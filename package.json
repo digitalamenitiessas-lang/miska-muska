@@ -1,0 +1,32 @@
+{
+  "name": "miska-muska-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Bot conversacional multicanal (Telegram -> WhatsApp Cloud API) + panel de monitoreo para Miska Muska",
+  "type": "module",
+  "workspaces": [
+    "apps/server",
+    "apps/dashboard"
+  ],
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,panel -c magenta,cyan \"npm:dev:server\" \"npm:dev:dashboard\"",
+    "dev:server": "npm run dev -w @miska/server",
+    "dev:dashboard": "npm run dev -w @miska/dashboard",
+    "build": "npm run build -w @miska/server && npm run build -w @miska/dashboard",
+    "start": "npm run start -w @miska/server",
+    "typecheck": "npm run typecheck -w @miska/server && npm run typecheck -w @miska/dashboard",
+    "check:boundaries": "node apps/server/scripts/check-boundaries.mjs",
+    "check": "npm run check:boundaries && npm run typecheck",
+    "seed": "npm run seed -w @miska/server",
+    "demo": "npm run demo -w @miska/server",
+    "db:sql": "npm run db:sql -w @miska/server",
+    "db:migrate": "npm run db:migrate -w @miska/server",
+    "setup:supabase": "npm run setup:supabase -w @miska/server --"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2"
+  }
+}

@@ -1,0 +1,18 @@
+node_modules
+**/node_modules
+apps/*/dist
+data
+.git
+.env
+.env.local
+*.log
+*.tsbuildinfo
+docs
+supabase
+README.md
+vercel.json
+
+# El panel no se construye en esta imagen (va a Vercel), pero `npm ci` valida el
+# lockfile contra TODOS los workspaces, así que su package.json tiene que estar.
+apps/dashboard/*
+!apps/dashboard/package.json

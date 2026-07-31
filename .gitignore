@@ -1,0 +1,15 @@
+node_modules/
+dist/
+data/
+# Cualquier variante de .env queda fuera; la única excepción es el ejemplo.
+.env
+.env.*
+!.env.example
+!apps/dashboard/.env.example
+*.log
+*.db
+*.db-wal
+*.db-shm
+.DS_Store
+.vite/
+*.tsbuildinfo

@@ -1,0 +1,62 @@
+# Fly.io — bot de Miska Muska.
+#
+# La región del bot tiene que seguir a la de tu proyecto de Supabase, que quedó
+# en us-west-2 (Oregon). `sea` (Seattle) es la más cercana en Fly.
+#
+# Lo que importa NO es la distancia a Tucumán: el mensaje del cliente viaja por
+# los servidores de Telegram/Meta igual. Lo que se siente es el ida y vuelta
+# entre el bot y la base, que ocurre varias veces por turno.
+#
+# Lo importante de este archivo son las tres líneas de `auto_*` y `min/max`:
+# el bot NO puede escalar. El debounce que junta los mensajes seguidos del
+# cliente y el mutex por conversación viven en memoria; dos máquinas contestarían
+# dos veces al mismo cliente, y una máquina dormida se pierde los webhooks.
+
+app = "miska-muska-bot"
+primary_region = "sea"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  PORT = "3001"
+  HOST = "0.0.0.0"
+  TZ = "America/Argentina/Tucuman"
+  # En producción Telegram va por webhook: el polling no sobrevive bien a los
+  # reinicios y necesita que el proceso esté siempre despierto.
+  TELEGRAM_MODE = "webhook"
+
+[http_service]
+  internal_port = 3001
+  force_https = true
+
+  # No dormir la máquina: los webhooks llegan cuando llegan.
+  auto_stop_machines = false
+  auto_start_machines = true
+
+  # Exactamente una instancia. No subas estos números.
+  min_machines_running = 1
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 50
+    hard_limit = 100
+
+[[http_service.checks]]
+  interval = "30s"
+  timeout = "5s"
+  grace_period = "20s"
+  method = "GET"
+  path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
+  # Una sola. El bot es de estado en memoria.
+  count = 1
+
+# Los secretos NO van acá. Se cargan con:
+#   fly secrets set DATABASE_URL="..." OPENROUTER_API_KEY="..." \
+#                   TELEGRAM_BOT_TOKEN="..." ADMIN_TOKEN="..." \
+#                   PUBLIC_URL="https://miska-muska-bot.fly.dev" \
+#                   DASHBOARD_ORIGIN="https://panel-miska.vercel.app"

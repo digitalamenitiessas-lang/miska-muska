@@ -1,0 +1,777 @@
+/**
+ * Repositorios. Único lugar del sistema que escribe SQL.
+ * Devuelve entidades de `core/types/domain.ts`, nunca filas crudas.
+ *
+ * Todo es asíncrono porque Postgres lo es. Notas del driver que importan al leer
+ * los mapeadores:
+ *  - las columnas `jsonb` vuelven ya parseadas (objeto/array), no como texto
+ *  - `timestamptz` vuelve como `Date`; el dominio usa ISO string
+ *  - `numeric` vuelve como STRING, para no perder precisión: hay que convertirlo
+ */
+
+import type { QueryResultRow } from 'pg';
+import { dateOnly, exec, iso, isoOrNull, newId, one, q, TIMEZONE } from './db.js';
+import type {
+  Campaign,
+  CampaignSku,
+  Contact,
+  Conversation,
+  ConversationMode,
+  MetricPoint,
+  Order,
+  OrderItem,
+  OrderStatus,
+  Product,
+  ProductCategory,
+  QuickReply,
+  BotSettings,
+  StoredMessage,
+} from '../types/domain.js';
+import type { ChannelId, InboundContact, MessageAuthor } from '../types/message.js';
+
+type Row = QueryResultRow;
+
+const str = (v: unknown): string | null => (v == null ? null : String(v));
+const int = (v: unknown): number | null => (v == null ? null : Number(v));
+
+// ---------------------------------------------------------------------------
+// Mapeadores
+// ---------------------------------------------------------------------------
+
+function toContact(r: Row): Contact {
+  return {
+    id: String(r.id),
+    channel: String(r.channel) as ChannelId,
+    externalId: String(r.external_id),
+    displayName: str(r.display_name),
+    username: str(r.username),
+    phone: str(r.phone),
+    fullName: str(r.full_name),
+    dni: str(r.dni),
+    notes: str(r.notes),
+    isReturning: Boolean(r.is_returning),
+    firstSeenAt: iso(r.first_seen_at),
+    lastSeenAt: iso(r.last_seen_at),
+  };
+}
+
+function toConversation(r: Row): Conversation {
+  return {
+    id: String(r.id),
+    channel: String(r.channel) as ChannelId,
+    externalId: String(r.external_id),
+    contactId: String(r.contact_id),
+    mode: String(r.mode) as ConversationMode,
+    lastIntent: str(r.last_intent),
+    lastInboundAt: isoOrNull(r.last_inbound_at),
+    lastOutboundAt: isoOrNull(r.last_outbound_at),
+    lastMessagePreview: str(r.last_message_preview),
+    unreadCount: Number(r.unread_count ?? 0),
+    needsAttention: Boolean(r.needs_attention),
+    attentionReason: str(r.attention_reason),
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+  };
+}
+
+function toMessage(r: Row): StoredMessage {
+  return {
+    id: String(r.id),
+    conversationId: String(r.conversation_id),
+    channel: String(r.channel) as ChannelId,
+    channelMessageId: str(r.channel_message_id),
+    direction: String(r.direction) as 'in' | 'out',
+    author: String(r.author) as MessageAuthor,
+    contentKind: String(r.content_kind),
+    text: String(r.text),
+    payload: r.payload ?? null,
+    intent: str(r.intent),
+    handler: str(r.handler),
+    latencyMs: int(r.latency_ms),
+    inputTokens: int(r.input_tokens),
+    outputTokens: int(r.output_tokens),
+    cacheReadTokens: int(r.cache_read_tokens),
+    // numeric llega como string desde pg.
+    costUsd: r.cost_usd == null ? null : Number(r.cost_usd),
+    model: str(r.model),
+    error: str(r.error),
+    createdAt: iso(r.created_at),
+  };
+}
+
+function toProduct(r: Row): Product {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    category: String(r.category) as ProductCategory,
+    price: Number(r.price),
+    availableToday: Boolean(r.available_today),
+    limitedEdition: Boolean(r.limited_edition),
+    pickupOnly: Boolean(r.pickup_only),
+    notes: str(r.notes),
+    sortOrder: Number(r.sort_order ?? 0),
+    updatedAt: iso(r.updated_at),
+  };
+}
+
+function toOrder(r: Row): Order {
+  return {
+    id: String(r.id),
+    number: Number(r.number),
+    conversationId: str(r.conversation_id),
+    contactId: str(r.contact_id),
+    customerName: String(r.customer_name),
+    customerDni: str(r.customer_dni),
+    customerPhone: str(r.customer_phone),
+    // jsonb ya viene parseado.
+    items: (r.items ?? []) as OrderItem[],
+    total: Number(r.total ?? 0),
+    paid: Number(r.paid ?? 0),
+    status: String(r.status) as OrderStatus,
+    deliveryMode: String(r.delivery_mode) as Order['deliveryMode'],
+    deliveryDate: dateOnly(r.delivery_date),
+    deliveryTime: str(r.delivery_time),
+    address: str(r.address),
+    dedication: str(r.dedication),
+    notes: str(r.notes),
+    campaignId: str(r.campaign_id),
+    campaignSkuId: str(r.campaign_sku_id),
+    createdBy: String(r.created_by) as MessageAuthor,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+  };
+}
+
+function toCampaign(r: Row): Campaign {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    startsOn: dateOnly(r.starts_on) ?? '',
+    endsOn: dateOnly(r.ends_on) ?? '',
+    active: Boolean(r.active),
+    pitch: str(r.pitch),
+    createdAt: iso(r.created_at),
+  };
+}
+
+function toSku(r: Row): CampaignSku {
+  return {
+    id: String(r.id),
+    campaignId: String(r.campaign_id),
+    name: String(r.name),
+    price: Number(r.price),
+    stockTotal: Number(r.stock_total),
+    stockUsed: Number(r.stock_used),
+    sortOrder: Number(r.sort_order ?? 0),
+  };
+}
+
+function toQuickReply(r: Row): QuickReply {
+  return {
+    key: String(r.key),
+    label: String(r.label),
+    body: String(r.body),
+    triggers: (r.triggers ?? []) as string[],
+    autoSend: Boolean(r.auto_send),
+    usageCount: Number(r.usage_count ?? 0),
+    updatedAt: iso(r.updated_at),
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Fábrica
+// ---------------------------------------------------------------------------
+
+export function createRepositories() {
+  const contacts = {
+    /** Inserta o actualiza el contacto por (canal, externalId), en un solo viaje. */
+    async upsert(channel: ChannelId, c: InboundContact): Promise<Contact> {
+      const row = await one(
+        `INSERT INTO contacts (id, channel, external_id, display_name, username, phone)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (channel, external_id) DO UPDATE SET
+           display_name = COALESCE(EXCLUDED.display_name, contacts.display_name),
+           username     = COALESCE(EXCLUDED.username, contacts.username),
+           phone        = COALESCE(EXCLUDED.phone, contacts.phone),
+           last_seen_at = now()
+         RETURNING *`,
+        [newId('c_'), channel, c.externalId, c.displayName ?? null, c.username ?? null, c.phone ?? null],
+      );
+      return toContact(row!);
+    },
+
+    async get(id: string): Promise<Contact | null> {
+      const row = await one('SELECT * FROM contacts WHERE id = $1', [id]);
+      return row ? toContact(row) : null;
+    },
+
+    async update(
+      id: string,
+      patch: Partial<Pick<Contact, 'fullName' | 'dni' | 'phone' | 'notes' | 'isReturning'>>,
+    ): Promise<void> {
+      const sets: string[] = [];
+      const args: unknown[] = [];
+      const put = (column: string, value: unknown) => {
+        sets.push(`${column} = $${sets.length + 1}`);
+        args.push(value);
+      };
+      if (patch.fullName !== undefined) put('full_name', patch.fullName);
+      if (patch.dni !== undefined) put('dni', patch.dni);
+      if (patch.phone !== undefined) put('phone', patch.phone);
+      if (patch.notes !== undefined) put('notes', patch.notes);
+      if (patch.isReturning !== undefined) put('is_returning', patch.isReturning);
+      if (!sets.length) return;
+      args.push(id);
+      await exec(`UPDATE contacts SET ${sets.join(', ')} WHERE id = $${args.length}`, args);
+    },
+
+    /** Agrega una nota al CRM sin borrar las anteriores. */
+    async appendNote(id: string, note: string): Promise<void> {
+      await exec(
+        `UPDATE contacts
+         SET notes = TRIM(BOTH E'\\n' FROM COALESCE(notes || E'\\n', '') ||
+                     '[' || to_char(now() AT TIME ZONE $2, 'YYYY-MM-DD') || '] ' || $3)
+         WHERE id = $1`,
+        [id, TIMEZONE, note],
+      );
+    },
+  };
+
+  const conversations = {
+    async ensure(channel: ChannelId, externalId: string, contactId: string): Promise<Conversation> {
+      // El DO UPDATE que no cambia nada existe para que RETURNING devuelva la
+      // fila también cuando ya existía (con DO NOTHING no devolvería nada).
+      const row = await one(
+        `INSERT INTO conversations (id, channel, external_id, contact_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (channel, external_id)
+           DO UPDATE SET updated_at = conversations.updated_at
+         RETURNING *`,
+        [newId('conv_'), channel, externalId, contactId],
+      );
+      return toConversation(row!);
+    },
+
+    async get(id: string): Promise<Conversation | null> {
+      const row = await one('SELECT * FROM conversations WHERE id = $1', [id]);
+      return row ? toConversation(row) : null;
+    },
+
+    async list(
+      opts: {
+        mode?: ConversationMode;
+        channel?: ChannelId;
+        needsAttention?: boolean;
+        limit?: number;
+      } = {},
+    ): Promise<Conversation[]> {
+      const where: string[] = [];
+      const args: unknown[] = [];
+      if (opts.mode) {
+        args.push(opts.mode);
+        where.push(`mode = $${args.length}`);
+      }
+      if (opts.channel) {
+        args.push(opts.channel);
+        where.push(`channel = $${args.length}`);
+      }
+      if (opts.needsAttention) where.push('needs_attention');
+      args.push(opts.limit ?? 100);
+      const rows = await q(
+        `SELECT * FROM conversations ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+         ORDER BY updated_at DESC LIMIT $${args.length}`,
+        args,
+      );
+      return rows.map(toConversation);
+    },
+
+    async markInbound(id: string, preview: string, intent: string | null): Promise<void> {
+      await exec(
+        `UPDATE conversations SET last_inbound_at = now(), last_message_preview = $2,
+           last_intent = COALESCE($3, last_intent), unread_count = unread_count + 1,
+           updated_at = now()
+         WHERE id = $1`,
+        [id, preview.slice(0, 240), intent],
+      );
+    },
+
+    async markOutbound(id: string, preview: string): Promise<void> {
+      await exec(
+        `UPDATE conversations SET last_outbound_at = now(), last_message_preview = $2,
+           updated_at = now()
+         WHERE id = $1`,
+        [id, preview.slice(0, 240)],
+      );
+    },
+
+    async setMode(id: string, mode: ConversationMode): Promise<void> {
+      await exec('UPDATE conversations SET mode = $2, updated_at = now() WHERE id = $1', [id, mode]);
+    },
+
+    async setAttention(id: string, needs: boolean, reason: string | null): Promise<void> {
+      await exec(
+        `UPDATE conversations SET needs_attention = $2, attention_reason = $3, updated_at = now()
+         WHERE id = $1`,
+        [id, needs, reason],
+      );
+    },
+
+    async markRead(id: string): Promise<void> {
+      await exec('UPDATE conversations SET unread_count = 0 WHERE id = $1', [id]);
+    },
+  };
+
+  const messages = {
+    /** true si el id del proveedor ya fue procesado (webhook reintentado). */
+    async alreadyProcessed(channel: ChannelId, channelMessageId: string): Promise<boolean> {
+      const row = await one(
+        'SELECT 1 AS x FROM messages WHERE channel = $1 AND channel_message_id = $2',
+        [channel, channelMessageId],
+      );
+      return row !== null;
+    },
+
+    async insert(
+      m: Omit<StoredMessage, 'id' | 'createdAt'> & { id?: string; createdAt?: string },
+    ): Promise<StoredMessage> {
+      const row = await one(
+        `INSERT INTO messages (id, conversation_id, channel, channel_message_id, direction, author,
+           content_kind, text, payload, intent, handler, latency_ms, input_tokens, output_tokens,
+           cache_read_tokens, cost_usd, model, error, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,
+                 COALESCE($19::timestamptz, now()))
+         RETURNING *`,
+        [
+          m.id ?? newId('m_'), m.conversationId, m.channel, m.channelMessageId, m.direction,
+          m.author, m.contentKind, m.text, m.payload == null ? null : JSON.stringify(m.payload),
+          m.intent, m.handler, m.latencyMs, m.inputTokens, m.outputTokens, m.cacheReadTokens,
+          m.costUsd, m.model, m.error, m.createdAt ?? null,
+        ],
+      );
+      return toMessage(row!);
+    },
+
+    /** Últimos N mensajes en orden cronológico. */
+    async history(conversationId: string, limit = 40): Promise<StoredMessage[]> {
+      const rows = await q(
+        `SELECT * FROM (
+           SELECT * FROM messages WHERE conversation_id = $1
+           ORDER BY created_at DESC LIMIT $2
+         ) t ORDER BY created_at ASC`,
+        [conversationId, limit],
+      );
+      return rows.map(toMessage);
+    },
+
+    async setChannelMessageId(
+      id: string,
+      channelMessageId: string | null,
+      error: string | null,
+    ): Promise<void> {
+      await exec('UPDATE messages SET channel_message_id = $2, error = $3 WHERE id = $1', [
+        id,
+        channelMessageId,
+        error,
+      ]);
+    },
+  };
+
+  const products = {
+    async list(
+      opts: { category?: ProductCategory; onlyAvailable?: boolean } = {},
+    ): Promise<Product[]> {
+      const where: string[] = [];
+      const args: unknown[] = [];
+      if (opts.category) {
+        args.push(opts.category);
+        where.push(`category = $${args.length}`);
+      }
+      if (opts.onlyAvailable) where.push('available_today');
+      const rows = await q(
+        `SELECT * FROM products ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+         ORDER BY category, sort_order, name`,
+        args,
+      );
+      return rows.map(toProduct);
+    },
+
+    async search(query: string, onlyAvailable = true): Promise<Product[]> {
+      const rows = await q(
+        `SELECT * FROM products
+         WHERE name ILIKE $1 ${onlyAvailable ? 'AND available_today' : ''}
+         ORDER BY sort_order, name LIMIT 25`,
+        [`%${query}%`],
+      );
+      return rows.map(toProduct);
+    },
+
+    async get(id: string): Promise<Product | null> {
+      const row = await one('SELECT * FROM products WHERE id = $1', [id]);
+      return row ? toProduct(row) : null;
+    },
+
+    async upsert(p: Omit<Product, 'updatedAt'>): Promise<Product> {
+      const row = await one(
+        `INSERT INTO products (id, name, category, price, available_today, limited_edition,
+           pickup_only, notes, sort_order, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category,
+           price = EXCLUDED.price, available_today = EXCLUDED.available_today,
+           limited_edition = EXCLUDED.limited_edition, pickup_only = EXCLUDED.pickup_only,
+           notes = EXCLUDED.notes, sort_order = EXCLUDED.sort_order, updated_at = now()
+         RETURNING *`,
+        [p.id, p.name, p.category, p.price, p.availableToday, p.limitedEdition, p.pickupOnly,
+         p.notes, p.sortOrder],
+      );
+      return toProduct(row!);
+    },
+
+    async setAvailability(id: string, available: boolean): Promise<void> {
+      await exec('UPDATE products SET available_today = $2, updated_at = now() WHERE id = $1', [
+        id,
+        available,
+      ]);
+    },
+
+    /** Marca varios de una vez: es lo que hace el local a la mañana. */
+    async setAvailabilityMany(ids: string[], available: boolean): Promise<number> {
+      if (!ids.length) return 0;
+      return exec(
+        'UPDATE products SET available_today = $2, updated_at = now() WHERE id = ANY($1::text[])',
+        [ids, available],
+      );
+    },
+
+    async remove(id: string): Promise<void> {
+      await exec('DELETE FROM products WHERE id = $1', [id]);
+    },
+  };
+
+  const orders = {
+    async create(o: Omit<Order, 'id' | 'number' | 'createdAt' | 'updatedAt'>): Promise<Order> {
+      // El número lo asigna la SEQUENCE: dos pedidos simultáneos nunca repiten.
+      const row = await one(
+        `INSERT INTO orders (id, conversation_id, contact_id, customer_name, customer_dni,
+           customer_phone, items, total, paid, status, delivery_mode, delivery_date, delivery_time,
+           address, dedication, notes, campaign_id, campaign_sku_id, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
+                 $18, $19)
+         RETURNING *`,
+        [
+          newId('o_'), o.conversationId, o.contactId, o.customerName, o.customerDni,
+          o.customerPhone, JSON.stringify(o.items), o.total, o.paid, o.status, o.deliveryMode,
+          o.deliveryDate, o.deliveryTime, o.address, o.dedication, o.notes, o.campaignId,
+          o.campaignSkuId ?? null, o.createdBy,
+        ],
+      );
+      return toOrder(row!);
+    },
+
+    async get(id: string): Promise<Order | null> {
+      const row = await one('SELECT * FROM orders WHERE id = $1', [id]);
+      return row ? toOrder(row) : null;
+    },
+
+    async byNumber(number: number): Promise<Order | null> {
+      const row = await one('SELECT * FROM orders WHERE number = $1', [number]);
+      return row ? toOrder(row) : null;
+    },
+
+    async list(
+      opts: {
+        status?: OrderStatus;
+        contactId?: string;
+        conversationId?: string;
+        limit?: number;
+      } = {},
+    ): Promise<Order[]> {
+      const where: string[] = [];
+      const args: unknown[] = [];
+      const put = (clause: string, value: unknown) => {
+        args.push(value);
+        where.push(clause.replace('?', `$${args.length}`));
+      };
+      if (opts.status) put('status = ?', opts.status);
+      if (opts.contactId) put('contact_id = ?', opts.contactId);
+      if (opts.conversationId) put('conversation_id = ?', opts.conversationId);
+      args.push(opts.limit ?? 200);
+      const rows = await q(
+        `SELECT * FROM orders ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+         ORDER BY created_at DESC LIMIT $${args.length}`,
+        args,
+      );
+      return rows.map(toOrder);
+    },
+
+    async update(id: string, patch: Partial<Order>): Promise<Order | null> {
+      const columns: Record<string, string> = {
+        customerName: 'customer_name', customerDni: 'customer_dni',
+        customerPhone: 'customer_phone', total: 'total', paid: 'paid', status: 'status',
+        deliveryMode: 'delivery_mode', deliveryDate: 'delivery_date',
+        deliveryTime: 'delivery_time', address: 'address', dedication: 'dedication',
+        notes: 'notes', campaignId: 'campaign_id', campaignSkuId: 'campaign_sku_id',
+      };
+      const sets: string[] = [];
+      const args: unknown[] = [];
+      for (const [key, column] of Object.entries(columns)) {
+        const value = (patch as Record<string, unknown>)[key];
+        if (value === undefined) continue;
+        args.push(value);
+        sets.push(`${column} = $${args.length}`);
+      }
+      if (patch.items !== undefined) {
+        args.push(JSON.stringify(patch.items));
+        sets.push(`items = $${args.length}::jsonb`);
+      }
+      if (!sets.length) return orders.get(id);
+      args.push(id);
+      const row = await one(
+        `UPDATE orders SET ${sets.join(', ')}, updated_at = now()
+         WHERE id = $${args.length} RETURNING *`,
+        args,
+      );
+      return row ? toOrder(row) : null;
+    },
+  };
+
+  const campaigns = {
+    async listActive(): Promise<Campaign[]> {
+      const rows = await q(
+        `SELECT * FROM campaigns
+         WHERE active AND ends_on >= (now() AT TIME ZONE $1)::date
+         ORDER BY starts_on`,
+        [TIMEZONE],
+      );
+      return rows.map(toCampaign);
+    },
+
+    async listAll(): Promise<Campaign[]> {
+      const rows = await q('SELECT * FROM campaigns ORDER BY starts_on DESC');
+      return rows.map(toCampaign);
+    },
+
+    async create(c: Omit<Campaign, 'id' | 'createdAt'>): Promise<Campaign> {
+      const row = await one(
+        `INSERT INTO campaigns (id, name, starts_on, ends_on, active, pitch)
+         VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+        [newId('camp_'), c.name, c.startsOn, c.endsOn, c.active, c.pitch],
+      );
+      return toCampaign(row!);
+    },
+
+    async setActive(id: string, active: boolean): Promise<void> {
+      await exec('UPDATE campaigns SET active = $2 WHERE id = $1', [id, active]);
+    },
+
+    async skus(campaignId: string): Promise<CampaignSku[]> {
+      const rows = await q(
+        'SELECT * FROM campaign_skus WHERE campaign_id = $1 ORDER BY sort_order',
+        [campaignId],
+      );
+      return rows.map(toSku);
+    },
+
+    async sku(id: string): Promise<CampaignSku | null> {
+      const row = await one('SELECT * FROM campaign_skus WHERE id = $1', [id]);
+      return row ? toSku(row) : null;
+    },
+
+    async upsertSku(s: Omit<CampaignSku, 'id'> & { id?: string }): Promise<CampaignSku> {
+      const row = await one(
+        `INSERT INTO campaign_skus (id, campaign_id, name, price, stock_total, stock_used, sort_order)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, price = EXCLUDED.price,
+           stock_total = EXCLUDED.stock_total, stock_used = EXCLUDED.stock_used,
+           sort_order = EXCLUDED.sort_order
+         RETURNING *`,
+        [s.id ?? newId('sku_'), s.campaignId, s.name, s.price, s.stockTotal, s.stockUsed, s.sortOrder],
+      );
+      return toSku(row!);
+    },
+
+    /**
+     * Reserva stock de forma atómica. Devuelve false si no alcanza.
+     * El WHERE hace la comprobación y el UPDATE en la misma sentencia, así que
+     * dos pedidos simultáneos por la última caja no pueden ganar los dos.
+     */
+    async reserveStock(skuId: string, quantity: number): Promise<boolean> {
+      const changed = await exec(
+        `UPDATE campaign_skus SET stock_used = stock_used + $2
+         WHERE id = $1 AND stock_used + $2 <= stock_total`,
+        [skuId, quantity],
+      );
+      return changed > 0;
+    },
+
+    async releaseStock(skuId: string, quantity: number): Promise<void> {
+      await exec(
+        `UPDATE campaign_skus SET stock_used = GREATEST(0, stock_used - $2) WHERE id = $1`,
+        [skuId, quantity],
+      );
+    },
+  };
+
+  const quickReplies = {
+    async list(): Promise<QuickReply[]> {
+      const rows = await q('SELECT * FROM quick_replies ORDER BY label');
+      return rows.map(toQuickReply);
+    },
+
+    async get(key: string): Promise<QuickReply | null> {
+      const row = await one('SELECT * FROM quick_replies WHERE key = $1', [key]);
+      return row ? toQuickReply(row) : null;
+    },
+
+    async upsert(
+      qr: Omit<QuickReply, 'usageCount' | 'updatedAt'> & { usageCount?: number },
+    ): Promise<QuickReply> {
+      const row = await one(
+        `INSERT INTO quick_replies (key, label, body, triggers, auto_send, usage_count, updated_at)
+         VALUES ($1, $2, $3, $4::jsonb, $5, $6, now())
+         ON CONFLICT (key) DO UPDATE SET label = EXCLUDED.label, body = EXCLUDED.body,
+           triggers = EXCLUDED.triggers, auto_send = EXCLUDED.auto_send, updated_at = now()
+         RETURNING *`,
+        [qr.key, qr.label, qr.body, JSON.stringify(qr.triggers), qr.autoSend, qr.usageCount ?? 0],
+      );
+      return toQuickReply(row!);
+    },
+
+    async countUse(key: string): Promise<void> {
+      await exec('UPDATE quick_replies SET usage_count = usage_count + 1 WHERE key = $1', [key]);
+    },
+
+    async remove(key: string): Promise<void> {
+      await exec('DELETE FROM quick_replies WHERE key = $1', [key]);
+    },
+  };
+
+  const settings = {
+    async read(): Promise<BotSettings> {
+      const row = await one<{ value: Partial<BotSettings> }>(
+        "SELECT value FROM settings WHERE key = 'bot'",
+      );
+      return { ...DEFAULT_SETTINGS, ...(row?.value ?? {}) };
+    },
+
+    async write(patch: Partial<BotSettings>): Promise<BotSettings> {
+      const next = { ...(await settings.read()), ...patch };
+      await exec(
+        `INSERT INTO settings (key, value) VALUES ('bot', $1::jsonb)
+         ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
+        [JSON.stringify(next)],
+      );
+      return next;
+    },
+  };
+
+  const metrics = {
+    /** Serie diaria, agrupada en el huso de Tucumán (no en UTC). */
+    async daily(days = 14): Promise<MetricPoint[]> {
+      const rows = await q(
+        `WITH msg AS (
+           SELECT to_char(created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS day,
+                  direction, conversation_id, handler,
+                  COALESCE(input_tokens, 0) AS input_tokens,
+                  COALESCE(output_tokens, 0) AS output_tokens,
+                  COALESCE(cost_usd, 0) AS cost_usd
+           FROM messages
+           WHERE created_at >= now() - ($1 || ' days')::interval
+         )
+         SELECT day,
+                COUNT(*) FILTER (WHERE direction = 'in') AS inbound,
+                COUNT(*) FILTER (WHERE direction = 'out') AS outbound,
+                COUNT(DISTINCT conversation_id) AS conversations,
+                COUNT(*) FILTER (WHERE handler = 'escalate') AS handoffs,
+                SUM(input_tokens) AS input_tokens,
+                SUM(output_tokens) AS output_tokens,
+                SUM(cost_usd) AS cost_usd
+         FROM msg GROUP BY day ORDER BY day`,
+        [days, TIMEZONE],
+      );
+
+      const orderRows = await q<{ day: string; n: string }>(
+        `SELECT to_char(created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS day, COUNT(*) AS n
+         FROM orders WHERE created_at >= now() - ($1 || ' days')::interval
+         GROUP BY day`,
+        [days, TIMEZONE],
+      );
+      const ordersByDay = new Map(orderRows.map((r) => [r.day, Number(r.n)]));
+
+      return rows.map((r) => ({
+        day: String(r.day),
+        inbound: Number(r.inbound ?? 0),
+        outbound: Number(r.outbound ?? 0),
+        conversations: Number(r.conversations ?? 0),
+        handoffs: Number(r.handoffs ?? 0),
+        orders: ordersByDay.get(String(r.day)) ?? 0,
+        inputTokens: Number(r.input_tokens ?? 0),
+        outputTokens: Number(r.output_tokens ?? 0),
+        costUsd: Number(r.cost_usd ?? 0),
+      }));
+    },
+
+    async intents(days = 14): Promise<Array<{ intent: string; count: number }>> {
+      const rows = await q<{ intent: string; n: string }>(
+        `SELECT intent, COUNT(*) AS n FROM messages
+         WHERE created_at >= now() - ($1 || ' days')::interval AND intent IS NOT NULL
+         GROUP BY intent ORDER BY n DESC LIMIT 12`,
+        [days],
+      );
+      return rows.map((r) => ({ intent: r.intent, count: Number(r.n) }));
+    },
+
+    async summary() {
+      const row = await one(
+        `SELECT
+           (SELECT COUNT(*) FROM conversations) AS conversations,
+           (SELECT COUNT(*) FROM conversations WHERE mode = 'human') AS human_mode,
+           (SELECT COUNT(*) FROM conversations WHERE needs_attention) AS needs_attention,
+           (SELECT COUNT(*) FROM messages WHERE direction = 'in') AS inbound,
+           (SELECT COUNT(*) FROM messages WHERE direction = 'out') AS outbound,
+           (SELECT COUNT(*) FROM orders) AS orders,
+           (SELECT COUNT(*) FROM orders WHERE status = 'borrador') AS draft_orders,
+           (SELECT COALESCE(AVG(latency_ms), 0) FROM messages WHERE latency_ms IS NOT NULL)
+             AS avg_latency_ms,
+           (SELECT COALESCE(SUM(cost_usd), 0) FROM messages) AS cost_usd,
+           (SELECT COUNT(*) FROM messages WHERE error IS NOT NULL) AS errors`,
+      );
+      return {
+        conversations: Number(row?.conversations ?? 0),
+        humanMode: Number(row?.human_mode ?? 0),
+        needsAttention: Number(row?.needs_attention ?? 0),
+        inbound: Number(row?.inbound ?? 0),
+        outbound: Number(row?.outbound ?? 0),
+        orders: Number(row?.orders ?? 0),
+        draftOrders: Number(row?.draft_orders ?? 0),
+        avgLatencyMs: Math.round(Number(row?.avg_latency_ms ?? 0)),
+        costUsd: Number(row?.cost_usd ?? 0),
+        errors: Number(row?.errors ?? 0),
+      };
+    },
+  };
+
+  return { contacts, conversations, messages, products, orders, campaigns, quickReplies, settings, metrics };
+}
+
+export type Repositories = ReturnType<typeof createRepositories>;
+
+export const DEFAULT_SETTINGS: BotSettings = {
+  botEnabled: true,
+  agentName: 'Mica',
+  activeChannels: ['telegram'],
+  // Modelo de OpenRouter. 1M de contexto, soporta tools y reasoning, y cuesta
+  // menos de la mitad que Opus con calidad muy parecida para atención.
+  model: 'anthropic/claude-sonnet-5',
+  effort: 'medium',
+  escalateAfterErrors: 2,
+  typingMsPerChar: 22,
+  maxTypingMs: 3200,
+  openHour: 9,
+  closeHour: 21,
+  address: 'Marcos Paz 473, San Miguel de Tucumán',
+  transferAlias: 'MISKATUC',
+  transferHolder: 'MISKA MUSKA SAS (Mercado Pago)',
+  webUrl: 'https://www.miskamuska.com.ar',
+  coursesUrl: 'https://www.cursos.miskamuska.com.ar',
+  breakfastsUrl: 'https://miskamuska.com.ar/product-category/desayunos/',
+};
