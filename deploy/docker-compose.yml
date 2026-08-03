@@ -1,0 +1,77 @@
+# Bot de Miska Muska en un VPS compartido con otros servicios.
+#
+# Está pensado para NO interferir con lo que ya corre en el servidor:
+#
+#   · Escucha en 127.0.0.1:3011 — solo local. No se expone a internet: quien lo
+#     publica es el proxy inverso que ya tenés. Si ese puerto está ocupado,
+#     cambiá el lado izquierdo del mapeo y nada más.
+#   · Red propia (`miska`). No toca la red por defecto ni ve otros contenedores.
+#   · Nombre e imagen con prefijo propio, para no pisar nada existente.
+#   · SIN volúmenes: la base está en Supabase, así que el contenedor no guarda
+#     estado. Se puede borrar y recrear sin perder nada.
+#   · Límites de memoria y CPU, para que un pico del bot no afecte a los vecinos.
+#
+# Uso:
+#   cd /opt/miska-muska
+#   docker compose -f deploy/docker-compose.yml up -d --build
+#   docker compose -f deploy/docker-compose.yml logs -f
+
+services:
+  bot:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: miska-muska-bot:latest
+    container_name: miska-bot
+    restart: unless-stopped
+
+    # Solo localhost. El proxy inverso hace de puerta.
+    ports:
+      - '127.0.0.1:3011:3001'
+
+    env_file:
+      - ../.env
+
+    environment:
+      NODE_ENV: production
+      PORT: '3001'
+      HOST: 0.0.0.0
+      TZ: America/Argentina/Tucuman
+
+    networks:
+      - miska
+
+    # El bot es liviano: un proceso Node con un pool de 5 conexiones.
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: '1.0'
+        reservations:
+          memory: 128M
+
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3001/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 25s
+      retries: 3
+
+    # El proceso cierra canales, servidor HTTP y pool de Postgres al recibir
+    # SIGTERM. Se le dan 20 s para que termine limpio.
+    stop_grace_period: 20s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+
+networks:
+  miska:
+    name: miska
+    driver: bridge

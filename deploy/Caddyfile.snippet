@@ -1,0 +1,33 @@
+# Si en el VPS usás Caddy en vez de nginx, agregá este bloque al final del
+# /etc/caddy/Caddyfile SIN tocar los que ya están:
+#
+#   sudo nano /etc/caddy/Caddyfile      # pegar al final
+#   sudo caddy validate --config /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# Caddy saca el certificado solo la primera vez que alguien entra, siempre que
+# el DNS ya apunte al servidor.
+
+bot.miskamuska.com.ar {
+	# El stream del panel necesita que no se acumule la respuesta. `flush_interval -1`
+	# manda cada evento apenas llega; sin eso la bandeja no se mueve.
+	handle /api/stream* {
+		reverse_proxy 127.0.0.1:3011 {
+			flush_interval -1
+			transport http {
+				# El servidor manda un ping cada 25 s: el timeout tiene que superarlo.
+				read_timeout 1h
+			}
+		}
+	}
+
+	# Webhooks, API de gestión y /health.
+	handle {
+		reverse_proxy 127.0.0.1:3011
+	}
+
+	encode gzip
+	log {
+		output file /var/log/caddy/miska-bot.log
+	}
+}
