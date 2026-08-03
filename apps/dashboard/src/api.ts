@@ -213,6 +213,17 @@ export const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
 
 const url = (path: string): string => `${API_BASE}${path}`;
 
+/** true cuando el panel está publicado pero no sabe a qué servidor hablarle. */
+export const apiBaseFaltante =
+  !API_BASE && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+
+const AYUDA_API_BASE =
+  'El panel no sabe a qué servidor hablarle: se construyó sin VITE_API_URL, ' +
+  'así que está pidiéndose la API a sí mismo y recibe su propio HTML.\n\n' +
+  'En Vercel: Settings → Environment Variables → VITE_API_URL = https://tu-bot.dominio.com\n' +
+  'Después hay que VOLVER A DESPLEGAR: Vite incrusta las variables al construir, ' +
+  'no las lee en tiempo de ejecución.';
+
 /** Token opcional del panel; se guarda en localStorage. */
 export function getToken(): string {
   return localStorage.getItem('miska.token') ?? '';
@@ -224,6 +235,10 @@ export function setToken(token: string): void {
 }
 
 async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
+  // Si no sabemos a dónde apuntar, no tiene sentido pedir nada: la petición
+  // caería en el propio hosting del panel y volvería su index.html.
+  if (apiBaseFaltante) throw new Error(AYUDA_API_BASE);
+
   const token = getToken();
   const res = await fetch(url(path), {
     ...init,
@@ -238,6 +253,15 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new Error(`${res.status} ${res.statusText}${detail ? ` — ${detail}` : ''}`);
   }
   if (res.status === 204) return undefined as T;
+
+  // Si vuelve HTML donde esperábamos JSON, la petición no llegó al bot: la
+  // atendió el hosting del panel y devolvió su index.html. El error nativo sería
+  // "Unexpected token '<'", que no le dice nada a nadie.
+  const tipo = res.headers.get('content-type') ?? '';
+  if (!tipo.includes('json')) {
+    throw new Error(apiBaseFaltante ? AYUDA_API_BASE : `Respuesta no-JSON desde ${url(path)} (${tipo || 'sin content-type'}).`);
+  }
+
   return (await res.json()) as T;
 }
 

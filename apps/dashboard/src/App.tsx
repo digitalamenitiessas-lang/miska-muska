@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   api,
   openStream,
+  apiBaseFaltante,
   getToken,
   setToken,
   type ChannelHealth,
@@ -130,6 +131,10 @@ export default function App() {
     }
   };
 
+  // Publicado sin saber a qué servidor hablarle: no tiene sentido mostrar la
+  // bandeja vacía y que todo falle. Se dice qué falta y cómo arreglarlo.
+  if (apiBaseFaltante) return <FaltaApiUrl />;
+
   if (authError) return <TokenGate onSaved={() => void loadShell()} />;
 
   return (
@@ -233,6 +238,47 @@ export default function App() {
       </main>
 
       {toast.node}
+    </div>
+  );
+}
+
+/** El panel está publicado pero se construyó sin saber dónde vive el bot. */
+function FaltaApiUrl() {
+  return (
+    <div style={{ display: 'grid', placeItems: 'center', height: '100%', padding: 20 }}>
+      <div className="card card-pad" style={{ maxWidth: 560 }}>
+        <div className="brand-gate">
+          <img src="/logo.png" alt="Miska Muska · Pastelería creativa" />
+        </div>
+        <h2 style={{ fontFamily: 'var(--font-brand)', fontSize: 18, margin: '0 0 10px' }}>
+          Falta decirle al panel dónde está el bot
+        </h2>
+        <p className="small" style={{ marginTop: 0 }}>
+          Este panel es solo la interfaz. Los datos los sirve el bot, que corre en otro lado
+          (un VPS, Fly.io o Railway). Ahora mismo se construyó sin esa dirección, así que se
+          está pidiendo la información a sí mismo.
+        </p>
+
+        <ol className="small" style={{ paddingLeft: 18, lineHeight: 1.8 }}>
+          <li>Asegurate de que el bot esté corriendo y accesible por HTTPS.</li>
+          <li>
+            En Vercel: <strong>Settings → Environment Variables</strong> →{' '}
+            <code>VITE_API_URL = https://tu-bot.dominio.com</code>
+          </li>
+          <li>
+            <strong>Volvé a desplegar.</strong> Vite incrusta las variables al construir, no las
+            lee al ejecutar: si no redesplegás, el cambio no tiene efecto.
+          </li>
+          <li>
+            En el bot: <code>DASHBOARD_ORIGIN</code> tiene que ser el dominio de este panel, o el
+            navegador va a bloquear las llamadas por CORS.
+          </li>
+        </ol>
+
+        <p className="small muted" style={{ marginBottom: 0 }}>
+          El paso a paso completo está en <code>docs/DESPLIEGUE.md</code> del repositorio.
+        </p>
+      </div>
     </div>
   );
 }
