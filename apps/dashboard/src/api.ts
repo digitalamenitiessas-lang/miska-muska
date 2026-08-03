@@ -331,6 +331,11 @@ export type LiveEvent =
  * loguees query strings, o poné el panel detrás de la autenticación del proxy.
  */
 export function openStream(onEvent: (event: LiveEvent) => void): () => void {
+  // Sin saber a dónde apuntar, el EventSource pediría /api/stream al propio
+  // hosting del panel, recibiría un index.html, fallaría, y reintentaría cada
+  // 3 s para siempre. Un bucle de reconexión que no puede funcionar.
+  if (apiBaseFaltante) return () => undefined;
+
   const token = getToken();
   const streamUrl = url(`/api/stream${token ? `?token=${encodeURIComponent(token)}` : ''}`);
   let source: EventSource | null = new EventSource(streamUrl);
