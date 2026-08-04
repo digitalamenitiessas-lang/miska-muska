@@ -66,6 +66,24 @@ body,
   margin: 0;
 }
 
+/*
+  En los navegadores de celular la barra de direcciones aparece y desaparece
+  mientras scrolleás, y `100%` se mide siempre contra el viewport GRANDE (el que
+  se ve con la barra retraída). Resultado: el compositor de mensajes queda unos
+  60 px por debajo del borde visible y no hay forma de llegar, porque el shell no
+  scrollea. `dvh` sigue el alto que realmente se ve en cada momento.
+
+  Va aparte y no reemplazando al `100%` para que ese siga siendo el respaldo
+  donde `dvh` no exista.
+*/
+@supports (height: 100dvh) {
+  html,
+  body,
+  #root {
+    height: 100dvh;
+  }
+}
+
 body {
   background: var(--cream);
   color: var(--ink);
@@ -89,6 +107,11 @@ textarea {
   display: grid;
   grid-template-columns: 232px 1fr;
   height: 100%;
+  /* Contiene a los hijos: sin esto, cualquier cosa que se pase de ancho hace
+     scrollear la página entera y el shell deja de ocupar exactamente la
+     pantalla. */
+  overflow: hidden;
+  max-width: 100%;
 }
 
 .sidebar {
@@ -99,6 +122,10 @@ textarea {
   padding: 18px 14px;
   gap: 18px;
   overflow-y: auto;
+  /* A 64 px el interruptor y los nombres de canal medían 140 px y aparecía una
+     barra de scroll horizontal dentro de la columna. Abajo se ocultan las
+     etiquetas; esto es el cinturón por si entra contenido nuevo. */
+  overflow-x: hidden;
 }
 
 /*
@@ -223,6 +250,12 @@ textarea {
   letter-spacing: 0.05em;
   text-transform: uppercase;
   margin: 0;
+  /* "Catálogo y disponibilidad de hoy" no entra en un celular. Que se recorte el
+     título es preferible a que empuje fuera de pantalla a los indicadores. */
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .topbar .spacer {
@@ -246,6 +279,20 @@ textarea {
 
 .card-pad {
   padding: 16px 18px;
+}
+
+/* El interruptor del bot, al pie de la barra lateral. Es una clase y no un
+   estilo en línea para que la media query pueda apretarlo en pantalla angosta:
+   un `style` en el JSX le gana a cualquier hoja. */
+.estado-bot {
+  padding: 11px 12px;
+}
+
+/* Las variables y URLs de las pantallas de ayuda son largas y sin espacios: sin
+   esto empujaban la tarjeta fuera del teléfono. */
+code {
+  font-size: 0.92em;
+  overflow-wrap: anywhere;
 }
 
 .card-title {
@@ -478,10 +525,23 @@ table.grid tbody tr:hover {
 
 /* ------------------------------------------------------------- bandeja --- */
 
+/*
+  `grid-template-rows: minmax(0, 1fr)` es la línea que hace que el chat scrollee
+  por dentro. Sin ella la fila implícita es `auto`, o sea `max-content`: la
+  columna del chat crecía hasta abarcar TODOS los mensajes —más de 3000 px con
+  una conversación larga— y el compositor terminaba muy por debajo del borde de
+  la pantalla, sin forma de llegar a él. `minmax(0, 1fr)` ata la fila al alto
+  disponible y recién ahí el `overflow-y: auto` de `.chat-body` tiene contra qué
+  scrollear.
+
+  Y `flex: 1` en vez de `height: 100%`: como hijo flexible de `.main`, el 100%
+  se medía contra el alto completo e ignoraba la barra superior.
+*/
 .inbox {
   display: grid;
   grid-template-columns: 296px minmax(0, 1fr) 268px;
-  height: 100%;
+  grid-template-rows: minmax(0, 1fr);
+  flex: 1;
   min-height: 0;
 }
 
@@ -489,6 +549,7 @@ table.grid tbody tr:hover {
   border-right: 1px solid var(--line);
   overflow-y: auto;
   background: var(--paper);
+  min-height: 0;
 }
 
 .inbox-filters {
@@ -574,6 +635,9 @@ table.grid tbody tr:hover {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  /* Sin esto un hijo flexible con contenido largo (la lista de mensajes) impone
+     su alto y el contenedor deja de poder recortarlo. */
+  min-height: 0;
   background: var(--cream);
 }
 
@@ -589,6 +653,7 @@ table.grid tbody tr:hover {
 
 .chat-body {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
   padding: 18px 16px;
   display: flex;
@@ -707,9 +772,15 @@ table.grid tbody tr:hover {
 
 /* ------------------------------------------------------------- métricas -- */
 
+/*
+  `min(N, 100%)` en vez de `N` a secas: `minmax(148px, …)` le promete a la grilla
+  una columna de 148 px aunque el contenedor mida menos, y la grilla cumple —
+  desbordando. Con `min()` la promesa se cae al ancho disponible y en un celular
+  angosto la columna se encoge en vez de pasarse.
+*/
 .tiles {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(148px, 100%), 1fr));
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -762,14 +833,31 @@ table.grid tbody tr:hover {
   background: var(--rose-deep);
 }
 
+/* Mismo motivo que en `.tiles`: era lo que desbordaba Ajustes y Rápidos. */
 .grid-2 {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
   gap: 14px;
 }
 
 .scroll-x {
   overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/*
+  Un contenedor con `overflow-x: auto` scrollea también en vertical (si un eje
+  no es `visible`, el otro deja de serlo), así que el `position: sticky` del
+  encabezado de la tabla se anclaba a una caja que nunca scrollea: no se pegaba
+  nunca. De 1000 px para arriba las tablas entran solas y no hace falta el
+  contenedor, así que se devuelve el desbordamiento a `.content` y ahí sí el
+  encabezado se queda fijo al scrollear.
+*/
+@media (min-width: 1000px) {
+  .scroll-x {
+    overflow-x: visible;
+  }
 }
 
 .toast {
@@ -786,21 +874,188 @@ table.grid tbody tr:hover {
   z-index: 50;
 }
 
-@media (max-width: 1180px) {
-  .inbox { grid-template-columns: 262px minmax(0, 1fr); }
-  .rail { display: none; }
+/* ---------------------------------------------------------- responsive --- */
+
+/*
+  Controles que solo existen en cierta franja de anchos. Se declaran ocultos acá
+  y cada media query los enciende: así el marcado es UNO solo y no hay dos
+  árboles de componentes que mantener sincronizados.
+*/
+.btn-ficha,
+.btn-volver,
+.rail-cierre,
+.rail-fondo,
+.chat-head-vacia {
+  display: none;
 }
 
+/* -- Hasta 1180px: la ficha del cliente pasa a ser un panel deslizante ------ */
+/*
+  Antes, de acá para abajo la ficha se ocultaba y listo. En una notebook chica o
+  una tablet no había NINGUNA forma de ver el teléfono, el DNI, las notas del CRM
+  ni los pedidos de la charla: la información existía y era inalcanzable. Ahora
+  entra desde el costado con el botón "Ficha" del encabezado del chat.
+*/
+@media (max-width: 1180px) {
+  .inbox { grid-template-columns: 262px minmax(0, 1fr); }
+
+  .rail {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    width: min(340px, 88vw);
+    z-index: 45;
+    transform: translateX(101%);
+    transition: transform 0.22s ease;
+    box-shadow: -10px 0 30px rgba(79, 58, 62, 0.18);
+  }
+
+  .rail[data-abierta='true'] { transform: none; }
+
+  .rail-cierre {
+    display: inline-flex;
+    align-self: flex-end;
+    flex: 0 0 auto;
+  }
+
+  /* Tapa el resto de la pantalla y cierra al tocar: en un celular es el gesto
+     que la gente prueba antes de buscar la X. */
+  .rail-fondo {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 44;
+    border: 0;
+    padding: 0;
+    background: rgba(63, 63, 63, 0.34);
+    cursor: pointer;
+  }
+
+  .btn-ficha { display: inline-flex; }
+}
+
+/* -- Hasta 860px: un panel por vez, como cualquier app de mensajería ------- */
 @media (max-width: 860px) {
-  .shell { grid-template-columns: 64px 1fr; }
-  /* A 64px el lettering del logo no se lee, pero el círculo rosa sigue
-     identificando la marca. Es preferible a inventar un ícono distinto.
-     Se achica el padding de la barra para que el marcador entre a 40px: a 27px
-     (lo que quedaba con el padding de escritorio) se leía como una mancha. */
-  .sidebar { padding: 14px 8px; }
+  .shell { grid-template-columns: 56px 1fr; }
+  /* A este ancho el lettering del logo no se lee, pero el círculo rosa sigue
+     identificando la marca. Es preferible a inventar un ícono distinto. */
+  .sidebar { padding: 12px 5px; gap: 14px; }
+
+  /* Cuando la columna necesita scrollear (celular acostado), la barra del
+     sistema se come 15 de los 56 px y el interruptor se queda sin lugar. En una
+     columna de íconos no aporta nada: se oculta y el scroll sigue andando con
+     el dedo y con la rueda. */
+  .sidebar { scrollbar-width: none; }
+  .sidebar::-webkit-scrollbar { width: 0; height: 0; }
   .brand { padding: 2px 0 0; }
-  .brand-logo { width: 40px; }
+  .brand-logo { width: 38px; }
+
+  .nav-item {
+    position: relative;
+    justify-content: center;
+    padding: 10px 4px;
+  }
+
   .nav-item span:not(.glyph):not(.nav-badge) { display: none; }
+  .nav-item .glyph { width: auto; }
+
+  /* Con la etiqueta oculta, `margin-left: auto` dejaba el marcador peleando el
+     lugar con el ícono. Sacado del flujo, se apoya en la esquina. */
+  .nav-badge {
+    position: absolute;
+    top: 3px;
+    right: 3px;
+    margin: 0;
+    padding: 0 5px;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+
+  /* El pie de la barra: quedan el interruptor y los semáforos, sin texto. Es lo
+     que se mira de un vistazo; las etiquetas medían 140 px en una columna de 56
+     y eran las que sacaban la barra de scroll horizontal. */
+  /* La tarjeta pierde el marco: el borde y sus 12 px de padding no entraban en
+     una columna de 56 px, y en ese tamaño un recuadro alrededor de un solo
+     interruptor era ruido visual de todos modos. */
+  .estado-bot {
+    padding: 6px 0;
+    background: transparent;
+    border-color: transparent;
+    box-shadow: none;
+  }
+
+  .sidebar-foot .switch { justify-content: center; }
+  .sidebar-foot .switch > span.small { display: none; }
+  .sidebar-foot .col > .row { justify-content: center; }
+  .sidebar-foot .col > .row > span { display: none; }
+
+  .topbar { padding: 11px 13px; gap: 9px; }
+  .topbar h1 { font-size: 16px; }
+  .content { padding: 14px 13px 26px; }
+
+  /*
+    Red de seguridad para las filas de las vistas: `flex-wrap: wrap` no cambia
+    nada mientras el contenido entra, y cuando no entra baja de línea en vez de
+    salirse de la tarjeta. Sale más barato que auditar una por una cada fila que
+    se agregue de acá en adelante.
+  */
+  .content .row { flex-wrap: wrap; }
+
+  /*
+    Acá estaba el peor bug del panel: `.inbox-list { display: none }`. En un
+    celular desaparecía la lista de conversaciones y quedaba solo el chat, así
+    que no había manera de ELEGIR con quién hablar. La bandeja —la vista
+    principal— era inusable en el teléfono.
+
+    Ahora se ve un panel por vez, gobernado por `data-panel`: la lista, y al
+    tocar una conversación el chat con un botón para volver.
+  */
   .inbox { grid-template-columns: 1fr; }
-  .inbox-list { display: none; }
+  .inbox-list { display: block; border-right: 0; }
+  .inbox[data-panel='chat'] .inbox-list { display: none; }
+  .inbox[data-panel='lista'] .chat { display: none; }
+
+  .btn-volver { display: inline-flex; }
+  .chat-head-vacia { display: flex; }
+
+  /* Volver + nombre + estado + tomar + silenciar + ficha no entran en una línea
+     de 375 px. */
+  .chat-head { flex-wrap: wrap; row-gap: 7px; }
+  .chat-body { padding: 14px 12px; }
+  .bubble { max-width: 85%; }
+
+  /* Objetivos táctiles: 3 px de padding vertical es un blanco de ~22 px de alto
+     y se falla seguido con el dedo. */
+  .chip { padding: 7px 12px; }
+  .btn-sm { padding: 7px 12px; font-size: 12px; }
+}
+
+/* -- Pantallas muy angostas (360 px o menos) ------------------------------- */
+@media (max-width: 380px) {
+  /* No baja de 52: el interruptor del bot mide 38 px y por debajo de esto no
+     entra ni sacándole todo el padding a la columna. */
+  .shell { grid-template-columns: 52px 1fr; }
+  .brand-logo { width: 34px; }
+  .topbar h1 { font-size: 15px; }
+  .content { padding: 12px 10px 24px; }
+  .card-pad { padding: 13px 12px; }
+}
+
+/* -- Pantallas bajas: el celular acostado ---------------------------------- */
+/*
+  Con 375 px de alto, el logo más siete ítems más el pie no entran en la columna
+  y aparecía scroll dentro de la barra. Se compacta hasta que entre: el logo es
+  lo primero que sobra, porque el nombre ya está en la barra superior.
+*/
+@media (max-height: 520px) and (max-width: 860px) {
+  .sidebar { gap: 8px; padding: 8px 5px; }
+  .brand { display: none; }
+  .nav-item { padding: 7px 4px; }
+  .sidebar-foot { gap: 6px; }
+}
+
+/* Quien pidió menos animación no quiere que la ficha se deslice. */
+@media (prefers-reduced-motion: reduce) {
+  .rail { transition: none; }
 }

@@ -166,7 +166,7 @@ export default function App() {
 
         <div className="sidebar-foot">
           {settings ? (
-            <div className="card card-pad" style={{ padding: '11px 12px' }}>
+            <div className="card estado-bot">
               <Switch
                 checked={settings.botEnabled}
                 onChange={(next) => void toggleBot(next)}
@@ -287,10 +287,12 @@ function FaltaApiUrl() {
 function TokenGate({ onSaved }: { onSaved: () => void }) {
   const [value, setValue] = useState(getToken());
   return (
-    <div style={{ display: 'grid', placeItems: 'center', height: '100%' }}>
+    <div style={{ display: 'grid', placeItems: 'center', height: '100%', padding: 16 }}>
       <form
         className="card card-pad"
-        style={{ width: 340 }}
+        /* Ancho fijo: en un teléfono de 320 px la tarjeta se pasaba de pantalla
+           y aparecía scroll horizontal en la primera pantalla del panel. */
+        style={{ width: 'min(340px, 100%)' }}
         onSubmit={(e) => {
           e.preventDefault();
           setToken(value.trim());

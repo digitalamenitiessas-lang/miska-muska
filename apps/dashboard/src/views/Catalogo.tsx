@@ -94,7 +94,9 @@ export function Catalogo({ toast }: { toast: (text: string) => void }) {
           const on = items.filter((p) => p.availableToday).length;
           return (
             <section className="card" key={category}>
-              <header className="row" style={{ padding: '12px 15px 6px', gap: 8 }}>
+              {/* `wrap`: en un teléfono angosto los botones "todo"/"nada" no
+                  entraban junto al título y se salían de la tarjeta. */}
+              <header className="row wrap" style={{ padding: '12px 15px 6px', gap: 8 }}>
                 <h3 className="card-title" style={{ margin: 0 }}>
                   {CATEGORY_LABEL[category] ?? category}
                 </h3>

@@ -206,7 +206,9 @@ export function Ajustes({
             <Field label="Página de cursos" value={draft.coursesUrl} onChange={(v) => set('coursesUrl', v)} />
             <Field label="Categoría desayunos" value={draft.breakfastsUrl} onChange={(v) => set('breakfastsUrl', v)} />
           </div>
-          <div className="row" style={{ gap: 12, marginTop: 12 }}>
+          {/* `wrap`: la aclaración de al lado es larga y en pantalla angosta
+              empujaba la fila fuera de la tarjeta en vez de bajar de línea. */}
+          <div className="row wrap" style={{ gap: 12, marginTop: 12 }}>
             <div>
               <label className="label">Abre</label>
               <input

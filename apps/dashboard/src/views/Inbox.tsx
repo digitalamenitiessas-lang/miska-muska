@@ -33,6 +33,17 @@ export function Inbox({
 }) {
   const [filter, setFilter] = useState<Filter>('todas');
   const [selected, setSelected] = useState<string | null>(null);
+  /*
+    Qué panel se ve cuando la pantalla da para uno solo (≤860 px). En escritorio
+    los tres conviven y el CSS ignora este valor.
+
+    Arranca en 'lista' a propósito: más abajo hay un efecto que preselecciona una
+    conversación para que el escritorio no abra en blanco, y sin este estado el
+    celular saltaría directo a un chat que nadie eligió.
+  */
+  const [panelMovil, setPanelMovil] = useState<'lista' | 'chat'>('lista');
+  /** La ficha del cliente, que de 1180 px para abajo es un panel deslizante. */
+  const [fichaAbierta, setFichaAbierta] = useState(false);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -81,6 +92,27 @@ export function Inbox({
   useEffect(() => {
     if (selected) void loadDetail(selected, true);
   }, [selected, loadDetail]);
+
+  /** Abrir una conversación: en pantalla angosta además cambia de panel. */
+  const abrir = (id: string) => {
+    setSelected(id);
+    setPanelMovil('chat');
+  };
+
+  // La ficha se cierra al cambiar de conversación: si no, queda abierta
+  // mostrando todavía los datos del cliente anterior mientras carga el nuevo.
+  useEffect(() => {
+    setFichaAbierta(false);
+  }, [selected]);
+
+  useEffect(() => {
+    if (!fichaAbierta) return;
+    const alTeclear = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setFichaAbierta(false);
+    };
+    window.addEventListener('keydown', alTeclear);
+    return () => window.removeEventListener('keydown', alTeclear);
+  }, [fichaAbierta]);
 
   // Refresco puntual: solo si el evento es de la conversación abierta.
   useEffect(() => {
@@ -148,7 +180,7 @@ export function Inbox({
   };
 
   return (
-    <div className="inbox">
+    <div className="inbox" data-panel={panelMovil}>
       <div className="inbox-list">
         <div className="inbox-filters">
           {FILTERS.map((f) => (
@@ -175,7 +207,7 @@ export function Inbox({
               key={c.id}
               className="conv"
               aria-selected={selected === c.id}
-              onClick={() => setSelected(c.id)}
+              onClick={() => abrir(c.id)}
             >
               <div className="conv-top">
                 <span className="conv-name">
@@ -200,10 +232,27 @@ export function Inbox({
 
       <div className="chat">
         {!detail ? (
-          <Empty glyph="🍰">Elegí una conversación de la izquierda.</Empty>
+          <>
+            {/* Sin esta cabecera, entrar al chat antes de que cargue el detalle
+                dejaba el celular sin ninguna forma de volver a la lista. */}
+            <div className="chat-head chat-head-vacia">
+              <button className="btn btn-sm btn-volver" onClick={() => setPanelMovil('lista')}>
+                ← Volver
+              </button>
+            </div>
+            <Empty glyph="🍰">Elegí una conversación de la lista.</Empty>
+          </>
         ) : (
           <>
             <div className="chat-head">
+              <button
+                className="btn btn-sm btn-volver"
+                onClick={() => setPanelMovil('lista')}
+                aria-label="Volver a la lista de conversaciones"
+              >
+                ←
+              </button>
+
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="row" style={{ gap: 7 }}>
                   <strong className="truncate">
@@ -236,6 +285,13 @@ export function Inbox({
                 onClick={() => void setMode(detail.conversation.mode === 'muted' ? 'bot' : 'muted')}
               >
                 {detail.conversation.mode === 'muted' ? '🔔' : '🔕'}
+              </button>
+              <button
+                className="btn btn-sm btn-ficha"
+                onClick={() => setFichaAbierta(true)}
+                aria-expanded={fichaAbierta}
+              >
+                Ficha
               </button>
             </div>
 
@@ -298,7 +354,18 @@ export function Inbox({
         )}
       </div>
 
-      <aside className="rail">
+      {fichaAbierta ? (
+        <button
+          className="rail-fondo"
+          aria-label="Cerrar la ficha del cliente"
+          onClick={() => setFichaAbierta(false)}
+        />
+      ) : null}
+
+      <aside className="rail" data-abierta={fichaAbierta}>
+        <button className="btn btn-sm rail-cierre" onClick={() => setFichaAbierta(false)}>
+          Cerrar ✕
+        </button>
         {detail ? <Rail detail={detail} onSaved={() => void loadDetail(detail.conversation.id)} toast={toast} /> : null}
       </aside>
     </div>
