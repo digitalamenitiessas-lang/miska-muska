@@ -1,0 +1,60 @@
+# Unidad de systemd del bot de Miska Muska.
+#
+# No la copies a mano: la instala deploy/instalar-systemd.sh, que además crea el
+# usuario, compila y ajusta permisos.
+#
+# Sigue la convención que ya usa el resto del VPS (un usuario dedicado por
+# servicio) para que un bot comprometido no pueda leer el .env ni el código de
+# los vecinos.
+
+[Unit]
+Description=Bot de Miska Muska (Telegram + API + SSE)
+Documentation=https://github.com/digitalamenitiessas-lang/miska-muska
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=miskabot
+Group=miskabot
+WorkingDirectory=/opt/miska-muska
+
+# Node 22 propio, en /opt/node22. El /usr/bin/node del sistema es el 20 y lo
+# comparten los otros nueve servicios: actualizarlo para este bot los tocaría a
+# todos.
+#
+# Las variables las lee el parser de Node, no EnvironmentFile. No es capricho:
+# la contraseña de Supabase trae un '%', y así el archivo lo interpreta
+# exactamente el mismo parser que en desarrollo (`npm start` usa
+# --env-file-if-exists). Acá va sin `-if-exists` a propósito: si falta el .env
+# el servicio tiene que fallar fuerte, no arrancar con la configuración a medias.
+ExecStart=/opt/node22/bin/node --env-file=/opt/miska-muska/.env /opt/miska-muska/apps/server/dist/main.js
+
+Environment=NODE_ENV=production
+Environment=TZ=America/Argentina/Tucuman
+
+Restart=always
+RestartSec=5
+
+# El proceso cierra canales, servidor HTTP y pool de Postgres al recibir
+# SIGTERM. Con 25 s termina limpio de sobra.
+KillSignal=SIGTERM
+TimeoutStopSec=25
+
+# El VPS tiene UN núcleo y nueve servicios en producción. Estos límites están
+# para que un pico del bot no se lleve puestos a los vecinos. MemoryHigh frena
+# antes por presión; MemoryMax es el corte duro.
+MemoryHigh=384M
+MemoryMax=512M
+CPUQuota=80%
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,41 @@
+# Variante SUBPATH: publicar el bot dentro de un dominio que Caddy YA sirve,
+# sin tocar DNS y sin pedir un certificado nuevo.
+#
+# La otra variante, con subdominio propio, está en Caddyfile.snippet.
+#
+# Este bloque NO va al final del archivo: va DENTRO del site block que ya
+# existe, antes del `handle` genérico que atiende todo lo demás.
+#
+#   sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.bak.$(date +%Y%m%d%H%M%S)
+#   sudo nano /etc/caddy/Caddyfile
+#   sudo caddy validate --config /etc/caddy/Caddyfile    # si falla, NO recargues
+#   sudo systemctl reload caddy                          # recarga sin cortar nada
+#
+# `handle_path` saca el prefijo /miska-bot antes de pasar la request: el bot
+# recibe /webhooks/telegram, /api/... y /health como si viviera en la raíz. Por
+# eso el subpath va incluido en las dos URLs de configuración:
+#
+#   PUBLIC_URL   = https://vps.marcorossi.com.ar/miska-bot   (en el .env del VPS)
+#   VITE_API_URL = https://vps.marcorossi.com.ar/miska-bot   (en Vercel)
+
+	# --- Bot de Miska Muska ---
+	handle_path /miska-bot/* {
+		# `route` fija el orden de los dos reverse_proxy. Sin él quedan a merced
+		# del ordenamiento automático de directivas de Caddy.
+		route {
+			# El stream del panel. `flush_interval -1` manda cada evento apenas
+			# llega; sin eso Caddy acumula la respuesta y la bandeja no se mueve.
+			reverse_proxy /api/stream* 127.0.0.1:3011 {
+				flush_interval -1
+				transport http {
+					# El servidor manda un ping cada 25 s: el timeout tiene que
+					# superarlo con margen o el stream se corta cada dos por tres.
+					read_timeout 1h
+					write_timeout 1h
+				}
+			}
+
+			# Webhooks de Telegram y Meta, API de gestión y /health.
+			reverse_proxy 127.0.0.1:3011
+		}
+	}

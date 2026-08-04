@@ -3,6 +3,11 @@
 #
 #   bash deploy/preparar-env.sh bot.midominio.com
 #
+# El primer argumento admite un subpath, para cuando el bot vive colgado de un
+# dominio que el proxy ya sirve:
+#
+#   bash deploy/preparar-env.sh vps.midominio.com/miska-bot
+#
 # Corre en TU máquina y escribe `.env.produccion`, listo para copiar al servidor.
 # Nunca imprime el valor de una credencial: solo dice si está o no.
 #
@@ -65,8 +70,11 @@ GRAPH="${GRAPH:-v21.0}"
   echo "OPENROUTER_MODEL=$(leer OPENROUTER_MODEL)"
   echo
   echo "# --- Servidor ---"
-  echo "PORT=3001"
-  echo "HOST=0.0.0.0"
+  echo "# Con systemd el bot abre este puerto de verdad: va en loopback, y quien"
+  echo "# lo publica es el proxy. (Con Docker da igual: el compose pisa las dos"
+  echo "# variables y el mapeo 127.0.0.1:3011 hace de contención.)"
+  echo "PORT=3011"
+  echo "HOST=127.0.0.1"
   echo "PUBLIC_URL=https://$DOMINIO"
   echo "DASHBOARD_ORIGIN=$PANEL"
   echo "ADMIN_TOKEN=$ADMIN_TOKEN_NUEVO"

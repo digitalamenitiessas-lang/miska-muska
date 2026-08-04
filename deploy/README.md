@@ -5,8 +5,34 @@ servidor sin tocarlo. Nada de lo que sigue modifica configuración existente:
 todo se agrega como archivos nuevos.
 
 Por qué esto es más fácil de lo que parece: **el bot no guarda nada en disco.**
-La base está en Supabase, así que el contenedor es descartable — se puede borrar
-y recrear sin perder un solo pedido.
+La base está en Supabase, así que el proceso es descartable — se puede borrar y
+recrear sin perder un solo pedido.
+
+Hay dos caminos. Elegí uno según con qué convive el bot:
+
+| | **Ruta A — systemd** | **Ruta B — Docker** |
+| --- | --- | --- |
+| Cuándo | El VPS ya corre servicios con systemd, o tiene poca RAM / un núcleo | El VPS ya usa Docker, o querés el proceso aislado |
+| Cuesta | Node 22 en `/opt/node22` (~50 MB) | El demonio de Docker (~150 MB RAM, ~500 MB disco, cadenas de iptables) |
+| Script | `deploy/instalar-systemd.sh` | `deploy/instalar.sh` |
+
+---
+
+## Cómo está desplegado hoy
+
+En el VPS compartido `2.25.185.242`, por la **ruta A**:
+
+| | |
+| --- | --- |
+| Código | `/opt/miska-muska`, del usuario `miskabot` |
+| Runtime | Node 22 en `/opt/node22` — el `/usr/bin/node` del sistema (v20) quedó intacto |
+| Servicio | `miska-bot.service`, habilitado al arranque, ~25 MB de RSS |
+| Escucha | `127.0.0.1:3011` — nada expuesto a internet |
+| URL pública | `https://vps.marcorossi.com.ar/miska-bot`, por subpath en el Caddy que ya estaba |
+| Panel | `https://miska-muska.vercel.app` |
+
+Convive con otros nueve servicios (Caddy, el compresor de audio, el worker de
+WhatsApp de MALALA y seis bots de Telegram) sin tocar ninguno.
 
 ---
 
@@ -23,6 +49,54 @@ existen y si el servidor llega a Supabase, OpenRouter y Telegram.
 Con esa salida se elige puerto y proxy sin adivinar.
 
 ---
+
+# Ruta A — systemd
+
+Un solo script hace todo. Es idempotente: corrélo las veces que haga falta.
+
+```bash
+sudo mkdir -p /opt/miska-muska
+# desde tu máquina, si el repo no está publicado todavía:
+#   tar -czf - --exclude=node_modules --exclude=.git --exclude=dist --exclude='.env*' . \
+#     | ssh root@TU-IP 'tar -xzf - -C /opt/miska-muska'
+
+bash deploy/preparar-env.sh vps.tudominio.com/miska-bot   # en TU máquina
+scp .env.produccion root@TU-IP:/opt/miska-muska/.env
+
+ssh root@TU-IP 'cd /opt/miska-muska && sudo bash deploy/instalar-systemd.sh'
+```
+
+El script instala Node 22 en `/opt/node22` (sin tocar el node del sistema, que
+comparten los demás servicios), crea el usuario `miskabot`, compila solo el
+workspace del servidor, instala la unit y espera a que `/health` responda.
+
+Lo que **no** hace, a propósito: no edita el proxy, no abre puertos, no toca
+ningún otro servicio. Cuando algo de eso hace falta, imprime el bloque exacto y
+se detiene.
+
+> El chequeo que evita el peor error: sin Docker no hay mapeo de puertos que
+> contenga al proceso. Si el `.env` trae `HOST=0.0.0.0` y el firewall está
+> inactivo, la API de gestión queda colgada de internet sin TLS. El script se
+> planta ahí y no arranca.
+
+Después, publicarlo con el proxy: si es un subdominio propio va
+`deploy/Caddyfile.snippet`; si va colgado de un dominio que Caddy ya sirve,
+`deploy/Caddyfile.subpath.snippet`. Y cerrar con Vercel, igual que en el paso 5.
+
+**Operación:**
+
+```bash
+journalctl -u miska-bot -f            # logs en vivo
+systemctl restart miska-bot           # reiniciar
+systemctl status miska-bot            # estado, memoria, PID
+
+# actualizar: traer el código nuevo y volver a correr el instalador
+cd /opt/miska-muska && sudo bash deploy/instalar-systemd.sh
+```
+
+---
+
+# Ruta B — Docker
 
 ## Paso 1 — Traer el código
 
@@ -151,21 +225,25 @@ Supabase.
 
 ---
 
-## Si algo no anda
+# Si algo no anda
+
+Vale para las dos rutas.
 
 | Síntoma | Causa |
 | --- | --- |
-| `bind: address already in use` | El 3011 estaba ocupado. Cambiá el lado izquierdo del mapeo en `docker-compose.yml` y el `proxy_pass` del vhost |
-| El contenedor reinicia en bucle | `docker compose logs bot` — casi siempre es `DATABASE_URL` o `DATABASE_PASSWORD` |
+| `bind: address already in use` | El 3011 estaba ocupado. En Docker cambiá el lado izquierdo del mapeo; en systemd, `PORT` en el `.env`. En los dos casos, también el proxy |
+| El proceso reinicia en bucle | `journalctl -u miska-bot -n 50` o `docker compose logs bot` — casi siempre es `DATABASE_URL` o `DATABASE_PASSWORD` |
 | `URIError: URI malformed` | La contraseña quedó dentro de `DATABASE_URL`. Va en `DATABASE_PASSWORD` |
 | El panel carga pero la bandeja no se mueve | Falta `proxy_buffering off` / `flush_interval -1` |
 | El panel no carga nada, error de CORS | `DASHBOARD_ORIGIN` y `VITE_API_URL` no coinciden |
-| Telegram no manda nada | `PUBLIC_URL` mal, o el certificado no es válido. Probá `curl https://bot.tudominio.com/health` desde afuera |
-| `nginx -t` falla | No recargues. El error dice archivo y línea; si es de este vhost, nada se rompió |
+| Telegram no manda nada | `PUBLIC_URL` mal, o el certificado no es válido. Probá `curl https://TU-URL/health` desde afuera, y mirá `getWebhookInfo` |
+| Telegram deja de responder de golpe | Alguien corrió `npm run dev` con el token de producción: el modo polling llama a `deleteWebhook`. Reiniciá el servicio para volver a registrarlo |
+| `nginx -t` / `caddy validate` falla | No recargues. El error dice archivo y línea; si es de este bloque, nada se rompió |
+| El servicio arranca y muere sin log | Falta el `.env` en `/opt/miska-muska`, o no lo puede leer `miskabot` |
 
 ---
 
-## Lo que hay que respetar
+# Lo que hay que respetar
 
 **Una sola instancia.** No escales esto ni pongas dos réplicas. El debounce que
 junta los mensajes seguidos del cliente y el mutex por conversación viven en
