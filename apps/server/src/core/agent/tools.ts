@@ -99,7 +99,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     'crear_pedido',
     'Carga un pedido en el sistema. Solo llamala cuando ya tengas nombre y apellido, teléfono, ' +
       'los productos, y la fecha y hora de retiro o entrega. Queda en estado "borrador" hasta que ' +
-      'llegue el comprobante de la transferencia: avisale eso al cliente.',
+      'llegue el comprobante de la transferencia: avisale eso al cliente. ' +
+      'Cada producto tiene que llevar precio: el producto_id del catálogo, o precio_unitario si ' +
+      'es a medida. Un pedido sin precio se rechaza.',
     {
       nombre_apellido: { type: 'string', description: 'Nombre y apellido del cliente.' },
       dni: { type: 'string', description: 'DNI, si lo dio.' },
@@ -116,6 +118,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
             },
             descripcion: { type: 'string', description: 'Cómo lo pidió el cliente.' },
             cantidad: { type: 'integer', minimum: 1 },
+            precio_unitario: {
+              type: 'number',
+              description:
+                'Precio por unidad, en pesos. Con producto_id no hace falta: sale del catálogo. ' +
+                'Para algo a medida es OBLIGATORIO, porque es el único lugar donde queda ' +
+                'registrado el precio que acordaste con el cliente.',
+            },
           },
           required: ['descripcion', 'cantidad'],
           additionalProperties: false,
@@ -255,17 +264,39 @@ export async function executeTool(
 
       case 'crear_pedido': {
         const rawItems = Array.isArray(input.items) ? input.items : [];
-        const productsById = new Map((await repos.products.list()).map((p) => [p.id, p]));
+        const catalogo = await repos.products.list();
+        const productsById = new Map(catalogo.map((p) => [p.id, p]));
+
+        /*
+          Índice por nombre además de por id. El modelo manda muy seguido la
+          descripción tal cual la dijo el cliente y omite producto_id —
+          producto_id es opcional—, y hasta acá eso hacía que un producto que SÍ
+          está en el catálogo entrara a precio 0 sin que nadie se enterara.
+        */
+        const normalizar = (s: string) =>
+          s
+            .toLowerCase()
+            .normalize('NFD')
+            .replace(/\p{Diacritic}/gu, '')
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+        const productsByName = new Map(catalogo.map((p) => [normalizar(p.name), p]));
 
         const items = rawItems.map((raw) => {
           const item = raw as Record<string, unknown>;
-          const productId = typeof item.producto_id === 'string' ? item.producto_id : null;
-          const product = productId ? productsById.get(productId) : undefined;
+          const declaredId = typeof item.producto_id === 'string' ? item.producto_id : null;
+          const description = String(item.descripcion ?? '').trim();
+          const product =
+            (declaredId ? productsById.get(declaredId) : undefined) ??
+            productsByName.get(normalizar(description));
+          const declaredPrice = Number(item.precio_unitario);
           return {
             productId: product ? product.id : null,
-            description: String(item.descripcion ?? product?.name ?? 'producto'),
+            description: description || product?.name || 'producto',
             quantity: Math.max(1, Number(item.cantidad ?? 1)),
-            unitPrice: product?.price ?? 0,
+            // El catálogo manda: es el precio real y vigente. El declarado por el
+            // modelo solo cubre lo que no está en el catálogo (tortas a medida).
+            unitPrice: product?.price ?? (Number.isFinite(declaredPrice) ? declaredPrice : 0),
           };
         });
 

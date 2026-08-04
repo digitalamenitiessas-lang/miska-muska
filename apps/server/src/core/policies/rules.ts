@@ -118,6 +118,28 @@ export function validateOrder(
     problems.push({ code: 'sin_items', message: 'El pedido no tiene ningún producto.' });
   }
 
+  /*
+    El precio salía únicamente de buscar producto_id en el catálogo, y ese campo
+    es opcional: si el modelo no lo mandaba, el ítem entraba a 0 y el pedido se
+    guardaba en silencio por $0. El local se enteraba recién al ir a cobrar.
+
+    Que falle acá es lo que hace que el bot pregunte en vez de inventar. Un ítem
+    verdaderamente gratis —una cortesía— hay que cargarlo desde el panel: es lo
+    bastante raro como para no merecer una vía en la que un precio perdido pase
+    por regalo.
+  */
+  const sinPrecio = draft.items.filter((i) => !(i.unitPrice > 0));
+  if (sinPrecio.length) {
+    problems.push({
+      code: 'sin_precio',
+      message:
+        `No tengo el precio de: ${sinPrecio.map((i) => i.description).join(', ')}. ` +
+        'Si está en el catálogo, llamá a buscar_catalogo y pasá su producto_id. ' +
+        'Si es algo a medida, acordá el precio con el cliente y mandalo en precio_unitario. ' +
+        'No cargues el pedido con el precio en cero.',
+    });
+  }
+
   const isDelivery = draft.deliveryMode === 'cadete-miska';
   if (isDelivery) {
     const pickupOnly = draft.items
