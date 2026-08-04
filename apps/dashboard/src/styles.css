@@ -815,6 +815,36 @@ table.grid tbody tr:hover {
   color: var(--ink-faint);
 }
 
+/* Importe editable de la tabla de pedidos. El subrayado punteado es la única
+   señal de que se puede tocar: un campo de formulario por celda llenaba la
+   tabla de recuadros. */
+.importe {
+  border: 0;
+  border-bottom: 1px dashed var(--line-strong);
+  background: transparent;
+  padding: 1px 3px;
+  margin: -1px -3px;
+  border-radius: 3px;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.importe:hover {
+  background: var(--mint-wash);
+  border-bottom-color: var(--mint-deep);
+}
+
+.importe-alerta {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--danger);
+  white-space: nowrap;
+}
+
 .stock-bar {
   height: 8px;
   border-radius: 999px;

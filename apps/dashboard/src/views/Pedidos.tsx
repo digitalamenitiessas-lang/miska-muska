@@ -59,6 +59,13 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
     [orders],
   );
 
+  /** Pedidos que quedaron sin precio. El bot ya no los deja pasar, pero los que
+      se cargaron antes siguen en cero y hay que corregirlos a mano. */
+  const sinPrecio = useMemo(
+    () => orders.filter((o) => o.total <= 0 && o.status !== 'cancelado').length,
+    [orders],
+  );
+
   const update = async (id: string, patch: Partial<Order>) => {
     try {
       const next = await api.updateOrder(id, patch);
@@ -79,6 +86,9 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
         />
         <Tile label="Por entregar" value={String((counts.get('confirmado') ?? 0) + (counts.get('en-preparacion') ?? 0) + (counts.get('listo') ?? 0))} />
         <Tile label="Por cobrar" value={money(pendingMoney)} note="Total menos lo ya transferido" />
+        {sinPrecio > 0 ? (
+          <Tile label="Sin precio" value={String(sinPrecio)} note="Cargales el total a mano" />
+        ) : null}
       </div>
 
       <div className="row wrap" style={{ marginBottom: 12 }}>
@@ -144,9 +154,15 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
                         </div>
                         {o.address ? <div className="muted">📍 {o.address}</div> : null}
                       </td>
-                      <td className="mono" style={{ textAlign: 'right' }}>{money(o.total)}</td>
                       <td className="mono" style={{ textAlign: 'right' }}>
-                        {money(o.paid)}
+                        <Importe
+                          valor={o.total}
+                          onGuardar={(n) => void update(o.id, { total: n })}
+                          alerta={o.total <= 0 ? 'falta el precio' : undefined}
+                        />
+                      </td>
+                      <td className="mono" style={{ textAlign: 'right' }}>
+                        <Importe valor={o.paid} onGuardar={(n) => void update(o.id, { paid: n })} />
                         {owes > 0 ? (
                           <div className="small" style={{ color: 'var(--danger)' }}>
                             debe {money(owes)}
@@ -158,15 +174,26 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
                       </td>
                       <td>
                         <div className="row" style={{ gap: 4 }}>
-                          {o.status === 'borrador' && owes > 0 ? (
+                          {/* Antes esto colgaba de `owes > 0`, así que con el
+                              total en cero el botón desaparecía y no quedaba
+                              ninguna forma de marcar el pedido como pagado.
+                              Ahora está siempre en borrador, y cuando falta el
+                              precio se ve deshabilitado y dice por qué. */}
+                          {o.status === 'borrador' ? (
                             <button
                               className="btn btn-sm btn-primary"
-                              title="Llegó el comprobante: marca pagado y confirma"
+                              disabled={o.total <= 0}
+                              title={
+                                o.total <= 0
+                                  ? 'Primero cargá el total: marcar pagado $0 no significa nada'
+                                  : 'Llegó el comprobante: marca pagado y confirma'
+                              }
                               onClick={() => void update(o.id, { paid: o.total, status: 'confirmado' })}
                             >
                               Comprobante ✓
                             </button>
-                          ) : next ? (
+                          ) : null}
+                          {next ? (
                             <button
                               className="btn btn-sm"
                               onClick={() => void update(o.id, { status: next })}
@@ -194,6 +221,69 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
         )}
       </section>
     </>
+  );
+}
+
+/**
+ * Importe editable dentro de la tabla: se ve como texto y al tocarlo se vuelve
+ * campo. Hace falta por dos motivos distintos que antes no tenían salida sin
+ * entrar a la base: un pedido a medida que quedó sin precio, y una seña —que en
+ * pastelería es la norma, no la excepción— que no es ni cero ni el total.
+ */
+function Importe({
+  valor,
+  onGuardar,
+  alerta,
+}: {
+  valor: number;
+  onGuardar: (n: number) => void;
+  alerta?: string;
+}) {
+  const [editando, setEditando] = useState(false);
+  const [texto, setTexto] = useState(String(valor));
+
+  // Si el valor cambia por el stream —lo tocó otra persona— se refleja acá.
+  useEffect(() => {
+    setTexto(String(valor));
+  }, [valor]);
+
+  const guardar = () => {
+    setEditando(false);
+    const n = Number(texto);
+    if (Number.isFinite(n) && n >= 0 && n !== valor) onGuardar(n);
+    else setTexto(String(valor));
+  };
+
+  if (!editando) {
+    return (
+      <button className="importe" onClick={() => setEditando(true)} title="Tocá para corregirlo">
+        {money(valor)}
+        {alerta ? <span className="importe-alerta">{alerta}</span> : null}
+      </button>
+    );
+  }
+
+  return (
+    <input
+      type="number"
+      min={0}
+      step={100}
+      autoFocus
+      value={texto}
+      onChange={(e) => setTexto(e.target.value)}
+      onBlur={guardar}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          guardar();
+        }
+        if (e.key === 'Escape') {
+          setTexto(String(valor));
+          setEditando(false);
+        }
+      }}
+      style={{ width: 104, textAlign: 'right' }}
+    />
   );
 }
 
