@@ -155,6 +155,23 @@ coinciden, el navegador bloquea todas las llamadas con un error de CORS.
 > en vivo — que es la mitad del valor. Mejor CORS bien configurado y el stream
 > directo al bot.
 
+### La reescritura del `vercel.json`
+
+```json
+"rewrites": [{ "source": "/((?!assets/|api/).*)", "destination": "/index.html" }]
+```
+
+El panel no tiene rutas, pero la reescritura evita un 404 si alguien entra a una
+URL profunda o recarga. Lo que importa es **la exclusión de `/api`**: ahí no vive
+nada, esa ruta la atiende el bot en otro dominio. Sin excluirla, una llamada mal
+configurada recibía el `index.html` y el panel fallaba con `Unexpected token '<'`,
+un error que no dice nada sobre la causa real.
+
+> Esta explicación vive acá y no en el archivo porque `vercel.json` **no admite
+> claves propias**: JSON no tiene comentarios, y el esquema de Vercel rechaza
+> cualquier propiedad que no conozca con
+> `should NOT have additional property`. Un `"_comment": "…"` rompe el deploy.
+
 ---
 
 ## 4. Telegram y WhatsApp en producción

@@ -4,7 +4,6 @@
   "installCommand": "npm install",
   "buildCommand": "npm run build -w @miska/dashboard",
   "outputDirectory": "apps/dashboard/dist",
-  "_comment_rewrites": "El SPA no tiene rutas, pero la reescritura evita 404 si alguien entra a una URL profunda. Se excluye /api porque ahí NO vive nada: esa ruta la atiende el bot en otro dominio. Sin excluirla, una llamada mal configurada recibía el index.html y el panel fallaba con 'Unexpected token <'.",
   "rewrites": [{ "source": "/((?!assets/|api/).*)", "destination": "/index.html" }],
   "headers": [
     {
