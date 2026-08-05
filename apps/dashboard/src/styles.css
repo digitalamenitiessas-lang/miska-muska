@@ -1052,6 +1052,11 @@ table.grid tbody tr:hover {
   /* Volver + nombre + estado + tomar + silenciar + ficha no entran en una línea
      de 375 px. */
   .chat-head { flex-wrap: wrap; row-gap: 7px; }
+
+  /* Y adentro, el nombre con sus etiquetas. El nombre se recorta solo, pero la
+     etiqueta del canal lleva `white-space: nowrap` y no se encoge: sin envolver
+     acá, se montaba por debajo del botón "Tomar yo" a 390 px o menos. */
+  .chat-head .row { flex-wrap: wrap; row-gap: 4px; }
   .chat-body { padding: 14px 12px; }
   .bubble { max-width: 85%; }
 
