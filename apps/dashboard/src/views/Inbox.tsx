@@ -253,7 +253,10 @@ export function Inbox({
                 ←
               </button>
 
-              <div className="grow" style={{ minWidth: 0 }}>
+              {/* Sin `style` en línea: la clase `.grow` ya trae min-width 0, y
+                  un estilo en línea le gana a la hoja, así que impedía que la
+                  media query le pusiera un mínimo en pantalla angosta. */}
+              <div className="grow">
                 <div className="row" style={{ gap: 7 }}>
                   <strong className="truncate">
                     {detail.contact?.fullName || detail.contact?.displayName || detail.conversation.externalId}
