@@ -27,6 +27,7 @@
 
 import { config } from '../../config.js';
 import { log } from '../events/bus.js';
+import { normalizeBubbles } from '../policies/writing.js';
 import type { BotSettings, StoredMessage } from '../types/domain.js';
 import { buildDailyContext, buildStablePrompt, SPLIT_MARKER, type DailyContextInput } from './persona.js';
 import { executeTool, TOOL_DEFINITIONS, type ToolContext } from './tools.js';
@@ -260,7 +261,16 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
 
     if (!toolCalls.length) {
       const text = choice.message.content?.trim() ?? '';
-      turn.bubbles = splitBubbles(text);
+      // Embudo único del texto que escribe el modelo. No se engancha en
+      // `egress.deliver()` porque por ahí también pasa lo que tipea una persona
+      // del local, y corregirle la escritura a un operador sería un bug.
+      const normalized = normalizeBubbles(splitBubbles(text));
+      turn.bubbles = normalized.bubbles;
+      if (normalized.fixes.length) {
+        // Si esto aparece seguido, el prompt no está alcanzando. Es información
+        // que hoy no existía en ningún lado.
+        log('info', 'La guarda de escritura corrigió el turno', normalized.fixes);
+      }
       if (!turn.bubbles.length) {
         turn.error =
           choice.finish_reason === 'length'

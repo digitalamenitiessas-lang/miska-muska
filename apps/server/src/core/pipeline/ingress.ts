@@ -29,17 +29,25 @@ export async function ingest(
   repos: Repositories,
   inbound: InboundMessage,
 ): Promise<IngressResult | null> {
-  if (await repos.messages.alreadyProcessed(inbound.channel, inbound.channelMessageId)) {
-    log('info', `Mensaje duplicado ignorado (${inbound.channel} ${inbound.channelMessageId})`);
-    return null;
-  }
-
+  /*
+    El contacto y la conversación se resuelven ANTES de deduplicar, porque el id
+    de mensaje de Telegram es correlativo por chat: sin saber de qué conversación
+    hablamos, el mensaje 1 de un cliente nuevo parecía el reintento del mensaje 1
+    de otro y se descartaba. Cuesta que un reintento de webhook bumpee
+    `contacts.last_seen_at`; `conversations.ensure` no toca `updated_at`, así que
+    el orden de la bandeja no se altera.
+  */
   const contact = await repos.contacts.upsert(inbound.channel, inbound.contact);
   const conversation = await repos.conversations.ensure(
     inbound.channel,
     inbound.ref.externalId,
     contact.id,
   );
+
+  if (await repos.messages.alreadyProcessed(conversation.id, inbound.channelMessageId)) {
+    log('info', `Mensaje duplicado ignorado (${inbound.channel} ${inbound.channelMessageId})`);
+    return null;
+  }
 
   const text = describeInbound(inbound.content);
 

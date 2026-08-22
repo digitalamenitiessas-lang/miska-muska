@@ -142,7 +142,15 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
                       </td>
                       <td style={{ maxWidth: 260 }}>
                         <div className="small">
-                          {o.items.map((i) => `${i.quantity}× ${i.description}`).join(', ')}
+                          {o.items
+                            .map((i) =>
+                              // La observación es una modificación PEDIDA, no autorizada:
+                              // por eso viaja pegada al ítem y no como nota suelta.
+                              i.observation
+                                ? `${i.quantity}× ${i.description} (${i.observation})`
+                                : `${i.quantity}× ${i.description}`,
+                            )
+                            .join(', ')}
                         </div>
                         {o.notes ? <div className="small muted">📝 {o.notes}</div> : null}
                         {o.dedication ? <div className="small muted">💌 {o.dedication}</div> : null}
@@ -153,6 +161,9 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
                           {[o.deliveryDate, o.deliveryTime].filter(Boolean).join(' · ') || 'sin fecha'}
                         </div>
                         {o.address ? <div className="muted">📍 {o.address}</div> : null}
+                        {o.recipientName ? (
+                          <div className="muted">recibe {o.recipientName}</div>
+                        ) : null}
                       </td>
                       <td className="mono" style={{ textAlign: 'right' }}>
                         <Importe

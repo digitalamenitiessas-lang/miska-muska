@@ -102,7 +102,7 @@ ingress   deduplica el reintento del webhook, resuelve contacto y conversación,
    ▼
 router    ¿bot apagado? ¿la tomó una persona? ¿matchea un mensaje rápido corto?
    ▼
-agent     OpenRouter con 7 herramientas (catálogo, pedidos, escalar, notas…)
+agent     OpenRouter con 8 herramientas (catálogo, pedidos, consultas, escalar…)
    ▼
 egress    degrada al canal, parte los textos largos, simula tipeo, envía, registra
    ▼
@@ -133,16 +133,26 @@ porque un prompt puede fallar y una guarda no:
 | Regla | Dónde se aplica |
 | --- | --- |
 | Las tortas no se envían a domicilio | `validateOrder()` rechaza el pedido |
+| Los desayunos y boxes van siempre con nuestro cadete | `validateOrder()` rechaza `uber-cliente` |
+| Ninguna modificación de producto la decide el bot | `consultar_modificacion` + guarda en `crear_pedido` |
+| Con una consulta abierta no se cierra el pedido ni se pide el pago | `conversations.pending_review` |
+| Un pedido por charla, y solo puede crecer | `crear_pedido` fusiona o deriva, nunca inserta dos |
 | Solo se venden las tortas del catálogo | el bot solo ve lo que está disponible |
 | No se reserva sin transferencia | el pedido nace en estado `borrador` |
 | No se ofrece nada agotado | `validateOrder()` + contexto del día |
 | No se compromete más stock del producido | restricción `CHECK` en la base |
 | No hay cafetería para enviar | prompt + mensaje rápido |
 | Cumpleaños: solo mañana, máximo 5 | prompt |
+| Sin signos de apertura, y "copa" no se usa | `policies/writing.ts`, sobre cada burbuja |
+
+Las guardas aplican a lo que hace **el bot**. `POST /api/orders` no pasa por
+`validateOrder()` a propósito: ahí hay una persona decidiendo, y el panel tiene que
+poder cargar la excepción que el bot no puede.
 
 **Herramientas.** `buscar_catalogo`, `disponibilidad_hoy`, `mensaje_rapido`,
-`crear_pedido`, `consultar_pedido`, `registrar_nota_cliente`, `escalar_a_humano`.
-Nunca dice un precio de memoria: lo consulta.
+`crear_pedido`, `consultar_modificacion`, `consultar_pedido`,
+`registrar_nota_cliente`, `escalar_a_humano`. Nunca dice un precio de memoria: lo
+consulta.
 
 **Mensajes rápidos.** Los textos que el equipo ya tenía pulidos en WhatsApp están
 cargados tal cual, con variables (`{{alias}}`, `{{cookiesHoy}}`, `{{direccion}}`).
@@ -175,8 +185,9 @@ Dos cosas que hacen que valga la pena comparar:
 - **Respaldos automáticos.** Con `OPENROUTER_FALLBACK_MODELS`, si el principal
   falla o está saturado OpenRouter prueba los otros dentro de la misma llamada.
 
-Para los modelos de Anthropic el prompt estable (~2.300 tokens de personalidad y
-reglas) va marcado con `cache_control`, así que se lee de caché en cada turno.
+Para los modelos de Anthropic el prompt estable (~4.900 tokens de personalidad,
+forma de escribir y reglas) va marcado con `cache_control`, así que se lee de caché
+en cada turno.
 
 ---
 

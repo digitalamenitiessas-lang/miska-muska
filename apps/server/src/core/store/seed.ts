@@ -114,7 +114,17 @@ const CATALOG: SeedProduct[] = [
   { id: 'box-requete-feliz', name: 'Box requete feliz', category: 'desayunos', price: 23000 },
 ];
 
-/** Mensajes rápidos, transcriptos tal cual los usa el equipo. */
+/**
+ * Mensajes rápidos: los textos que el equipo ya usaba en WhatsApp, con el ajuste
+ * de forma que pidió el local — sin signos de apertura, sin las fórmulas de
+ * apertura ("muchas gracias por escribirnos", "muchas gracias por tu consulta") y
+ * con un emoji por mensaje en vez de tres.
+ *
+ * Lo que NO se toca: los datos duros ({{alias}}, {{titular}}, {{direccion}},
+ * links, precios), el registro informal del equipo ("amor", "porqe", "qe",
+ * minúsculas al arrancar) y los emojis que hacen de viñeta de una lista, que son
+ * estructura y no decoración.
+ */
 const QUICK_REPLIES = [
   {
     key: 'saludo',
@@ -122,8 +132,8 @@ const QUICK_REPLIES = [
     autoSend: false,
     triggers: ['hola', 'holaa', 'buenas', 'buen dia', 'buenas tardes', 'buenas noches'],
     body:
-      'Hola! como estas? 😊🫶🏻, muchas gracias por escribirnos🙌🏼\n' +
-      'mi nombre es {{agente}}💕✨  en que te puedo ayudar?',
+      'Hola! como estas? 🫶🏻\n' +
+      'soy {{agente}}, en que te puedo ayudar?',
   },
   {
     key: 'desayunos',
@@ -132,8 +142,8 @@ const QUICK_REPLIES = [
     triggers: ['desayuno', 'desayunos', 'box', 'regalo sorpresa', 'merienda'],
     body:
       'Holaa! Tenemos 4 opciones de box para enviar como desayuno, merienda o regalo sorpresa 🥰 ' +
-      'hacemos envíos a domicilio en el horario que necesites! Te paso el link donde podrás ver las 4 opciones, ' +
-      'cualquier duda podes consultarme sin problema 🥰 {{linkDesayunos}}',
+      'el envío lo hacemos nosotros, en el horario que necesites! Te paso el link donde podrás ver ' +
+      'las 4 opciones, cualquier duda podes consultarme sin problema {{linkDesayunos}}',
   },
   {
     key: 'cookies-disponibles',
@@ -141,9 +151,9 @@ const QUICK_REPLIES = [
     autoSend: false,
     triggers: ['cookies', 'cookie', 'galletas', 'que cookies hay'],
     body:
-      'nuestras cookies disponibles hoy son 😋👇🏼\n{{cookiesHoy}}\n\n' +
-      'Te gustaría encargar alguna?😍\n' +
-      'podes abonar por transferencia y enviar un uber a retirar 🙏🏻🥰',
+      'nuestras cookies disponibles hoy son 👇🏼\n{{cookiesHoy}}\n\n' +
+      'Te gustaría encargar alguna? 😍\n' +
+      'podes abonar por transferencia y mandar un uber a retirar',
   },
   {
     key: 'mini-tortas-disponibles',
@@ -151,8 +161,8 @@ const QUICK_REPLIES = [
     autoSend: false,
     triggers: ['mini torta', 'mini tortas', 'minitorta', 'que minis hay'],
     body:
-      'Muchas gracias por tu consulta 🙌🏼💕✨\nnuestras mini tortas disponibles hoy son:\n' +
-      '{{miniTortasHoy}}\n\nsu precio es ${{precioMiniTorta}}\nte gustaria encargar alguna??🙌🏼💕',
+      'nuestras mini tortas disponibles hoy son:\n' +
+      '{{miniTortasHoy}}\n\nsu precio es ${{precioMiniTorta}}\nte gustaria encargar alguna? 💕',
   },
   {
     key: 'datos-pedido',
@@ -160,11 +170,29 @@ const QUICK_REPLIES = [
     autoSend: false,
     triggers: ['encargar', 'encargo', 'para el sabado', 'para mañana', 'reservar'],
     body:
-      'Para completar el pedido te pido los siguientes datos por favor 🙌🏼🥰\n\n' +
+      'Para completar el pedido te pido estos datos por favor 🥰\n\n' +
       '▫️Nombre y apellido:\n▫️Dni:\n▫️Número de tel:\n▫️producto:\n▫️fecha y hora de retiro:\n\n' +
       'Con los datos y comprobante queda el pedido tomado!\n\n' +
       'Alias: {{alias}}\n\nMercado Pago\n{{titular}}\n\n' +
       'Por favor enviar COMPROBANTE de la transferencia ☺️ gracias!',
+  },
+  {
+    /*
+      Los desayunos y boxes van siempre con nuestro cadete, así que necesitan datos
+      que el mensaje de retiro no pide: quién recibe y la dirección. Van todos en un
+      solo mensaje a propósito: pedirlos de a uno es lo que hacía que la charla se
+      volviera un interrogatorio.
+    */
+    key: 'datos-envio-desayuno',
+    label: 'Datos para un envío nuestro (desayuno o box)',
+    autoSend: false,
+    triggers: ['envio a domicilio', 'lo mandan', 'hacen envio', 'mandar a domicilio'],
+    body:
+      'Para el envío te pido estos datos 🥰\n\n' +
+      '▫️Nombre y apellido tuyo:\n▫️Tu número de tel:\n▫️Nombre de quien lo recibe:\n' +
+      '▫️Dirección con alguna referencia:\n▫️Día y franja horaria:\n▫️Dedicatoria:\n\n' +
+      'Con los datos y el comprobante queda el pedido tomado!\n\n' +
+      'Alias: {{alias}}\n\nMercado Pago\n{{titular}}',
   },
   {
     key: 'no-envio-tortas',
@@ -173,18 +201,24 @@ const QUICK_REPLIES = [
     triggers: ['envian tortas', 'envio de torta', 'mandan tortas', 'delivery de torta'],
     body:
       'no enviamos tortas amor, porqe queremos qe llegue en buenas condiciones, ' +
-      'podes retirar del local, estamos en {{direccion}}, o pedir un uber auto y aca le entregamos 💞🙏🏻',
+      'podes retirar del local, estamos en {{direccion}}, o pedir un uber auto y aca le entregamos 🙏🏻',
   },
   {
+    /*
+      La etiqueta es lo único que ve el modelo cuando decide qué mensaje traer, así
+      que dice cuándo aplica: el Uber es para algo del momento o para una torta que
+      no enviamos, nunca para un desayuno. `cadete` sale de los disparadores porque
+      el cadete es NUESTRO y ese mensaje habla del Uber del cliente.
+    */
     key: 'uber',
-    label: 'Instrucciones para mandar un Uber',
+    label: 'Cómo mandar un Uber (solo para algo del momento, o torta)',
     autoSend: false,
-    triggers: ['uber', 'cadete', 'mando un uber', 'pedido ya', 'rappi'],
+    triggers: ['uber', 'uber envio', 'mando un uber', 'mando un auto', 'pedido ya', 'rappi'],
     body:
-      'nuestra direccion es {{direccion}}📍🥰\n' +
-      'podes pedir el uber envio, te recomendamos que le pongas pin para mas seguridad 🔒❤️, ' +
+      'nuestra direccion es {{direccion}} 📍\n' +
+      'podes pedir el uber envio, te recomendamos que le pongas pin para mas seguridad 🔒, ' +
       'decile al chofer tu nombre para retirar el pedido, mandanos captura con la info del conductor, ' +
-      'y un mensajito cuando este afuera🙏🏻💕\nmuchas gracias por elegirnos! ✨🥰',
+      'y un mensajito cuando este afuera\nmuchas gracias por elegirnos!',
   },
   {
     key: 'curso-inscripcion',
@@ -193,9 +227,9 @@ const QUICK_REPLIES = [
     triggers: ['me anote', 'curso pagado', 'ya transferi el curso'],
     body:
       'Gracias por anotarte! 💖 Te contamos que el lugar ya quedo reservado una vez que hiciste el pago. ' +
-      'Como los cupos son limitados, ese lugar queda guardado solo para vos 🫶 te avisamos con anticipación ' +
-      'que por este motivo, no hacemos devoluciones ni cancelaciones en caso de que no puedas venir.\n' +
-      'Te mandamos un link para el grupo de wp 💖 ahí pasaremos toda la info 🤗',
+      'Como los cupos son limitados, ese lugar queda guardado solo para vos, y te avisamos con ' +
+      'anticipación que por este motivo no hacemos devoluciones ni cancelaciones en caso de que no ' +
+      'puedas venir.\nTe mandamos un link para el grupo de wp, ahí pasaremos toda la info',
   },
   {
     key: 'cursos',
@@ -204,8 +238,8 @@ const QUICK_REPLIES = [
     triggers: ['curso', 'cursos', 'clases', 'taller'],
     body:
       'Tenemos cursos 🥰 te paso la info completa acá: {{linkCursos}}\n' +
-      'La inscripción queda confirmada únicamente con el pago, porque los cupos son limitados 🫶 ' +
-      '¿Te gustaría que te reserve un lugar?',
+      'La inscripción queda confirmada únicamente con el pago, porque los cupos son limitados. ' +
+      'te gustaría que te reserve un lugar?',
   },
   {
     key: 'no-cafeteria',
@@ -214,14 +248,14 @@ const QUICK_REPLIES = [
     triggers: ['cafe', 'cafeteria', 'capuchino', 'cortado'],
     body:
       'Cafetería no enviamos amor 🙏🏻 pero te esperamos en el local para tomar algo rico, ' +
-      'estamos en {{direccion}} 💕',
+      'estamos en {{direccion}}',
   },
   {
     key: 'web',
     label: 'Links (web y cursos)',
     autoSend: false,
     triggers: ['pagina', 'web', 'link', 'catalogo'],
-    body: 'Página web: {{linkWeb}}\nPágina de cursos online: {{linkCursos}} 💕✨',
+    body: 'Página web: {{linkWeb}}\nPágina de cursos online: {{linkCursos}} 💕',
   },
 ] satisfies Array<{ key: string; label: string; body: string; triggers: string[]; autoSend: boolean }>;
 

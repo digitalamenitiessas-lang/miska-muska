@@ -28,6 +28,30 @@ export interface Contact {
   lastSeenAt: string;
 }
 
+/**
+ * Modificación de producto que tiene que contestar una persona del local.
+ * Mientras `resueltoEn` es null el bot no cierra el pedido: la guarda vive en
+ * `crear_pedido`, no solo en el prompt.
+ *
+ * No hay un enum 'aprobada' | 'rechazada' a propósito. El bot no traduce un
+ * booleano a prosa: repite lo que dijo el equipo. Un "NO SE PUEDE" pelado lo
+ * obligaría a inventar el motivo, que es justo lo que no queremos.
+ */
+export interface PendingReview {
+  id: string;
+  /** Producto sobre el que pide el cambio, como lo nombró el cliente. */
+  producto: string;
+  /** Qué cambio pide, en una línea. Si pide dos cosas, se acumulan acá. */
+  pedido: string;
+  /** La frase del cliente, tal cual, para que la persona no lea todo el chat. */
+  textoCliente: string | null;
+  abiertoEn: string;
+  /** null = sigue esperando respuesta. Es el único indicador de "en pausa". */
+  resueltoEn: string | null;
+  /** Lo que contestó el equipo, con sus palabras. No es null si hay `resueltoEn`. */
+  respuesta: string | null;
+}
+
 export interface Conversation {
   id: string;
   channel: ChannelId;
@@ -44,6 +68,8 @@ export interface Conversation {
   /** Marcada por el bot al escalar, o por un operador. */
   needsAttention: boolean;
   attentionReason: string | null;
+  /** Consulta de modificación abierta o recién contestada. null si no hay. */
+  pendingReview: PendingReview | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -138,6 +164,12 @@ export interface OrderItem {
   description: string;
   quantity: number;
   unitPrice: number;
+  /**
+   * Modificación pedida sobre este ítem ("sin jamón"). Es transporte al panel:
+   * quien decide si se puede es una persona, y hasta que contesta el pedido no se
+   * cierra. Vive en la columna `items` (jsonb), así que no necesita migración.
+   */
+  observation?: string;
 }
 
 export interface Order {
@@ -161,6 +193,8 @@ export interface Order {
   deliveryTime: string | null;
   /** Dirección, solo para envíos. */
   address: string | null;
+  /** Quién recibe, cuando no es quien compra (desayuno sorpresa). */
+  recipientName: string | null;
   /** Dedicatoria para desayunos y regalos. */
   dedication: string | null;
   /** Observaciones ("agregar velas", "no quiere foto"). */

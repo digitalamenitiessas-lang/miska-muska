@@ -20,6 +20,18 @@ export interface Contact {
   lastSeenAt: string;
 }
 
+/** Modificacion de producto que tiene que contestar una persona del local. */
+export interface PendingReview {
+  id: string;
+  producto: string;
+  pedido: string;
+  textoCliente: string | null;
+  abiertoEn: string;
+  /** null = todavia esperando respuesta del equipo. */
+  resueltoEn: string | null;
+  respuesta: string | null;
+}
+
 export interface Conversation {
   id: string;
   channel: ChannelId;
@@ -33,6 +45,7 @@ export interface Conversation {
   unreadCount: number;
   needsAttention: boolean;
   attentionReason: string | null;
+  pendingReview: PendingReview | null;
   createdAt: string;
   updatedAt: string;
   contact?: Contact | null;
@@ -78,6 +91,8 @@ export interface OrderItem {
   description: string;
   quantity: number;
   unitPrice: number;
+  /** Modificacion pedida sobre este item. La decide una persona. */
+  observation?: string;
 }
 
 export interface Order {
@@ -96,6 +111,7 @@ export interface Order {
   deliveryDate: string | null;
   deliveryTime: string | null;
   address: string | null;
+  recipientName: string | null;
   dedication: string | null;
   notes: string | null;
   campaignId: string | null;
@@ -281,6 +297,12 @@ export const api = {
     post<{ ok: true }>(`/api/conversations/${id}/mode`, { mode }),
   setAttention: (id: string, needsAttention: boolean, reason?: string) =>
     post<{ ok: true }>(`/api/conversations/${id}/attention`, { needsAttention, reason }),
+  answerReview: (id: string, respuesta: string, devolverAlBot = true) =>
+    post<{ ok: true; conversation: Conversation }>(`/api/conversations/${id}/review`, {
+      respuesta,
+      devolverAlBot,
+    }),
+  clearReview: (id: string) => del<{ ok: true }>(`/api/conversations/${id}/review`),
   sendMessage: (id: string, text: string) =>
     post<{ ok: true }>(`/api/conversations/${id}/messages`, { text }),
   sendQuickReply: (id: string, quickReplyKey: string) =>

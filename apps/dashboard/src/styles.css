@@ -40,6 +40,8 @@
   --navy: #334862;
   --danger: #b20000;
   --success: #627d47;
+  /* Fondo de la franja de consulta pendiente: el amarillo de la marca, lavado. */
+  --warn-soft: #fff8e6;
 
   --line: #efe4e6;
   --line-strong: #e2d3d6;
@@ -649,6 +651,30 @@ table.grid tbody tr:hover {
   align-items: center;
   gap: 10px;
   flex: 0 0 auto;
+}
+
+/* Consulta de modificación esperando respuesta del equipo. Franja propia debajo
+   del encabezado: el encabezado es un flex row que ya se acomoda justo en
+   pantalla angosta, y meter un formulario ahí lo rompía. */
+.review-box {
+  padding: 9px 16px;
+  background: var(--warn-soft);
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 0 0 auto;
+}
+
+.review-acciones {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+}
+
+.review-acciones input {
+  min-width: 160px;
 }
 
 .chat-body {

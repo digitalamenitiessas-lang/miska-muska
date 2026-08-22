@@ -10,7 +10,7 @@
  */
 
 import type { QueryResultRow } from 'pg';
-import { dateOnly, exec, iso, isoOrNull, newId, one, q, TIMEZONE } from './db.js';
+import { dateOnly, exec, iso, isoOrNull, newId, nowIso, one, q, TIMEZONE } from './db.js';
 import type {
   Campaign,
   CampaignSku,
@@ -21,6 +21,7 @@ import type {
   Order,
   OrderItem,
   OrderStatus,
+  PendingReview,
   Product,
   ProductCategory,
   QuickReply,
@@ -69,6 +70,10 @@ function toConversation(r: Row): Conversation {
     unreadCount: Number(r.unread_count ?? 0),
     needsAttention: Boolean(r.needs_attention),
     attentionReason: str(r.attention_reason),
+    // jsonb vuelve ya parseado. Se castea sin validar a propósito: la pausa solo
+    // actúa si hay objeto y `resueltoEn` es null, así que una fila con forma
+    // desconocida no frena ventas, se ignora.
+    pendingReview: (r.pending_review ?? null) as PendingReview | null,
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
   };
@@ -132,6 +137,7 @@ function toOrder(r: Row): Order {
     deliveryDate: dateOnly(r.delivery_date),
     deliveryTime: str(r.delivery_time),
     address: str(r.address),
+    recipientName: str(r.recipient_name),
     dedication: str(r.dedication),
     notes: str(r.notes),
     campaignId: str(r.campaign_id),
@@ -316,17 +322,83 @@ export function createRepositories() {
       );
     },
 
+    /**
+     * Abre la consulta de modificación, o le SUMA el pedido nuevo si ya había una
+     * sin contestar. Suma y no reemplaza porque el modelo puede pedir dos cambios
+     * en el mismo turno ("sin queso y en pan de chipá"), y la primera consulta no
+     * puede desaparecer sin que nadie se entere.
+     */
+    async openReview(
+      id: string,
+      data: Pick<PendingReview, 'producto' | 'pedido' | 'textoCliente'>,
+    ): Promise<PendingReview> {
+      const actual = (await conversations.get(id))?.pendingReview ?? null;
+      const abierta = actual && !actual.resueltoEn ? actual : null;
+      const review: PendingReview = abierta
+        ? { ...abierta, pedido: `${abierta.pedido} + ${data.pedido}` }
+        : {
+            id: newId('rev_'),
+            ...data,
+            abiertoEn: nowIso(),
+            resueltoEn: null,
+            respuesta: null,
+          };
+      await exec(
+        'UPDATE conversations SET pending_review = $2::jsonb, updated_at = now() WHERE id = $1',
+        [id, JSON.stringify(review)],
+      );
+      return review;
+    },
+
+    /**
+     * Guarda la respuesta del equipo. Devuelve null si no había ninguna consulta
+     * abierta: el WHERE comprueba y el UPDATE escribe en la misma sentencia, así
+     * que dos operadores apretando a la vez no la contestan dos veces.
+     *
+     * La marca de tiempo se arma en TS y viaja como parámetro: `to_char` daría un
+     * offset de solo horas ("-03") y `Date.parse` lo rechaza.
+     */
+    async answerReview(id: string, respuesta: string): Promise<Conversation | null> {
+      const row = await one(
+        `UPDATE conversations
+         SET pending_review = pending_review || jsonb_build_object(
+               'respuesta', $2::text, 'resueltoEn', $3::text),
+             updated_at = now()
+         WHERE id = $1
+           AND pending_review IS NOT NULL
+           AND pending_review->>'resueltoEn' IS NULL
+         RETURNING *`,
+        [id, respuesta, nowIso()],
+      );
+      return row ? toConversation(row) : null;
+    },
+
+    /** Borra la consulta: el pedido se cargó, o ya no aplica. */
+    async clearReview(id: string): Promise<void> {
+      await exec(
+        'UPDATE conversations SET pending_review = NULL, updated_at = now() WHERE id = $1',
+        [id],
+      );
+    },
+
     async markRead(id: string): Promise<void> {
       await exec('UPDATE conversations SET unread_count = 0 WHERE id = $1', [id]);
     },
   };
 
   const messages = {
-    /** true si el id del proveedor ya fue procesado (webhook reintentado). */
-    async alreadyProcessed(channel: ChannelId, channelMessageId: string): Promise<boolean> {
+    /**
+     * true si el id del proveedor ya fue procesado (webhook reintentado).
+     *
+     * Se pregunta POR CONVERSACIÓN, no por canal: el id de mensaje de Telegram es
+     * correlativo por chat, así que dos personas distintas tienen las dos un
+     * mensaje 1. Preguntando por canal, el primer mensaje de cada charla nueva
+     * chocaba con uno viejo de otra y se descartaba en silencio.
+     */
+    async alreadyProcessed(conversationId: string, channelMessageId: string): Promise<boolean> {
       const row = await one(
-        'SELECT 1 AS x FROM messages WHERE channel = $1 AND channel_message_id = $2',
-        [channel, channelMessageId],
+        'SELECT 1 AS x FROM messages WHERE conversation_id = $1 AND channel_message_id = $2',
+        [conversationId, channelMessageId],
       );
       return row !== null;
     },
@@ -453,15 +525,15 @@ export function createRepositories() {
       const row = await one(
         `INSERT INTO orders (id, conversation_id, contact_id, customer_name, customer_dni,
            customer_phone, items, total, paid, status, delivery_mode, delivery_date, delivery_time,
-           address, dedication, notes, campaign_id, campaign_sku_id, created_by)
+           address, recipient_name, dedication, notes, campaign_id, campaign_sku_id, created_by)
          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-                 $18, $19)
+                 $18, $19, $20)
          RETURNING *`,
         [
           newId('o_'), o.conversationId, o.contactId, o.customerName, o.customerDni,
           o.customerPhone, JSON.stringify(o.items), o.total, o.paid, o.status, o.deliveryMode,
-          o.deliveryDate, o.deliveryTime, o.address, o.dedication, o.notes, o.campaignId,
-          o.campaignSkuId ?? null, o.createdBy,
+          o.deliveryDate, o.deliveryTime, o.address, o.recipientName ?? null, o.dedication,
+          o.notes, o.campaignId, o.campaignSkuId ?? null, o.createdBy,
         ],
       );
       return toOrder(row!);
@@ -508,7 +580,8 @@ export function createRepositories() {
         customerName: 'customer_name', customerDni: 'customer_dni',
         customerPhone: 'customer_phone', total: 'total', paid: 'paid', status: 'status',
         deliveryMode: 'delivery_mode', deliveryDate: 'delivery_date',
-        deliveryTime: 'delivery_time', address: 'address', dedication: 'dedication',
+        deliveryTime: 'delivery_time', address: 'address', recipientName: 'recipient_name',
+        dedication: 'dedication',
         notes: 'notes', campaignId: 'campaign_id', campaignSkuId: 'campaign_sku_id',
       };
       const sets: string[] = [];
@@ -537,8 +610,14 @@ export function createRepositories() {
   const campaigns = {
     async listActive(): Promise<Campaign[]> {
       const rows = await q(
+        // Faltaba `starts_on`: una campaña cargada con tres semanas de
+        // anticipación ya salía como activa, y el contexto del día la anunciaba.
+        // El bot ofrecía boxes de una fecha que todavía no había empezado. El
+        // panel usa listAll(), así que esto solo cambia lo que ve el bot.
         `SELECT * FROM campaigns
-         WHERE active AND ends_on >= (now() AT TIME ZONE $1)::date
+         WHERE active
+           AND starts_on <= (now() AT TIME ZONE $1)::date
+           AND ends_on   >= (now() AT TIME ZONE $1)::date
          ORDER BY starts_on`,
         [TIMEZONE],
       );

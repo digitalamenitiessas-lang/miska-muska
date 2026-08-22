@@ -70,11 +70,63 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
       return reply.code(400).send({ error: 'Modo inválido' });
     }
     await repos.conversations.setMode(id, mode);
-    // Al devolverla al bot se limpia la alerta: ya fue atendida.
-    if (mode === 'bot') await repos.conversations.setAttention(id, false, null);
+    /*
+      Al devolverla al bot se limpia la alerta, porque ya fue atendida. Pero si
+      quedó una modificación sin contestar, la alerta se MANTIENE: el bot ya está
+      frenado por la guarda de `crear_pedido`, y la alerta es lo único que le
+      recuerda al equipo que hay alguien esperando una respuesta. Sin esto, el
+      movimiento natural ("ahí te confirmo" + devolver al bot) deja la conversación
+      sin ningún rastro, que es el caso real del sanguchito.
+
+      Los reclamos siguen igual: no tienen consulta abierta, así que la alerta se
+      limpia como hasta ahora.
+    */
+    const actual = await repos.conversations.get(id);
+    const consultaAbierta = Boolean(actual?.pendingReview && !actual.pendingReview.resueltoEn);
+    if (mode === 'bot' && !consultaAbierta) {
+      await repos.conversations.setAttention(id, false, null);
+    }
     const conversation = await repos.conversations.get(id);
     if (conversation) bus.emit({ type: 'conversation', conversation });
     return { ok: true, conversation };
+  });
+
+  /** Respuesta del equipo a una consulta de modificación. */
+  app.post('/api/conversations/:id/review', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const { respuesta, devolverAlBot } = req.body as {
+      respuesta?: string;
+      devolverAlBot?: boolean;
+    };
+    /*
+      Se exige texto: el bot repite lo que dijo el equipo. Un sí o un no pelados lo
+      obligarían a inventar el motivo del rechazo, que es justamente lo que no
+      queremos. El panel ofrece dos textos precargados, así que sigue siendo un clic.
+    */
+    const texto = (respuesta ?? '').trim();
+    if (!texto) return reply.code(400).send({ error: 'Falta la respuesta para el bot' });
+    const resolved = await repos.conversations.answerReview(id, texto);
+    // null = no había consulta abierta, o la contestó otro un segundo antes.
+    if (!resolved) return reply.code(409).send({ error: 'Acá no hay ninguna consulta abierta' });
+    if (devolverAlBot !== false) {
+      await repos.conversations.setMode(id, 'bot');
+      await repos.conversations.setAttention(id, false, null);
+      // El cliente quedó esperando: el bot retoma él mismo con la respuesta del
+      // equipo, en vez de esperar a que la persona vuelva a escribir.
+      await pipeline.resumeAfterReview(id);
+    }
+    const conversation = await repos.conversations.get(id);
+    if (conversation) bus.emit({ type: 'conversation', conversation });
+    return { ok: true, conversation };
+  });
+
+  /** La consulta ya no aplica: el cliente se arrepintió, o se resolvió por teléfono. */
+  app.delete('/api/conversations/:id/review', async (req) => {
+    const { id } = req.params as { id: string };
+    await repos.conversations.clearReview(id);
+    const conversation = await repos.conversations.get(id);
+    if (conversation) bus.emit({ type: 'conversation', conversation });
+    return { ok: true };
   });
 
   app.post('/api/conversations/:id/attention', async (req) => {
@@ -206,6 +258,7 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
       deliveryDate: (body.deliveryDate as string) ?? null,
       deliveryTime: (body.deliveryTime as string) ?? null,
       address: (body.address as string) ?? null,
+      recipientName: (body.recipientName as string) ?? null,
       dedication: (body.dedication as string) ?? null,
       notes: (body.notes as string) ?? null,
       campaignId: (body.campaignId as string) ?? null,

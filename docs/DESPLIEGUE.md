@@ -63,6 +63,33 @@ advisory lock para que un deploy solapado no las aplique dos veces. Si preferís
 provisionar la base antes del primer deploy, `supabase/schema.sql` tiene el SQL
 completo para pegar en el editor de Supabase (se regenera con `npm run db:sql`).
 
+**Aplicar una migración a mano, con la base ya en uso.** Es el caso de todos los
+deploys después del primero: `supabase/migraciones/` tiene un archivo por
+migración, con su registro al final.
+
+```
+supabase/migraciones/001-esquema-inicial.sql
+supabase/migraciones/002-consulta-de-modificacion-y-quien-recibe.sql
+supabase/migraciones/003-deduplicacion-por-conversacion.sql
+```
+
+Para saber qué falta, en el editor SQL de Supabase:
+
+```sql
+SELECT id, name, applied_at FROM _migrations ORDER BY id;
+```
+
+Y pegar los archivos que no aparezcan, en orden, **incluido el `INSERT` del
+final**: es lo que le dice al servidor que ya está aplicada. Si te lo salteás no
+se rompe nada —de la 2 en adelante el SQL está escrito con `IF NOT EXISTS`
+justamente porque se corre a mano— pero el servidor la va a volver a intentar en
+cada arranque.
+
+Correrlas a mano es opcional: si arrancás el servicio con la migración pendiente,
+la aplica él. Lo que **no** conviene es lo inverso — desplegar código viejo contra
+una base ya migrada está bien, pero código nuevo contra una base sin migrar falla
+en la primera consulta que use la columna nueva.
+
 Después del primer arranque, cargá el catálogo y los mensajes rápidos:
 
 ```bash

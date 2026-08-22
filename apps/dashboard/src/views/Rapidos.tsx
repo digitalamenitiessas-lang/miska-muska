@@ -66,9 +66,10 @@ export function Rapidos({ toast }: { toast: (text: string) => void }) {
     <>
       <div className="row wrap" style={{ marginBottom: 14, gap: 10 }}>
         <span className="small muted grow">
-          El bot los trae con la herramienta <code>mensaje_rapido</code> y puede sumar una línea
-          empática arriba, pero no cambia los datos duros. Con <strong>auto</strong> encendido, un
-          mensaje corto que matchee se responde sin pasar por el modelo.
+          El bot los trae con la herramienta <code>mensaje_rapido</code> y los usa tal cual: no
+          cambia los datos duros ni los emojis, y no agrega un saludo arriba si el mensaje ya
+          saluda. Con <strong>auto</strong> encendido, un mensaje corto que matchee se responde sin
+          pasar por el modelo.
         </span>
         <button
           className="btn btn-primary"

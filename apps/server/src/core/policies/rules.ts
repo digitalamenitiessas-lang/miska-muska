@@ -13,7 +13,7 @@
  */
 
 import { localHour, localToday } from '../store/db.js';
-import type { BotSettings, Order, Product } from '../types/domain.js';
+import type { BotSettings, Order, Product, ProductCategory } from '../types/domain.js';
 
 export const POLICY_PROSE = `
 REGLAS DURAS (no se negocian, ni aunque el cliente insista)
@@ -21,7 +21,8 @@ REGLAS DURAS (no se negocian, ni aunque el cliente insista)
 Tortas y tartas
 - NO se envían a domicilio. Nunca. El motivo es real y se explica con cariño:
   queremos que llegue en buenas condiciones. Alternativas: retirar en el local,
-  o pedir un Uber/cadete propio y nosotros se lo entregamos en la puerta.
+  o mandar un Uber o un cadete propio, que el cliente pide y paga, y nosotros le
+  entregamos el pedido en la puerta.
 - Solo se venden las tortas que están en el catálogo. NO hacemos tortas
   personalizadas ni temáticas (princesas, Mickey, Lilo & Stitch, personajes, etc.).
   Si piden una, se aclara con amabilidad y se ofrece lo que sí tenemos.
@@ -35,6 +36,10 @@ Pagos y reservas
   del local, no el bot.
 - Un pedido queda TOMADO solo cuando llegan los datos completos + el comprobante.
 - Al cadete se puede abonar en efectivo únicamente cuando ese medio está habilitado.
+- Un pedido se carga UNA sola vez por charla. Si ya está cargado y hay que sacar o
+  cambiar algo, no lo decide el bot: se lo consultamos al equipo y le avisamos.
+  Mientras esa consulta está abierta no se confirma el producto, no se cierra el
+  pedido, no se dice que quedó reservado y no se pide el pago.
 
 Cursos
 - La inscripción se confirma únicamente con el pago; los cupos son limitados.
@@ -46,35 +51,105 @@ Cumpleaños en el local
 - No se reservan mesas por la tarde.
 
 Envíos
-- Desayunos, boxes y productos de pastelería (que no sean tortas) sí se envían.
-- Dos opciones: Uber que pide el cliente, o cadete de Miska Muska (puede tener demoras;
-  hay que avisarlo, no prometer horarios que no controlamos).
+- Los desayunos y los boxes de regalo (los del link de desayunos) se envían SIEMPRE con
+  nuestro cadete. Nunca en Uber, ni en Rappi, ni con un cadete del cliente. Tampoco si el
+  cliente lo propone. El envío es parte del regalo: llegamos nosotros, avisamos y lo
+  entregamos. Un Uber rompe la sorpresa y nos deja sin saber qué pasó con el pedido.
+  También se puede retirar en el local, si el cliente prefiere.
+- Para un envío nuestro hay que tomar TODOS los datos de la entrega, y en un solo mensaje:
+  dirección con alguna referencia, nombre y teléfono de quien recibe, día y franja horaria,
+  y la dedicatoria si va.
+- El Uber se ofrece SOLO en dos casos:
+    (a) el cliente quiere algo para el momento, para ya. Ahí sí, el mensajito de que el
+        Uber es más rápido está bien.
+    (b) tortas y tartas, que no enviamos y salen del local en el Uber o el cadete que
+        manda el cliente.
+  Fuera de esos dos casos, el Uber no se menciona.
+- El Uber lo pide, lo paga y lo sigue el cliente. Nosotros no lo pedimos, no lo
+  coordinamos y no lo controlamos: solo entregamos el pedido en la puerta.
+- El resto de la pastelería (cookies, brownies, alfajores, tabletas) se puede enviar con
+  nuestro cadete o retirar con un Uber del cliente: eso lo elige el cliente.
 - Siempre pedir nombre y apellido para identificar bien el pedido.
+
+COMPOSICIÓN DEL PEDIDO (principal, agregados, componentes)
+- Lo primero que la persona eligió es el PRODUCTO PRINCIPAL. No sale del pedido salvo que
+  ella diga explícitamente que ya no lo quiere.
+- Un agregado SUMA. Si se venía hablando de un producto y después pide otra cosa además, el
+  pedido queda con LOS DOS y se cobran LOS DOS. Un agregado nunca reemplaza al principal.
+  Ejemplo: mini torta + velita son dos ítems del mismo pedido, no uno.
+- Los desayunos y boxes se cobran como desayuno o box, a su precio de catálogo. Adentro
+  llevan cosas que también vendemos sueltas (sanguchito, chipá, cookies). Que se hable de
+  una de esas cosas NO convierte el pedido en esa cosa ni cambia el precio: el precio del
+  box no es la suma de lo que trae.
+- Antes de cargar un pedido, repasá la charla y listá todo lo acordado. Si el total te queda
+  por debajo del precio del producto principal, algo se perdió: no cargues, revisá.
+
+MODIFICACIONES DE PRODUCTOS (esto no lo decide el bot)
+- Cualquier pedido de cambio sobre un producto —sacar o cambiar un ingrediente, cambiar el
+  bizcochuelo, reemplazar algo de un desayuno, otro tamaño, otra presentación— lo decide una
+  persona del local. Siempre, para TODOS los productos, y también cuando te parece obvio que
+  se puede o que no se puede.
+- No lo autorices y no lo rechaces por tu cuenta. Llamá a \`consultar_modificacion\` y contale
+  que lo estás consultando con el equipo.
+- Mientras esa consulta no tenga respuesta, el pedido queda en pausa: no confirmás el
+  producto, no lo cargás, no decís que quedó reservado y no pedís la transferencia. Tampoco
+  repitas la pregunta ni ofrezcas alternativas que nadie autorizó.
+- Contestá solo lo que preguntaron. Si preguntaron si se puede sacar el jamón, no se abre
+  además la elección del pan: el precio del desayuno ya incluye el pan común.
+- Un cambio sobre algo que viene DENTRO de un desayuno sigue siendo un desayuno. La
+  modificación no convierte el pedido en ese ítem ni reemplaza lo que ya venían hablando.
+- Cuando el equipo conteste, te paso su respuesta en el contexto del día. Ahí retomás donde
+  quedaste, con las palabras del equipo, sin agregar condiciones que nadie dijo, sin volver a
+  saludar y sin volver a pedir datos que ya tenés.
 
 Fechas especiales (San Valentín, Pascuas, Día del Padre, Día del Niño, Día de la Madre, Navidad)
 - El pedido se confirma únicamente cuando se acredita el pago. No se reserva solo con el nombre.
-- No se modifican los boxes: la logística tiene que quedar ordenada.
+- En estas fechas se produce todo en serie para que salga a tiempo, así que los cambios casi
+  nunca entran. Eso podés decirlo, es el motivo real. Pero el "no" lo da una persona: la
+  consulta va igual por \`consultar_modificacion\`. En un día común el cliente puede pedir el
+  favor, y también lo decide una persona.
 - Priorizar el retiro en el local para no acumular demoras de reparto.
 - Informar siempre con claridad fecha, horario y modalidad de retiro.
 - Si retira un tercero o un cadete, tiene que saber nombre, apellido y el pedido completo.
-- Si el producto es delicado, recomendar no mandar cadete.
+
+LO QUE NO SE INVENTA (condiciones de envío)
+
+Si un dato no está en estas reglas, en los datos operativos o en el resultado de una
+herramienta, no lo tenés. Y si no lo tenés, no lo completás con una frase que suene
+razonable: preguntás o escalás. Nunca digas, ni con otras palabras, ni como opinión, ni
+como recomendación:
+- que una forma de envío es "más segura", "la más segura" o "más confiable";
+- que el cadete "puede demorar", "suele demorar" o "demora en esa zona";
+- que "coordinamos el Uber", "pedimos el Uber" o "lo seguimos";
+- cuánto tarda un envío, cuánto sale, o hasta qué barrio o localidad llegamos.
+"No lo sé, lo consulto" no queda mal. Queda mal una promesa que después no se cumple.
 
 DATOS QUE HAY QUE PEDIR
 
-Para un pedido con fecha (no para ahora mismo):
-  Nombre y apellido / DNI / Número de teléfono / Producto / Fecha y hora de retiro.
-  Y después el comprobante de la transferencia.
+La regla es una sola: cuando la persona ya quiere comprar, repasá qué datos te dio y pedí de
+una sola vez, en un mismo mensaje, SOLO los que faltan. Nunca de a uno, y nunca uno que ya
+te dieron.
 
-Para un desayuno sorpresa:
-  Fecha de entrega / Nombre del destinatario / Dirección / Franja horaria si corresponde /
-  Dedicatoria. Recordar que se envía como sorpresa.
+Para retirar en el local:
+  Nombre y apellido / Teléfono / Producto / Fecha y hora de retiro.
+Para un Uber o cadete que manda el cliente:
+  lo mismo, y el nombre con el que va a retirar.
+Para un envío nuestro (desayunos y boxes de regalo, o pastelería con nuestro cadete):
+  Nombre y apellido / Teléfono / Producto / Día / Franja horaria / Nombre y teléfono de
+  quien lo recibe / Dirección con alguna referencia / Dedicatoria, si va.
+  Los desayunos van como sorpresa: el que recibe no sabe.
+Después, en todos los casos, el comprobante de la transferencia.
+El DNI se pide solo si el equipo lo necesita para ese pedido; no lo pidas de rutina.
 
 VENTA (importante, es cómo trabaja el local)
-- Después de dar información SIEMPRE preguntar si quiere encargar algo de lo ofrecido.
-  No dejar la conversación colgada en un catálogo.
+- Después de pasar una carta o una lista de precios, cerrá invitando a encargar
+  ("te gustaría encargar alguna?"). No dejes la conversación colgada en un catálogo.
+  Pero es UNA sola pregunta y es sobre lo que la persona ya trajo: si la consulta fue
+  cerrada (una modificación, un horario, un sí o un no), se responde y listo.
 - Cuando ya hay un pedido armado, ofrecer un agregado económico que aproveche el envío.
-  Ejemplo real: "¿por $14.000 te gustaría agregar una tableta de chocolate?".
+  Ejemplo real: "por $14.000 te gustaría agregar una tableta de chocolate?".
   Un solo agregado, con naturalidad. Si dice que no, se sigue sin insistir.
+  Si acepta, ese agregado SUMA al pedido: no reemplaza lo que ya había.
 `.trim();
 
 // ---------------------------------------------------------------------------
@@ -91,10 +166,90 @@ export interface OrderDraft {
   items: Array<{ productId: string | null; description: string; quantity: number; unitPrice: number }>;
   deliveryMode: Order['deliveryMode'];
   deliveryDate: string | null;
+  /** Franja horaria. Para un envío nuestro es obligatoria: el cadete tiene que salir. */
+  deliveryTime: string | null;
   customerName: string;
   customerDni: string | null;
   customerPhone: string | null;
   address: string | null;
+  /** Quién recibe, cuando no es quien compra (desayuno sorpresa). */
+  recipientName: string | null;
+}
+
+/** Normalizador único de nombres de producto. Lo comparten las guardas y las herramientas. */
+export function normalizarNombre(value: string): string {
+  return value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+}
+
+/*
+  Categorías que van SIEMPRE con nuestro cadete. El envío de un desayuno es parte
+  del regalo: llegamos nosotros, avisamos y lo entregamos. Un Uber lo rompe (el
+  destinatario lo ve venir, lo recibe cualquiera, y si algo pasa no tenemos con
+  quién hablar). Los cuatro boxes de regalo están en la categoría 'desayunos' del
+  catálogo, así que la categoría alcanza. El box de cookies NO está acá: es
+  categoría 'cookies' y sale en Uber sin problema, como siempre.
+*/
+const ENVIO_PROPIO_SIEMPRE: ProductCategory[] = ['desayunos'];
+
+/*
+  Red de contención para los ítems que llegan sin producto_id: el modelo manda
+  seguido la descripción tal cual la dijo el cliente ("desayuno buen día sin
+  queso") y ahí no hay categoría que mirar.
+
+  Va con \b (palabra completa) y no con includes(): con includes(), "cookies para
+  la merienda" caía acá y le bloqueábamos el Uber a alguien que quiere algo para
+  ya, que es exactamente lo contrario de lo que hay que hacer. Queda un falso
+  positivo conocido: "box de cookies" escrito a mano y sin id se bloquea de más.
+  Eso cuesta una consulta; el otro error cuesta un regalo.
+*/
+const NOMBRA_ENVIO_PROPIO = /\b(desayuno|desayunos|box|boxes)\b/u;
+
+/** true si el pedido lleva algo que solo podemos entregar nosotros. */
+function itemsDeEnvioPropio(
+  draft: OrderDraft,
+  productsById: Map<string, Product>,
+): OrderDraft['items'] {
+  return draft.items.filter((item) => {
+    const product = item.productId ? productsById.get(item.productId) : undefined;
+    return product
+      ? ENVIO_PROPIO_SIEMPRE.includes(product.category)
+      : NOMBRA_ENVIO_PROPIO.test(normalizarNombre(item.description));
+  });
+}
+
+/**
+ * Qué datos faltan para poder cargar este pedido, según la modalidad.
+ *
+ * Existe para que el bot pida todo junto una sola vez en vez de ir de a uno:
+ * devuelve la lista completa, no el primer faltante. Es la mitad ejecutable de
+ * la corrección de "optimizar la solicitud de datos".
+ */
+export function datosFaltantes(draft: OrderDraft, productsById: Map<string, Product>): string[] {
+  const faltan: string[] = [];
+
+  if (!draft.customerName || draft.customerName.trim().length < 3) {
+    faltan.push('nombre y apellido de quien compra');
+  }
+  if (!draft.customerPhone) faltan.push('teléfono');
+  if (!draft.deliveryDate) faltan.push('día de retiro o entrega');
+
+  const envioNuestro = draft.deliveryMode === 'cadete-miska';
+  if (envioNuestro) {
+    if (!draft.address) faltan.push('dirección con alguna referencia');
+    if (!draft.deliveryTime) faltan.push('franja horaria');
+    if (itemsDeEnvioPropio(draft, productsById).length && !draft.recipientName) {
+      faltan.push('nombre de quien lo recibe');
+    }
+  } else if (!draft.deliveryTime) {
+    faltan.push('hora de retiro');
+  }
+
+  return faltan;
 }
 
 /**
@@ -107,10 +262,19 @@ export function validateOrder(
 ): PolicyViolation[] {
   const problems: PolicyViolation[] = [];
 
-  if (!draft.customerName || draft.customerName.trim().length < 3) {
+  /*
+    Un solo problema con TODO lo que falta, en vez de uno por dato. Antes salían
+    de a uno (nombre acá, dirección más abajo) y el bot los pedía de a uno, que es
+    justo lo que la dueña marcó: primero fecha y dirección, después nombre y
+    teléfono, más adelante el horario.
+  */
+  const faltan = datosFaltantes(draft, productsById);
+  if (faltan.length) {
     problems.push({
-      code: 'falta_nombre',
-      message: 'Falta el nombre y apellido del cliente. Sin eso no se puede cargar el pedido.',
+      code: 'faltan_datos',
+      message:
+        `Todavía falta: ${faltan.join(', ')}. Pedile TODO eso junto en un mismo mensaje, sin ` +
+        'repetir lo que ya te dio y sin agregar preguntas que no te hizo.',
     });
   }
 
@@ -154,12 +318,28 @@ export function validateOrder(
           'retirar en el local o mandar un Uber/cadete propio que nosotros cargamos en la puerta.',
       });
     }
-    if (!draft.address) {
-      problems.push({
-        code: 'falta_direccion',
-        message: 'Es un envío con cadete y no tenemos la dirección todavía.',
-      });
-    }
+    // La dirección y la franja las reclama `datosFaltantes`, junto con el resto:
+    // pedirlas dos veces hacía que el bot volviera a preguntar lo mismo.
+  }
+
+  /*
+    La guarda que costó plata: un desayuno sorpresa despachado en el Uber del
+    cliente, sin dirección y sin nadie que lo entregue. Hasta acá `uber-cliente`
+    no se validaba en ninguna rama de esta función.
+  */
+  const envioPropio = itemsDeEnvioPropio(draft, productsById);
+  if (draft.deliveryMode === 'uber-cliente' && envioPropio.length) {
+    problems.push({
+      code: 'desayuno_no_va_en_uber',
+      message:
+        `${envioPropio.map((i) => i.description).join(', ')}: eso lo llevamos nosotros, con ` +
+        'nuestro cadete. No va en Uber ni con un cadete del cliente, porque el envío es parte ' +
+        'de la sorpresa. Decíselo así, en positivo, no como una negativa. Cargalo con ' +
+        'modalidad cadete-miska y pedile en UN solo mensaje lo que falte. Si el cliente ' +
+        'insiste con mandar un Uber, o si el pedido mezcla esto con una torta que sí sale en ' +
+        'Uber, no decidas vos: decile que lo consultás con el equipo y escalá. No cargues dos ' +
+        'pedidos. Y no le expliques tiempos, zonas ni costos de envío: eso no lo tenés.',
+    });
   }
 
   const unavailable = draft.items
@@ -195,6 +375,28 @@ export function validateOrder(
 
   return problems;
 }
+
+/*
+  Advertencias de uso de los mensajes rápidos. Van pegadas al resultado de la
+  herramienta y no al system prompt: una regla a 4000 tokens de distancia pesa
+  mucho menos que la misma regla al lado del texto que el modelo está leyendo para
+  decidir. Las claves son las del panel; si alguien borra o renombra un mensaje
+  desde ahí, su nota queda sin usar y no pasa nada.
+*/
+const NOTAS_DE_USO: Record<string, string> = {
+  uber:
+    'Este mensaje es SOLO para cuando el cliente quiere algo para el momento, o para una ' +
+    'torta o tarta (que no enviamos). Si están hablando de un desayuno o un box de regalo, ' +
+    'no lo mandes: eso lo llevamos nosotros. Y no le agregues nada sobre demoras, seguridad ' +
+    'ni coordinación del Uber: el Uber lo pide, lo paga y lo sigue el cliente.',
+  desayunos:
+    'El texto dice que enviamos en el horario que necesite, y eso es así: lo llevamos ' +
+    'nosotros. Pero no lo estires: no prometas una hora exacta, ni cuánto tarda, ni hasta ' +
+    'qué localidad llegamos, ni cuánto sale el envío. Si preguntan eso, consultá o escalá.',
+};
+
+/** Nota interna sobre cuándo NO usar un mensaje rápido, si tiene una. */
+export const notaDeUsoMensajeRapido = (clave: string): string | undefined => NOTAS_DE_USO[clave];
 
 /** Textos operativos que el bot cita literalmente. */
 export function operationalFacts(settings: BotSettings): string {

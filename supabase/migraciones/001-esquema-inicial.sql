@@ -1,27 +1,18 @@
-/**
- * Esquema en Postgres. Se aplica solo al arrancar, y también se puede volcar a
- * un archivo para pegarlo en el editor SQL de Supabase (`npm run db:sql`).
- *
- * Diferencias a propósito con la versión de SQLite que reemplaza:
- *  - `timestamptz` en vez de texto ISO. Esto arregla de raíz el bug de zona
- *    horaria: las fechas se comparan en el huso de Tucumán, no en UTC.
- *  - `boolean` en vez de 0/1.
- *  - `jsonb` para los items del pedido y los disparadores.
- *  - una SEQUENCE para el número de pedido, en vez de `MAX(number) + 1`, que con
- *    dos pedidos simultáneos podía repetir el número.
- */
+-- Migración 1 de la base del bot de Miska Muska.
+-- Generado con `npm run db:sql`. No editar a mano: editá migrations.ts.
+--
+-- Para correrla a mano en el editor SQL de Supabase: pegá todo, incluido el
+-- INSERT del final, que es lo que le dice al servidor que ya está aplicada.
 
-export interface Migration {
-  id: number;
-  name: string;
-  sql: string;
-}
+CREATE TABLE IF NOT EXISTS _migrations (
+  id         integer PRIMARY KEY,
+  name       text NOT NULL,
+  applied_at timestamptz NOT NULL DEFAULT now()
+);
 
-export const MIGRATIONS: Migration[] = [
-  {
-    id: 1,
-    name: 'esquema-inicial',
-    sql: `
+-- ========================================================================
+-- Migración 1: esquema-inicial
+-- ========================================================================
 CREATE TABLE contacts (
   id            text PRIMARY KEY,
   channel       text NOT NULL,
@@ -174,91 +165,6 @@ CREATE TABLE settings (
   key   text PRIMARY KEY,
   value jsonb NOT NULL
 );
-`,
-  },
-  {
-    id: 2,
-    name: 'consulta-de-modificacion-y-quien-recibe',
-    sql: `
--- Ninguna modificación de producto la decide el bot, y mientras una persona no la
--- conteste el flujo automático queda en pausa.
---
--- Por qué una columna nueva y no reusar \`mode\`: \`mode\` dice QUIÉN habla, y lo
--- escriben la escalada, la racha de errores y cualquier operador que apriete
--- "Devolver al bot" (que además limpia la alerta). Esto dice QUÉ puede prometer
--- el bot, y tiene que sobrevivir a todo eso.
---
--- jsonb y no cuatro columnas porque el blob lo leen dos lugares (la guarda de
--- crear_pedido y el contexto del día), así crece sin otra migración, y sigue la
--- convención de orders.items y quick_replies.triggers. Sin índice: nadie filtra
--- por esta columna en SQL; el panel filtra en memoria la lista que ya trajo.
-ALTER TABLE conversations ADD COLUMN IF NOT EXISTS pending_review jsonb;
 
--- Un desayuno sorpresa lo recibe alguien que no es quien compra. Hasta acá ese
--- nombre no tenía dónde vivir: el bot lo pedía y se perdía en la charla.
-ALTER TABLE orders ADD COLUMN IF NOT EXISTS recipient_name text;
-
--- El bot ahora consulta los pedidos de la charla en cada turno: para inyectarlos
--- en el contexto del día y para no volver a cargar el mismo pedido.
-CREATE INDEX IF NOT EXISTS idx_orders_conversation ON orders (conversation_id, created_at DESC);
-`,
-  },
-  {
-    id: 3,
-    name: 'deduplicacion-por-conversacion',
-    sql: `
--- El id de mensaje de Telegram es correlativo POR CHAT, no global: el chat A y el
--- chat B tienen los dos un mensaje 1, 2, 3. Con el índice único global, el primer
--- mensaje de cada conversación nueva chocaba con un mensaje viejo de otra y se
--- descartaba en silencio como "reintento de webhook". De ahí venía buena parte del
--- "el bot ignora lo que ya le dije" y del "arranca de nuevo".
---
--- No hace falta borrar nada antes: el índice viejo era estrictamente más estricto
--- que este, así que si el par global era único, el par por conversación también.
-DROP INDEX IF EXISTS idx_messages_dedupe;
-CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dedupe ON messages (conversation_id, channel_message_id)
-  WHERE channel_message_id IS NOT NULL;
-`,
-  },
-];
-
-/**
- * Una migración sola, con su registro en `_migrations`, para correrla a mano
- * desde el editor SQL de Supabase.
- *
- * El `INSERT` final no es decorativo: si se corre el SQL sin registrarlo, el
- * servidor la ve como pendiente y la vuelve a aplicar al arrancar. Las de la 2 en
- * adelante están escritas con `IF NOT EXISTS` justamente porque se corren a mano,
- * así que ese caso no rompe el arranque — pero el registro es lo que hace que el
- * estado de la base y el de `_migrations` coincidan.
- */
-export function migrationSql(migration: Migration): string {
-  return (
-    `-- ${'='.repeat(72)}\n-- Migración ${migration.id}: ${migration.name}\n` +
-    `-- ${'='.repeat(72)}\n${migration.sql.trim()}\n\n` +
-    `INSERT INTO _migrations (id, name) VALUES (${migration.id}, '${migration.name}')\n` +
-    '  ON CONFLICT (id) DO NOTHING;\n'
-  );
-}
-
-/** SQL completo, para pegar en el editor de Supabase. */
-export function schemaSql(): string {
-  const header = [
-    '-- Esquema de la base del bot de Miska Muska.',
-    '-- Generado con `npm run db:sql`. No editar a mano: editá migrations.ts.',
-    '--',
-    '-- El servidor aplica esto solo al arrancar. Este archivo existe para poder',
-    '-- revisarlo, versionarlo, o correrlo desde el editor SQL de Supabase.',
-    '',
-    'CREATE TABLE IF NOT EXISTS _migrations (',
-    '  id         integer PRIMARY KEY,',
-    '  name       text NOT NULL,',
-    '  applied_at timestamptz NOT NULL DEFAULT now()',
-    ');',
-    '',
-  ].join('\n');
-
-  const body = MIGRATIONS.map(migrationSql).join('\n');
-
-  return `${header}\n${body}`;
-}
+INSERT INTO _migrations (id, name) VALUES (1, 'esquema-inicial')
+  ON CONFLICT (id) DO NOTHING;

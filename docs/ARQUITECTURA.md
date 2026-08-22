@@ -104,6 +104,26 @@ La capa más dura de todas está en la base: `campaign_skus` tiene un `CHECK` qu
 impide comprometer más stock del producido. Ni el bot ni el panel ni una consulta
 suelta pueden vender la caja 151 de 150.
 
+Hay tres guardas más que siguen el mismo patrón y vale conocerlas antes de tocar
+`crear_pedido`:
+
+- **Un pedido por charla, y solo puede crecer.** El modelo no tiene un verbo para
+  modificar un pedido: `crear_pedido` es su única escritura. Así que cuando el
+  cliente suma, saca o cambia algo, lo único que puede hacer es volver a llamarla.
+  Antes eso insertaba una fila nueva (el desayuno en un pedido, el sanguchito en
+  otro: se producía uno y se cobraba el otro). Ahora la herramienta busca el
+  borrador abierto de la charla y decide: mismos ítems no escribe nada, ítems de
+  más los fusiona, y si algo desapareció o cambió de precio no escribe y deriva.
+- **La pausa por consulta.** `conversations.pending_review` es un `jsonb` con la
+  modificación que pidió el cliente. Mientras no tenga respuesta, `crear_pedido`
+  rechaza y el mensaje rápido que lleva el alias también. Es una columna aparte y
+  no `mode` porque `mode` dice *quién habla* y lo escriben tres caminos distintos;
+  esto dice *qué puede prometer el bot*.
+- **La forma del texto.** `policies/writing.ts` le saca los signos de apertura y
+  traduce "copa" a cada burbuja que genera el modelo, y también a los mensajes
+  rápidos al renderizarlos. Los emojis no se tocan: cuántos van es criterio, y una
+  guarda que los borra a ciegas le saca el 🙏🏻 al mensaje del papá internado.
+
 ---
 
 ## 6. Un proveedor, muchos modelos
@@ -143,8 +163,8 @@ de sistema, en este orden:
 
 | Posición | Qué | Por qué |
 | --- | --- | --- |
-| `messages[0]` | personalidad, reglas, datos del local (~2.300 tokens) | cambia casi nunca → lleva `cache_control` y se lee de caché |
-| `messages[1]` | fecha, disponibilidad de hoy, campaña activa, notas del cliente | cambia todo el tiempo → va después, así no invalida lo de arriba |
+| `messages[0]` | personalidad, forma de escribir, reglas, datos del local (~4.900 tokens) | cambia casi nunca → lleva `cache_control` y se lee de caché |
+| `messages[1]` | fecha, disponibilidad, campaña, notas, pedidos de la charla, consulta abierta | cambia todo el tiempo → va después, así no invalida lo de arriba |
 
 Se podría ganar algo más poniendo el bloque volátil al final de la conversación,
 para que también se cachee el historial. No se hace: eso depende de cómo cada
@@ -187,6 +207,13 @@ mensaje, el reloj se reinicia y se contesta a todo junto.
 
 **Mutex por conversación.** Sin él, dos mensajes casi simultáneos disparan dos
 turnos de modelo en paralelo que se pisan y duplican respuestas.
+
+**Marca de agua del último entrante contestado.** El mutex evita el paralelo, pero
+no el turno de más: cuando está tomado, el debounce se reprograma, y ese disparo
+puede terminar corriendo un turno cuyo último mensaje del cliente ya fue leído y
+contestado por el turno anterior. Ahí salían dos respuestas casi idénticas — y, si
+el turno incluía `crear_pedido`, dos pedidos. Cada turno anota el id del último
+entrante que leyó y el siguiente se saltea si no hay nada nuevo.
 
 **Tipeo proporcional.** El indicador "escribiendo…" y una espera de ~22 ms por
 carácter, con piso y techo. Configurable, y en 0 se nota que es un bot.

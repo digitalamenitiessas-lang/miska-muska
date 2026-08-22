@@ -54,6 +54,14 @@ export class Pipeline {
   #pending = new Map<string, NodeJS.Timeout>();
   #running = new Set<string>();
   #errorStreak = new Map<string, number>();
+  /*
+    Último mensaje entrante que un turno ya LEYÓ y contestó, por conversación.
+    No necesita limpieza: una entrada vieja solo puede volver a coincidir con el
+    mismo id de mensaje, y ese id no vuelve a llegar nunca. Crece como
+    #errorStreak y por la misma razón: el bot corre en una sola instancia. Cuando
+    haya que escalar, esto se muda a una columna junto con el mutex.
+  */
+  #answered = new Map<string, string>();
 
   constructor(repos: Repositories, resolveAdapter: AdapterResolver) {
     this.#repos = repos;
@@ -141,13 +149,36 @@ export class Pipeline {
     const contact = await repos.contacts.get(conversation.contactId);
     if (!contact) return;
 
-    const [settings, history, products, quickReplies, activeCampaigns] = await Promise.all([
-      repos.settings.read(),
-      repos.messages.history(conversationId, 40),
-      repos.products.list(),
-      repos.quickReplies.list(),
-      repos.campaigns.listActive(),
-    ]);
+    const [settings, history, products, quickReplies, activeCampaigns, openOrders] =
+      await Promise.all([
+        repos.settings.read(),
+        repos.messages.history(conversationId, 40),
+        repos.products.list(),
+        repos.quickReplies.list(),
+        repos.campaigns.listActive(),
+        repos.orders.list({ conversationId, limit: 5 }),
+      ]);
+
+    /*
+      Un turno existe para contestar algo nuevo. El reloj del debounce se rearma
+      cada vez que el mutex está tomado, así que es normal que dispare un turno
+      cuyo último entrante ya contestó el turno anterior: ese mensaje llegó en la
+      ventana entre que el timer disparó y que este SELECT corrió, o sea que el
+      turno de antes también lo leyó. Correrlo igual es la forma más común de
+      mandar dos respuestas casi idénticas, y de cargar dos veces el mismo pedido.
+
+      Se compara contra el historial que este turno LEYÓ, no contra lo que había
+      cuando disparó el timer: es lo único que distingue "ya contestado" de
+      "todavía sin contestar".
+    */
+    const ultimoEntrante = [...history]
+      .reverse()
+      .find((m) => m.direction === 'in' && m.contentKind !== 'typing');
+    if (!ultimoEntrante) return;
+    if (this.#answered.get(conversationId) === ultimoEntrante.id) {
+      log('info', `Turno omitido (${conversationId}): nada nuevo que contestar.`);
+      return;
+    }
     const campaigns = await Promise.all(
       activeCampaigns.map(async (campaign) => ({
         campaign,
@@ -168,14 +199,56 @@ export class Pipeline {
         quickReplies,
         contact,
         outsideHours: isOutsideBusinessHours(settings),
+        openOrders,
+        pendingReview: conversation.pendingReview,
       },
     });
+
+    // --- efectos de las herramientas ----------------------------------------
+    /*
+      Van ANTES del manejo de errores a propósito: si el modelo escaló y después se
+      quedó sin burbujas, la escalada tiene que valer igual. Hasta acá el `return`
+      del bloque de errores la descartaba en silencio, y con una consulta de
+      modificación eso es peor: el bot seguía habilitado y en el turno siguiente
+      cerraba el pedido.
+    */
+    const { escalate } = toolContext.effects;
+    if (escalate) {
+      await repos.conversations.setMode(conversationId, 'human');
+      await repos.conversations.setAttention(
+        conversationId,
+        true,
+        `[${escalate.reason}] ${escalate.summary}`,
+      );
+      const refreshed = await repos.conversations.get(conversationId);
+      if (refreshed) bus.emit({ type: 'conversation', conversation: refreshed });
+    }
 
     // --- manejo de errores del modelo ---------------------------------------
     if (turn.error || !turn.bubbles.length) {
       const streak = (this.#errorStreak.get(conversationId) ?? 0) + 1;
       this.#errorStreak.set(conversationId, streak);
       log('warn', `Turno sin respuesta (${conversationId}), racha ${streak}`, turn.error);
+
+      /*
+        Si escaló y el turno igual se cayó, el cliente no puede quedarse en
+        silencio: la conversación ya quedó en 'human', así que el bot no vuelve a
+        intentar nunca. Se avisa sin esperar la racha, y no se toca la alerta: el
+        motivo de la escalada vale más que "el bot falló N veces".
+      */
+      if (escalate) {
+        await this.#send(
+          conversationId,
+          [
+            {
+              kind: 'text',
+              text: 'Dame un minutito que lo confirmo 🙏🏻 ya te escribe alguien del local 💕',
+            },
+          ],
+          { author: 'system', intent: 'error', handler: 'escalate' },
+        );
+        return;
+      }
 
       if (streak >= settings.escalateAfterErrors) {
         await repos.conversations.setMode(conversationId, 'human');
@@ -202,19 +275,15 @@ export class Pipeline {
       return;
     }
     this.#errorStreak.delete(conversationId);
-
-    // --- efectos de las herramientas ----------------------------------------
-    const { escalate } = toolContext.effects;
-    if (escalate) {
-      await repos.conversations.setMode(conversationId, 'human');
-      await repos.conversations.setAttention(
-        conversationId,
-        true,
-        `[${escalate.reason}] ${escalate.summary}`,
-      );
-      const refreshed = await repos.conversations.get(conversationId);
-      if (refreshed) bus.emit({ type: 'conversation', conversation: refreshed });
-    }
+    /*
+      Se marca acá y no antes de llamar al modelo. Un turno que falló no contestó
+      nada, y el disparo pendiente del debounce es la única segunda oportunidad que
+      tiene el cliente: marcarlo por adelantado se la saca. Lo que estamos cerrando
+      es la duplicación del turno anterior que SÍ contestó.
+      Antes del #send y no después: si el envío se corta a mitad, reintentar manda
+      de nuevo las burbujas que ya salieron.
+    */
+    this.#answered.set(conversationId, ultimoEntrante.id);
 
     const contents: OutboundContent[] = turn.bubbles.map((text) => ({ kind: 'text', text }));
 
@@ -260,6 +329,21 @@ export class Pipeline {
       metrics: opts.metrics,
       humanize: opts.humanize,
     });
+  }
+
+  /**
+   * El equipo contestó una consulta de modificación: el bot retoma la charla.
+   *
+   * Hace falta un empujón explícito porque el cliente ya escribió y quedó
+   * esperando: sin esto, la respuesta del local queda guardada y el bot no dice
+   * nada hasta que la persona vuelva a escribir, que es justo la sensación de
+   * "me dejaron colgado" que hay que evitar. Se borra la marca de agua porque el
+   * último entrante ya fue contestado ("lo estoy consultando") y sin eso el turno
+   * se saltearía solo.
+   */
+  async resumeAfterReview(conversationId: string): Promise<void> {
+    this.#answered.delete(conversationId);
+    this.#scheduleAgentTurn(conversationId);
   }
 
   /** API pública para que un operador escriba desde el panel. */

@@ -168,3 +168,49 @@ CREATE TABLE settings (
 
 INSERT INTO _migrations (id, name) VALUES (1, 'esquema-inicial')
   ON CONFLICT (id) DO NOTHING;
+
+-- ========================================================================
+-- Migración 2: consulta-de-modificacion-y-quien-recibe
+-- ========================================================================
+-- Ninguna modificación de producto la decide el bot, y mientras una persona no la
+-- conteste el flujo automático queda en pausa.
+--
+-- Por qué una columna nueva y no reusar `mode`: `mode` dice QUIÉN habla, y lo
+-- escriben la escalada, la racha de errores y cualquier operador que apriete
+-- "Devolver al bot" (que además limpia la alerta). Esto dice QUÉ puede prometer
+-- el bot, y tiene que sobrevivir a todo eso.
+--
+-- jsonb y no cuatro columnas porque el blob lo leen dos lugares (la guarda de
+-- crear_pedido y el contexto del día), así crece sin otra migración, y sigue la
+-- convención de orders.items y quick_replies.triggers. Sin índice: nadie filtra
+-- por esta columna en SQL; el panel filtra en memoria la lista que ya trajo.
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS pending_review jsonb;
+
+-- Un desayuno sorpresa lo recibe alguien que no es quien compra. Hasta acá ese
+-- nombre no tenía dónde vivir: el bot lo pedía y se perdía en la charla.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS recipient_name text;
+
+-- El bot ahora consulta los pedidos de la charla en cada turno: para inyectarlos
+-- en el contexto del día y para no volver a cargar el mismo pedido.
+CREATE INDEX IF NOT EXISTS idx_orders_conversation ON orders (conversation_id, created_at DESC);
+
+INSERT INTO _migrations (id, name) VALUES (2, 'consulta-de-modificacion-y-quien-recibe')
+  ON CONFLICT (id) DO NOTHING;
+
+-- ========================================================================
+-- Migración 3: deduplicacion-por-conversacion
+-- ========================================================================
+-- El id de mensaje de Telegram es correlativo POR CHAT, no global: el chat A y el
+-- chat B tienen los dos un mensaje 1, 2, 3. Con el índice único global, el primer
+-- mensaje de cada conversación nueva chocaba con un mensaje viejo de otra y se
+-- descartaba en silencio como "reintento de webhook". De ahí venía buena parte del
+-- "el bot ignora lo que ya le dije" y del "arranca de nuevo".
+--
+-- No hace falta borrar nada antes: el índice viejo era estrictamente más estricto
+-- que este, así que si el par global era único, el par por conversación también.
+DROP INDEX IF EXISTS idx_messages_dedupe;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dedupe ON messages (conversation_id, channel_message_id)
+  WHERE channel_message_id IS NOT NULL;
+
+INSERT INTO _migrations (id, name) VALUES (3, 'deduplicacion-por-conversacion')
+  ON CONFLICT (id) DO NOTHING;

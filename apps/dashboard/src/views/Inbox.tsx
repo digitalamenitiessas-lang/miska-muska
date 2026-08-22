@@ -8,11 +8,12 @@ import {
 } from '../api';
 import { CHANNEL_LABEL, Empty, ORDER_STATUS_LABEL, ORDER_STATUS_TONE, Pill, clock, money, timeAgo } from '../ui';
 
-type Filter = 'todas' | 'sin-leer' | 'atencion' | 'bot' | 'humano';
+type Filter = 'todas' | 'sin-leer' | 'consultas' | 'atencion' | 'bot' | 'humano';
 
 const FILTERS: Array<{ id: Filter; label: string }> = [
   { id: 'todas', label: 'Todas' },
   { id: 'sin-leer', label: 'Sin leer' },
+  { id: 'consultas', label: 'Consultas' },
   { id: 'atencion', label: 'Atención' },
   { id: 'bot', label: 'Bot' },
   { id: 'humano', label: 'Humano' },
@@ -46,6 +47,8 @@ export function Inbox({
   const [fichaAbierta, setFichaAbierta] = useState(false);
   const [detail, setDetail] = useState<ConversationDetail | null>(null);
   const [draft, setDraft] = useState('');
+  /** Lo que el equipo le contesta al bot sobre una modificación pedida. */
+  const [respuesta, setRespuesta] = useState('');
   const [sending, setSending] = useState(false);
   const [typing, setTyping] = useState(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -55,6 +58,8 @@ export function Inbox({
       switch (filter) {
         case 'sin-leer':
           return c.unreadCount > 0;
+        case 'consultas':
+          return Boolean(c.pendingReview && !c.pendingReview.resueltoEn);
         case 'atencion':
           return c.needsAttention;
         case 'bot':
@@ -103,6 +108,8 @@ export function Inbox({
   // mostrando todavía los datos del cliente anterior mientras carga el nuevo.
   useEffect(() => {
     setFichaAbierta(false);
+    // Si no, la respuesta escrita para una consulta aparece cargada en la siguiente.
+    setRespuesta('');
   }, [selected]);
 
   useEffect(() => {
@@ -147,6 +154,33 @@ export function Inbox({
       toast(`No se pudo enviar: ${String(err)}`);
     } finally {
       setSending(false);
+    }
+  };
+
+  const responderConsulta = async () => {
+    if (!selected || !respuesta.trim()) return;
+    try {
+      // `request` lanza con cualquier respuesta que no sea 2xx, incluido el 409 de
+      // "otro la contestó primero": sin este catch el panel muestra un error crudo.
+      await api.answerReview(selected, respuesta.trim());
+      setRespuesta('');
+      await loadDetail(selected);
+      onConversationsChanged();
+      toast('El bot ya puede seguir con el pedido');
+    } catch (err) {
+      toast(`No pude guardar la respuesta: ${String(err)}`);
+    }
+  };
+
+  const descartarConsulta = async () => {
+    if (!selected) return;
+    try {
+      await api.clearReview(selected);
+      await loadDetail(selected);
+      onConversationsChanged();
+      toast('Consulta descartada');
+    } catch (err) {
+      toast(`No pude descartarla: ${String(err)}`);
     }
   };
 
@@ -223,6 +257,9 @@ export function Inbox({
                 {c.mode === 'human' ? <Pill tone="rose">humano</Pill> : null}
                 {c.mode === 'muted' ? <Pill tone="grey">silenciada</Pill> : null}
                 {c.needsAttention ? <Pill tone="danger">atención</Pill> : null}
+                {c.pendingReview && !c.pendingReview.resueltoEn ? (
+                  <Pill tone="warn">consulta</Pill>
+                ) : null}
                 {c.unreadCount > 0 ? <Pill tone="warn">{c.unreadCount}</Pill> : null}
               </div>
             </button>
@@ -297,6 +334,51 @@ export function Inbox({
                 Ficha
               </button>
             </div>
+
+            {/* Consulta de modificación sin contestar: lo único que el equipo
+                tiene que decidir para que el bot pueda seguir. Va como franja
+                propia y no dentro de .chat-head, que es un flex row y se rompe
+                en pantalla angosta. */}
+            {detail.conversation.pendingReview && !detail.conversation.pendingReview.resueltoEn ? (
+              <div className="review-box">
+                <div className="small">
+                  <strong>Consulta sin responder:</strong>{' '}
+                  {detail.conversation.pendingReview.pedido} (
+                  {detail.conversation.pendingReview.producto})
+                  {detail.conversation.pendingReview.textoCliente
+                    ? ` — "${detail.conversation.pendingReview.textoCliente}"`
+                    : null}
+                </div>
+                <div className="review-acciones">
+                  <button className="chip" onClick={() => setRespuesta('Sí, se puede.')}>
+                    Se puede
+                  </button>
+                  <button className="chip" onClick={() => setRespuesta('No se puede.')}>
+                    No se puede
+                  </button>
+                  <input
+                    className="grow"
+                    value={respuesta}
+                    onChange={(e) => setRespuesta(e.target.value)}
+                    placeholder="Qué le contesta el bot, con tus palabras"
+                  />
+                  <button
+                    className="btn btn-sm btn-primary"
+                    disabled={!respuesta.trim()}
+                    onClick={() => void responderConsulta()}
+                  >
+                    Enviar al bot
+                  </button>
+                  <button
+                    className="btn btn-sm btn-ghost"
+                    title="La consulta ya no aplica"
+                    onClick={() => void descartarConsulta()}
+                  >
+                    Descartar
+                  </button>
+                </div>
+              </div>
+            ) : null}
 
             <div className="chat-body" ref={bodyRef}>
               {detail.messages.map((m) => (

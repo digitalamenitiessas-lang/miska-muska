@@ -69,18 +69,18 @@ const CHATS: DemoChat[] = [
     turns: [
       { dir: 'in', text: 'holaa! que cookies tenes hoy?' },
       bot(
-        'Holaa! Cómo estás? 🥰 Hoy tenemos cookie clásica y red velvet a $4000, y ferrero, kinder, nutella, dubai y pistacho a $5000 😋',
+        'Holaa! Cómo estás? 🥰 Hoy tenemos cookie clásica y red velvet a $4000, y ferrero, kinder, nutella, dubai y pistacho a $5000',
         'disponibilidad_hoy',
       ),
-      bot('Te gustaría encargar alguna? Podés abonar por transferencia y mandar un Uber a retirar 🙌🏼'),
+      bot('Te gustaría encargar alguna? Podés abonar por transferencia y mandar un Uber a retirar'),
       { dir: 'in', text: 'dame 2 de kinder y 1 de ferrero' },
       bot(
-        'Buenísimo, quedan 2 kinder y 1 ferrero: $15.000 en total ✨ Por $14.000 te gustaría agregar una tableta rellena? Aprovechás el mismo viaje 😍',
+        'Listo, 2 kinder y 1 ferrero: $15.000 en total. Por $14.000 te gustaría agregar una tableta rellena? Aprovechás el mismo viaje 😍',
         'buscar_catalogo',
       ),
       { dir: 'in', text: 'siii la de franui y nutella' },
       bot(
-        'Ay me encanta esa 🫶🏻 Total $29.000. Te paso el alias MISKATUC (MISKA MUSKA SAS, Mercado Pago) y con el comprobante te lo dejo listo 💕',
+        'Total $29.000. Te paso el alias MISKATUC (MISKA MUSKA SAS, Mercado Pago) y con el comprobante te lo dejo listo 💕',
         'crear_pedido',
       ),
     ],
@@ -94,18 +94,18 @@ const CHATS: DemoChat[] = [
     turns: [
       { dir: 'in', text: 'buenas! estoy viviendo en españa y queria mandarle algo a mi mama' },
       bot(
-        '¡Qué lindo gesto! 🥰 Seguro le va a hacer muchísima ilusión recibir algo tuyo desde tan lejos. Contame qué tenías pensado y te ayudo a elegir algo que la sorprenda ✨',
+        'Un regalo desde tan lejos siempre pega fuerte 🥰 Contame qué tenías pensado y vemos algo que la sorprenda',
         'registrar_nota_cliente',
       ),
       { dir: 'in', text: 'un desayuno estaria genial, es su cumple el viernes' },
       bot(
-        'Ayyy qué mimo para el cumple 💕 Tenemos cuatro opciones de box para enviar como desayuno. Te paso el link así los ves y cualquier duda me consultás sin problema 🙌🏼 https://miskamuska.com.ar/product-category/desayunos/',
+        'Tenemos cuatro opciones de box para enviar como desayuno, y los llevamos nosotros. Te paso el link así los ves y cualquier duda me consultás sin problema https://miskamuska.com.ar/product-category/desayunos/',
         'mensaje_rapido',
         { handler: 'agent' },
       ),
       { dir: 'in', text: 'el desayuno miska muska. le puedo poner una dedicatoria?' },
       bot(
-        'Obvio que sí 🫶🏻 Si querés te tiro tres opciones y elegís la que más suene a vos. Necesito también la dirección, el nombre de tu mamá y en qué franja horaria le va mejor — se lo mandamos como sorpresa 🎁',
+        'Obvio que sí 🫶🏻 Si querés te tiro tres opciones y elegís la que más suene a vos. Necesito también tu teléfono, la dirección con alguna referencia, el nombre de tu mamá y en qué franja horaria le va mejor — se lo mandamos como sorpresa',
       ),
     ],
   },
@@ -120,12 +120,12 @@ const CHATS: DemoChat[] = [
     turns: [
       { dir: 'in', text: 'hola! necesito 6 box de alfajores para el sabado' },
       bot(
-        'Holaa! Qué bueno 🙌🏼 Seis cajas de alfajores para el sábado, te las reservo. Son $17.000 cada una 💕',
+        'Holaa! Seis cajas de alfajores para el sábado, te las anoto. Son $17.000 cada una 💕',
         'buscar_catalogo',
       ),
       { dir: 'in', text: 'puedo señar la mitad y el resto cuando retiro?' },
       bot(
-        'Dejame que lo consulto con el local un segundito 🙏🏻 En un rato te escribe alguien del equipo para verlo bien 💕',
+        'Dejame que lo consulto con el local un segundito 🙏🏻 En un rato te escribe alguien del equipo para verlo bien',
         'escalar_a_humano',
         { handler: 'escalate' },
       ),
@@ -145,12 +145,12 @@ const CHATS: DemoChat[] = [
     turns: [
       { dir: 'in', text: 'hacen envio de tortas a domicilio?' },
       bot(
-        'No enviamos tortas amor 🙏🏻 es porque queremos que te llegue en buenas condiciones. Podés retirarla del local, estamos en Marcos Paz 473, o pedir un Uber auto y acá se lo entregamos 💞',
+        'No enviamos tortas amor 🙏🏻 es porque queremos que te llegue en buenas condiciones. Podés retirarla del local, estamos en Marcos Paz 473, o pedir un Uber auto y acá se lo entregamos',
         'mensaje_rapido',
       ),
       { dir: 'in', text: 'ah ok. y una torta de lilo y stitch para nena hacen?' },
       bot(
-        'Uy en eso no te puedo ayudar: trabajamos solamente con las tortas del catálogo, no hacemos temáticas 🙈 Pero mirá que la chocoreo y la red velvet siempre son un éxito en los cumples ✨ te muestro?',
+        'Uy en eso no te puedo ayudar: trabajamos solamente con las tortas del catálogo, no hacemos temáticas. Pero la chocoreo y la red velvet siempre andan muy bien en los cumples, te muestro?',
         'buscar_catalogo',
       ),
     ],
@@ -163,15 +163,15 @@ const CHATS: DemoChat[] = [
     turns: [
       { dir: 'in', text: 'hola, queria saber por los cursos' },
       bot(
-        'Holaa! Cómo estás? 😊🫶🏻 Mi nombre es Mica 💕 Tenemos cursos, te paso toda la info acá: https://www.cursos.miskamuska.com.ar',
+        'Holaa! Cómo estás? 🫶🏻 Tenemos cursos, te paso toda la info acá: https://www.cursos.miskamuska.com.ar',
         'mensaje_rapido',
       ),
       bot(
-        'La inscripción queda confirmada únicamente con el pago porque los cupos son limitados 🙌🏼 ¿Querés que te reserve un lugar?',
+        'La inscripción queda confirmada únicamente con el pago porque los cupos son limitados. Querés que te reserve un lugar?',
       ),
       { dir: 'in', text: 'si dale, ya transferi' },
       bot(
-        'Gracias por anotarte! 💖 El lugar ya quedó reservado. Como los cupos son limitados te avisamos que no hacemos devoluciones ni cancelaciones. Te mando el link del grupo de wp, ahí pasamos toda la info 🤗',
+        'Gracias por anotarte! 💖 El lugar ya quedó reservado. Como los cupos son limitados te avisamos que no hacemos devoluciones ni cancelaciones. Te mando el link del grupo de wp, ahí pasamos toda la info',
         'mensaje_rapido',
       ),
     ],
@@ -270,6 +270,7 @@ export async function loadDemoData(): Promise<void> {
       deliveryDate: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
       deliveryTime: '17:00 a 18:00',
       address: null,
+      recipientName: null,
       dedication: null,
       notes: 'Mandar con papel extra, viaja en Uber',
       campaignId: null,
@@ -294,6 +295,7 @@ export async function loadDemoData(): Promise<void> {
       deliveryDate: new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 10),
       deliveryTime: '16:18',
       address: null,
+      recipientName: null,
       dedication: 'Feliz cumple mami!',
       notes: 'Agregar velas, sumar notita con dedicatoria',
       campaignId: null,
