@@ -49,6 +49,8 @@ export function Inbox({
   const [draft, setDraft] = useState('');
   /** Lo que el equipo le contesta al bot sobre una modificación pedida. */
   const [respuesta, setRespuesta] = useState('');
+  /** Bandera propia, para no deshabilitar también el botón de enviar mensaje. */
+  const [enviandoConsulta, setEnviandoConsulta] = useState(false);
   const [sending, setSending] = useState(false);
   const [typing, setTyping] = useState(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
@@ -133,6 +135,11 @@ export function Inbox({
     if (lastEvent.type === 'order' && lastEvent.order.conversationId === selected) {
       void loadDetail(selected);
     }
+    // La consulta de modificación se abre y se cierra por este evento: sin esto la
+    // franja quedaba en pantalla después de contestarla, hasta cambiar de chat.
+    if (lastEvent.type === 'conversation' && lastEvent.conversation.id === selected) {
+      void loadDetail(selected);
+    }
     // `tick` fuerza la reevaluación aunque el objeto del evento sea idéntico.
   }, [tick, lastEvent, selected, loadDetail]);
 
@@ -158,7 +165,8 @@ export function Inbox({
   };
 
   const responderConsulta = async () => {
-    if (!selected || !respuesta.trim()) return;
+    if (!selected || !respuesta.trim() || enviandoConsulta) return;
+    setEnviandoConsulta(true);
     try {
       // `request` lanza con cualquier respuesta que no sea 2xx, incluido el 409 de
       // "otro la contestó primero": sin este catch el panel muestra un error crudo.
@@ -169,6 +177,8 @@ export function Inbox({
       toast('El bot ya puede seguir con el pedido');
     } catch (err) {
       toast(`No pude guardar la respuesta: ${String(err)}`);
+    } finally {
+      setEnviandoConsulta(false);
     }
   };
 
@@ -342,7 +352,9 @@ export function Inbox({
             {detail.conversation.pendingReview && !detail.conversation.pendingReview.resueltoEn ? (
               <div className="review-box">
                 <div className="small">
-                  <strong>Consulta sin responder:</strong>{' '}
+                  <strong>
+                    Consulta sin responder ({timeAgo(detail.conversation.pendingReview.abiertoEn)}):
+                  </strong>{' '}
                   {detail.conversation.pendingReview.pedido} (
                   {detail.conversation.pendingReview.producto})
                   {detail.conversation.pendingReview.textoCliente
@@ -353,7 +365,12 @@ export function Inbox({
                   <button className="chip" onClick={() => setRespuesta('Sí, se puede.')}>
                     Se puede
                   </button>
-                  <button className="chip" onClick={() => setRespuesta('No se puede.')}>
+                  <button
+                    className="chip"
+                    onClick={() =>
+                      setRespuesta('No se puede, en estas fechas se produce todo en serie.')
+                    }
+                  >
                     No se puede
                   </button>
                   <input
@@ -364,17 +381,17 @@ export function Inbox({
                   />
                   <button
                     className="btn btn-sm btn-primary"
-                    disabled={!respuesta.trim()}
+                    disabled={enviandoConsulta || !respuesta.trim()}
                     onClick={() => void responderConsulta()}
                   >
                     Enviar al bot
                   </button>
                   <button
                     className="btn btn-sm btn-ghost"
-                    title="La consulta ya no aplica"
+                    title="La consulta ya no aplica y la charla queda en tus manos"
                     onClick={() => void descartarConsulta()}
                   >
-                    Descartar
+                    Descartar y sigo yo
                   </button>
                 </div>
               </div>

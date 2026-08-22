@@ -13,7 +13,7 @@
  *   (escaló, creó pedido) para que el pipeline los aplique después.
  *
  * - Los DOS mensajes de sistema van al principio, el estable primero. El estable
- *   (personalidad + reglas, ~4000 tokens) lleva `cache_control` y se lee de caché
+ *   (personalidad, forma y reglas, ~4900 tokens) lleva `cache_control` y se lee de caché
  *   en cada turno. El volátil (fecha, disponibilidad de hoy) va inmediatamente
  *   después: cambia siempre, así que invalida lo que venga detrás, pero no lo que
  *   está delante. Podría ganar algo más de caché poniéndolo al final de la

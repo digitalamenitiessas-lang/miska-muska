@@ -23,6 +23,7 @@ import type {
   QuickReply,
 } from '../types/domain.js';
 import { POLICY_PROSE, operationalFacts } from '../policies/rules.js';
+import { localToday } from '../store/db.js';
 import { normalizeWriting } from '../policies/writing.js';
 
 /** Marca que el modelo usa para cortar su respuesta en varias burbujas. */
@@ -83,7 +84,7 @@ CÓMO SE ESCRIBE
 
 Signos de apertura
 - No los usamos: va solo el signo de cierre, igual que escribe el equipo en el WhatsApp
-  del local. "que lindo dia!", "como estas?", "te gustaría encargar alguna?".
+  del local. "como estas?", "te gustaría encargar alguna?", "mirá lo que salió del horno!".
 - Nunca abras una pregunta ni una exclamación con el signo invertido del español, ni
   siquiera cuando estés reescribiendo un mensaje del equipo.
 
@@ -125,7 +126,9 @@ Contestá lo que te preguntaron, y nada más
 - Aunque el catálogo tenga dos versiones de algo, si no preguntaron por la versión, no la
   menciones.
 - No sumes preguntas sobre sabores, panes, tamaños, rellenos, horarios ni agregados que
-  nadie mencionó. Si te falta un dato para avanzar, pedí solo el que falta.
+  nadie mencionó. La única excepción es el agregado de venta que está más abajo en las
+  reglas, y solo cuando el pedido ya está armado.
+- Si te faltan datos para avanzar, pedí solo los que falten, y todos en el mismo mensaje.
 `.trim();
 
 const CONTINUIDAD = `
@@ -145,9 +148,13 @@ CONTINUIDAD DE LA CONVERSACIÓN
 const EMOTION = `
 LA EMOCIÓN ES PARTE DE LA VENTA
 
-Siempre detectá el MOTIVO del pedido antes de tirar precios. No es lo mismo vender un desayuno
-que acompañar un cumpleaños, un aniversario, una reconciliación, una felicitación, un
-nacimiento o un agradecimiento. Cada situación merece una respuesta distinta y personalizada.
+Detectá el MOTIVO del pedido cuando la persona cuenta para qué es, o cuando lo que pide lo
+pide (un regalo, una fecha, una sorpresa). No es lo mismo vender un desayuno que acompañar un
+cumpleaños, un aniversario, una reconciliación, una felicitación, un nacimiento o un
+agradecimiento. Cada situación merece una respuesta distinta y personalizada.
+
+Ojo con el orden: si te preguntaron un precio, el precio va primero. Averiguar para qué es
+antes de contestar lo que te preguntaron es una pregunta de más, no empatía.
 
 Ejemplo 1 — "Estoy viviendo en España y quiero mandarle un regalo a mi mamá."
   MAL: "Perfecto. Qué desayuno desea?" (frío, y arranca con muletilla)
@@ -270,7 +277,11 @@ export function buildDailyContext(input: DailyContextInput): string {
     timeZone: 'America/Argentina/Tucuman',
   });
 
-  const parts: string[] = [`Hoy es ${fecha}, ${hora} (hora de Tucumán).`];
+  // La fecha también en el formato que pide `crear_pedido`: ahora que el día es
+  // obligatorio en todo pedido, la conversión dejó de ser un caso de borde.
+  const parts: string[] = [
+    `Hoy es ${fecha}, ${hora} (hora de Tucumán). En formato de pedido, hoy es ${localToday()}.`,
+  ];
 
   if (outsideHours) {
     parts.push(
@@ -329,18 +340,38 @@ export function buildDailyContext(input: DailyContextInput): string {
     bloque el bot no tiene forma de saber que ya cargó un pedido. De ahí salían
     los pedidos duplicados y el "volvió a empezar".
   */
-  if (openOrders.length) {
-    const lines = openOrders.map(
-      (o) =>
-        `  #${o.number} — ${o.items.map((i) => `${i.quantity}x ${i.description}`).join(', ')} — ` +
-        `$${o.total.toLocaleString('es-AR')} — ${o.status} — ${o.deliveryMode}` +
-        `${o.deliveryDate ? ` ${o.deliveryDate}` : ''}${o.deliveryTime ? ` ${o.deliveryTime}` : ''}`,
-    );
+  const linea = (o: Order) =>
+    `  #${o.number} — ${o.items.map((i) => `${i.quantity}x ${i.description}`).join(', ')} — ` +
+    `${o.total.toLocaleString('es-AR')} — ${o.status} — ${o.deliveryMode}` +
+    `${o.deliveryDate ? ` ${o.deliveryDate}` : ''}${o.deliveryTime ? ` ${o.deliveryTime}` : ''}`;
+
+  /*
+    La lista va partida en dos, y esa división es lo que evita el pedido
+    duplicado por la puerta de atrás: un borrador se amplía, un pedido pagado no.
+    Con una sola lista, la instrucción de "mandá TODOS los ítems" aplicada a un
+    pedido ya confirmado hacía que el modelo lo cargara de nuevo entero.
+  */
+  const ampliables = openOrders.filter((o) => o.status === 'borrador');
+  const cerrados = openOrders.filter((o) => o.status !== 'borrador');
+
+  if (ampliables.length) {
     parts.push(
-      `PEDIDOS YA CARGADOS EN ESTA CHARLA:\n${lines.join('\n')}\n` +
-        'No los vuelvas a cargar ni se los vuelvas a anunciar. Si el cliente suma algo, llamá ' +
-        'crear_pedido con TODOS los ítems (los de antes y el nuevo) y se agregan al pedido que ' +
-        'ya existe. Si quiere sacar o cambiar algo, no lo decidas vos: consultalo con el equipo.',
+      `PEDIDO ABIERTO DE ESTA CHARLA (sigue en borrador, se puede ampliar):\n${ampliables
+        .map(linea)
+        .join('\n')}\n` +
+        'No lo vuelvas a cargar ni se lo vuelvas a anunciar. Si el cliente SUMA algo, llamá ' +
+        'crear_pedido con TODOS los ítems (los de antes y el nuevo), repitiendo la fecha, la ' +
+        'hora y la modalidad que ya tiene, y con sumar_al_pedido_existente en true. Si pide ' +
+        'otra unidad de algo que ya está, mandá la cantidad TOTAL (2, no 1). Si quiere sacar, ' +
+        'cambiar o reemplazar algo, no lo decidas vos: consultalo con el equipo.',
+    );
+  }
+
+  if (cerrados.length) {
+    parts.push(
+      `PEDIDOS YA CERRADOS DE ESTA CHARLA (no se amplían):\n${cerrados.map(linea).join('\n')}\n` +
+        'Estos ya están confirmados o entregados. NO llames crear_pedido con estos ítems: si el ' +
+        'cliente quiere sumarles algo o cambiarlos, decile que lo ve una persona del local.',
     );
   }
 
@@ -399,7 +430,13 @@ export function renderQuickReply(
     .map((p) => `🍰${p.name.replace(/^Mini torta /i, '').toLowerCase()}`)
     .join('\n');
 
-  const precioMiniTorta = available('mini-tortas')[0]?.price ?? 10800;
+  /*
+    Sin filtrar por disponibilidad: en un día sin minis, el filtro dejaba la lista
+    vacía y el precio caía a una constante que el panel no actualiza nunca. El
+    prompt le prohíbe al modelo decir un precio de memoria; esto lo hacía en su
+    lugar. Si no hay ninguna mini en el catálogo, el renglón no se rinde.
+  */
+  const precioMiniTorta = products.find((p) => p.category === 'mini-tortas')?.price ?? null;
 
   const values: Record<string, string> = {
     agente: settings.agentName,
@@ -411,8 +448,10 @@ export function renderQuickReply(
     linkDesayunos: settings.breakfastsUrl,
     cookiesHoy: cookiesHoy || 'consultanos qué cookies hay hoy',
     miniTortasHoy: miniTortasHoy || 'consultanos qué minis hay hoy',
-    precioMiniTorta: String(precioMiniTorta),
   };
+  // Sin precio en el catálogo, el placeholder queda sin resolver y el renglón sale
+  // con las llaves a la vista: preferible a inventar una cifra.
+  if (precioMiniTorta !== null) values.precioMiniTorta = String(precioMiniTorta);
 
   const rendered = body.replace(/\{\{(\w+)\}\}/g, (match, key: string) => values[key] ?? match);
   /*
@@ -423,5 +462,8 @@ export function renderQuickReply(
     operador y la vista previa del panel). Los emojis NO se tocan: los eligió el
     equipo.
   */
-  return normalizeWriting(rendered).text;
+  const limpio = normalizeWriting(rendered).text;
+  // Un cuerpo que era solo puntuación queda vacío, y el canal rechaza un texto
+  // vacío. Vale más mandarlo sin normalizar que no mandar nada.
+  return limpio || rendered;
 }

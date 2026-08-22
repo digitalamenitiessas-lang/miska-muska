@@ -127,8 +127,8 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       'último cambio. Cada producto tiene que llevar precio: el producto_id del catálogo, o ' +
       'a_medida con precio_unitario si no está en el catálogo. Un pedido sin precio se rechaza. ' +
       'Un pedido se carga UNA sola vez por charla: si después el cliente suma algo, volvé a ' +
-      'llamarla con TODOS los ítems (los de antes y el nuevo) y se agregan al pedido que ya ' +
-      'existe. Nunca la uses para sacar ni cambiar algo de un pedido ya cargado: eso lo decide ' +
+      'llamarla con TODOS los ítems (los de antes y el nuevo) y sumar_al_pedido_existente en ' +
+      'true, y se agregan al pedido que ya existe. Nunca la uses para sacar ni cambiar algo de un pedido ya cargado: eso lo decide ' +
       'una persona del local. Si en este mismo turno consultaste una modificación con ' +
       '`consultar_modificacion`, NO llames esta herramienta: el pedido está en pausa.',
     {
@@ -187,9 +187,16 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       direccion: { type: 'string', description: 'Solo si es envío con cadete.' },
       quien_recibe: {
         type: 'string',
-        description: 'Nombre de quien recibe, cuando no es quien compra (desayuno sorpresa).',
+        description:
+          'Nombre de quien recibe el pedido. Si lo recibe quien compra, repetí su nombre.',
       },
       dedicatoria: { type: 'string', description: 'Para desayunos y regalos.' },
+      sumar_al_pedido_existente: {
+        type: 'boolean',
+        description:
+          'true SOLO si estos ítems se SUMAN a lo que ya está cargado en esta charla. Si el ' +
+          'cliente quiere reemplazar o sacar algo, no la pongas: eso lo decide una persona.',
+      },
       observaciones: { type: 'string', description: 'Ej. "agregar velas", "no quiere foto".' },
     },
     ['nombre_apellido', 'items', 'modalidad'],
@@ -510,28 +517,25 @@ export async function executeTool(
           };
         }
 
-        const horaRetiro = typeof input.hora_retiro === 'string' ? input.hora_retiro : null;
-        const draft: OrderDraft = {
-          items,
-          deliveryMode: modalidad,
-          deliveryDate: typeof input.fecha_retiro === 'string' ? input.fecha_retiro : null,
-          deliveryTime: horaRetiro,
-          customerName: String(input.nombre_apellido ?? '').trim(),
-          customerDni: typeof input.dni === 'string' ? input.dni : null,
-          customerPhone:
-            (typeof input.telefono === 'string' ? input.telefono : null) ?? ctx.contact.phone,
-          address: typeof input.direccion === 'string' ? input.direccion : null,
-          recipientName: typeof input.quien_recibe === 'string' ? input.quien_recibe : null,
-        };
-
-        const problems = validateOrder(draft, productsById);
-        if (problems.length) {
+        /*
+          Una modificación sobre un ítem NO la autoriza el bot. La descripción del
+          campo `observacion` ya lo dice, pero un prompt puede fallar: sin esta
+          guarda, "sacale el jamón y sumame una cookie" entraba como un ítem con la
+          observación adentro, el local lo producía así y nadie había autorizado
+          nada. Solo pasa si el equipo ya contestó una consulta en esta charla.
+        */
+        const consultaResuelta = ctx.conversation.pendingReview?.resueltoEn
+          ? ctx.conversation.pendingReview
+          : null;
+        const conObservacion = items.filter((i) => i.observation);
+        if (conObservacion.length && !consultaResuelta) {
+          const primero = conObservacion[0];
           return {
             ok: false,
             error:
-              'No pude cargar el pedido:\n' +
-              problems.map((p) => `- ${p.message}`).join('\n') +
-              '\nExplicale al cliente con tus palabras y resolvé lo que falta antes de reintentar.',
+              `"${primero.description}" viene con una modificación ("${primero.observation}") que ` +
+              'no autorizó nadie. Eso no lo decidís vos: llamá a consultar_modificacion, contale ' +
+              'que lo estás consultando y no cargues el pedido.',
           };
         }
 
@@ -545,71 +549,140 @@ export async function executeTool(
           sanguchito en otro: el local producía uno y cobraba el otro, y en el
           panel aparecían dos.
 
-          Cuatro caminos, y ninguno puede perder plata:
-            - mismos ítems                 -> no se escribe nada (era un duplicado)
-            - mismos ítems + algo          -> se suma al pedido que ya existe
-            - ítems nuevos, ninguno de los de antes -> se AGREGAN a los de antes
-              (es el caso del agregado que llega solo: el desayuno no se pierde)
-            - falta o cambió algo de lo que había -> no se escribe y decide una persona
+          La búsqueda va ANTES de validar porque el pedido abierto es la fuente de
+          los datos que el modelo no repite. Validar primero hacía que un agregado
+          sin la fecha rebotara con "todavía falta el día", y el bot volvía a
+          preguntar algo que el cliente ya había dicho.
         */
         const claveItem = (i: { productId: string | null; description: string }) =>
           i.productId ?? normalizarNombre(i.description);
 
         const sumarPorClave = (lista: Order['items']) => {
-          const mapa = new Map<string, { quantity: number; unitPrice: number }>();
+          const mapa = new Map<
+            string,
+            { quantity: number; unitPrice: number; observation: string | null }
+          >();
           for (const i of lista) {
             const previo = mapa.get(claveItem(i));
             mapa.set(claveItem(i), {
               quantity: (previo?.quantity ?? 0) + i.quantity,
               unitPrice: i.unitPrice,
+              observation: i.observation ?? null,
             });
           }
           return mapa;
         };
 
+        const fusionable = (o: Order) =>
+          // Solo un borrador que cargó el bot. Si lo cargó una persona, o ya está
+          // confirmado (o sea, pagado), el bot no lo toca.
+          o.createdBy === 'bot' &&
+          o.status === 'borrador' &&
+          Date.now() - Date.parse(o.createdAt) < PEDIDO_ABIERTO_MS;
+
         const recientes = await repos.orders.list({
           conversationId: ctx.conversation.id,
-          limit: 5,
+          limit: 10,
         });
-        const abierto = recientes.find(
-          (o) =>
-            // Solo un borrador que cargó el bot. Si lo cargó una persona, o ya
-            // está confirmado (o sea, pagado), el bot no lo toca.
-            o.createdBy === 'bot' &&
-            o.status === 'borrador' &&
-            Date.now() - Date.parse(o.createdAt) < PEDIDO_ABIERTO_MS,
-        );
+        const abierto = recientes.find(fusionable);
+
+        const fechaDeclarada = typeof input.fecha_retiro === 'string' ? input.fecha_retiro : null;
+        const horaDeclarada = typeof input.hora_retiro === 'string' ? input.hora_retiro : null;
+        const direccionDeclarada = typeof input.direccion === 'string' ? input.direccion : null;
+        const recibeDeclarado = typeof input.quien_recibe === 'string' ? input.quien_recibe : null;
+
+        const draft: OrderDraft = {
+          items,
+          deliveryMode: modalidad,
+          // Lo que el modelo omite se hereda del pedido abierto; lo declarado
+          // manda. Los valores declarados se guardan aparte porque son los únicos
+          // que sirven para decidir si esto es el mismo pedido o es otro.
+          deliveryDate: fechaDeclarada ?? abierto?.deliveryDate ?? null,
+          deliveryTime: horaDeclarada ?? abierto?.deliveryTime ?? null,
+          customerName: String(input.nombre_apellido ?? '').trim(),
+          customerDni: typeof input.dni === 'string' ? input.dni : null,
+          customerPhone:
+            (typeof input.telefono === 'string' ? input.telefono : null) ?? ctx.contact.phone,
+          address: direccionDeclarada ?? abierto?.address ?? null,
+          recipientName: recibeDeclarado ?? abierto?.recipientName ?? null,
+        };
+
+        const problems = validateOrder(draft, productsById);
+        if (problems.length) {
+          return {
+            ok: false,
+            error:
+              'No pude cargar el pedido:\n' +
+              problems.map((p) => `- ${p.message}`).join('\n') +
+              '\nExplicale al cliente con tus palabras y resolvé lo que falta antes de reintentar.',
+          };
+        }
+
+        /** Cierre común a los dos caminos de escritura. */
+        const cerrarPedido = async (): Promise<void> => {
+          // Completa la ficha del contacto con lo que acaba de dar.
+          await repos.contacts.update(ctx.contact.id, {
+            fullName: draft.customerName,
+            dni: draft.customerDni ?? undefined,
+            phone: draft.customerPhone ?? undefined,
+          });
+          // La consulta murió con el pedido: si quedó una ya contestada, se limpia
+          // para que el contexto del día no siga pidiendo anunciarla.
+          if (ctx.conversation.pendingReview) {
+            await repos.conversations.clearReview(ctx.conversation.id);
+          }
+        };
 
         if (abierto) {
           const previos = sumarPorClave(abierto.items);
           const entrantes = sumarPorClave(items);
 
-          // Un pedido para otra fecha, otro horario u otra modalidad no es este
-          // pedido: es otro, y otro lo carga una persona desde el panel. Lo que el
-          // modelo omite se hereda; lo que declara distinto, no.
+          /*
+            La fecha y la modalidad son identidad del pedido: otro día u otra forma
+            de entrega es otro pedido, y ese lo carga una persona. La modalidad
+            además no se puede relajar acá: en la rama de agregado suelto la lista
+            fusionada no se vuelve a validar, así que un cambio de modalidad
+            metería una torta en nuestro cadete.
+
+            La franja horaria NO es identidad: cambiar el horario no es una
+            modificación (lo dice la descripción de consultar_modificacion), así que
+            se actualiza en vez de escalar. Se compara normalizado porque es texto
+            libre y "16 a 17" no debería pelearse con "16:00 a 17:00".
+          */
           const mismaLogistica =
-            abierto.deliveryMode === draft.deliveryMode &&
-            (draft.deliveryDate ?? abierto.deliveryDate) === abierto.deliveryDate &&
-            (horaRetiro ?? abierto.deliveryTime) === abierto.deliveryTime;
+            abierto.deliveryMode === modalidad &&
+            (fechaDeclarada ?? abierto.deliveryDate) === abierto.deliveryDate;
 
           const perdidos = [...previos.keys()].filter((k) => !entrantes.has(k));
           const cambiados = [...previos.entries()].filter(([k, previo]) => {
             const entrante = entrantes.get(k);
             return (
               entrante &&
-              (entrante.quantity < previo.quantity || entrante.unitPrice !== previo.unitPrice)
+              // Solo una BAJA la decide una persona. Una SUBA del precio del
+              // catálogo entre dos llamadas no es un cambio que pidió el cliente.
+              (entrante.quantity < previo.quantity ||
+                entrante.unitPrice < previo.unitPrice ||
+                entrante.observation !== previo.observation)
             );
           });
 
           /*
-            Ninguno de los ítems de antes vino en la llamada: es el agregado que
-            llega solo ("dale, sumame el sanguchito"), no un reemplazo. Se suman
-            los dos y se le confirma el total nuevo, que es lo que pidió la dueña.
-            Si en realidad quería reemplazar, va a decirlo cuando vea el total, y
-            ese sí es un cambio que decide una persona.
+            Ninguno de los ítems de antes vino en la llamada. Puede ser el agregado
+            que llega solo ("dale, sumame el sanguchito") o un reemplazo ("en vez
+            del desayuno quiero una torta"), y desde acá los dos se ven igual. Por
+            eso el modelo tiene que declararlo: sin la bandera, se trata como un
+            reemplazo y lo mira una persona.
+
+            Un ítem a medida nunca entra por esta rama: su clave es la prosa que
+            redacta el modelo, así que "torta 2 pisos" y "torta dos pisos" se leen
+            como dos productos y el pedido se cobraría dos veces.
           */
-          const esAgregadoSuelto = previos.size > 0 && perdidos.length === previos.size;
-          const fusionados = esAgregadoSuelto ? [...abierto.items, ...items] : items;
+          const entranteAMedida = items.some((i) => !i.productId);
+          const esAgregadoSuelto =
+            input.sumar_al_pedido_existente === true &&
+            !entranteAMedida &&
+            previos.size > 0 &&
+            perdidos.length === previos.size;
 
           if (!mismaLogistica || (!esAgregadoSuelto && (perdidos.length || cambiados.length))) {
             /*
@@ -644,11 +717,37 @@ export async function executeTool(
             };
           }
 
+          /*
+            Los datos que las propias reglas dicen que NO son modificaciones
+            (dirección, quién recibe, dedicatoria, observaciones, franja) tienen
+            que poder actualizarse. El update escribía solo items y total, así que
+            un "perdón, la dirección es otra" no se escribía en ninguna parte y el
+            cadete salía a la dirección vieja.
+          */
+          const patch: Partial<Order> = {};
+          if (direccionDeclarada && direccionDeclarada !== abierto.address) {
+            patch.address = direccionDeclarada;
+          }
+          if (recibeDeclarado && recibeDeclarado !== abierto.recipientName) {
+            patch.recipientName = recibeDeclarado;
+          }
+          if (
+            horaDeclarada &&
+            normalizarNombre(horaDeclarada) !== normalizarNombre(abierto.deliveryTime ?? '')
+          ) {
+            patch.deliveryTime = horaDeclarada;
+          }
+          const dedicatoria = typeof input.dedicatoria === 'string' ? input.dedicatoria.trim() : '';
+          if (dedicatoria && dedicatoria !== abierto.dedication) patch.dedication = dedicatoria;
+          const observaciones =
+            typeof input.observaciones === 'string' ? input.observaciones.trim() : '';
+          if (observaciones && observaciones !== abierto.notes) patch.notes = observaciones;
+
           const sumados = [...entrantes.entries()].filter(
             ([k, e]) => !previos.has(k) || e.quantity > (previos.get(k)?.quantity ?? 0),
           );
 
-          if (!sumados.length) {
+          if (!sumados.length && !Object.keys(patch).length) {
             // Duplicado exacto: el turno anterior ya lo cargó, o murió después de
             // cargarlo y el modelo no tiene rastro de su propia llamada.
             return {
@@ -657,15 +756,35 @@ export async function executeTool(
                 ...orderView(abierto),
                 duplicado: true,
                 instruccion:
-                  `Este pedido ya estaba cargado como #${abierto.number}. No lo vuelvas a ` +
-                  'cargar ni se lo anuncies de nuevo: seguí la charla desde donde estaba.',
+                  `Este pedido ya estaba cargado como #${abierto.number} con ` +
+                  `${abierto.items.map((i) => `${i.quantity}x ${i.description}`).join(', ')}. ` +
+                  'Si el cliente pidió OTRA unidad de algo que ya está en el pedido, volvé a ' +
+                  'llamarla con la cantidad TOTAL (2, no 1). Si no pidió nada nuevo, seguí la ' +
+                  'charla desde donde estaba y no se lo anuncies de nuevo.',
               },
             };
           }
 
+          /*
+            El precio que vale es el que se le cotizó al cliente. Si el local subió
+            un precio desde el panel entre las dos llamadas, el total no puede
+            subir solo: el bot ya le dijo un número.
+          */
+          const cotizado = new Map(abierto.items.map((i) => [claveItem(i), i.unitPrice]));
+          const aPrecioCotizado = (lista: Order['items']) =>
+            lista.map((i) => {
+              const previo = cotizado.get(claveItem(i));
+              return previo !== undefined ? { ...i, unitPrice: previo } : i;
+            });
+
           // Nada perdido y nada bajado: el total solo puede subir.
+          const fusionados = esAgregadoSuelto
+            ? [...abierto.items, ...items]
+            : aPrecioCotizado(items);
           const totalFusionado = fusionados.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
+
           const actualizado = await repos.orders.update(abierto.id, {
+            ...patch,
             items: fusionados,
             total: totalFusionado,
           });
@@ -675,9 +794,10 @@ export async function executeTool(
               error: `No encontré el pedido #${abierto.number} para actualizarlo.`,
             };
           }
+          await cerrarPedido();
           ctx.effects.createdOrder = actualizado;
           bus.emit({ type: 'order', order: actualizado });
-          log('info', `Pedido ${actualizado.number} ampliado por el bot`, {
+          log('info', `Pedido ${actualizado.number} actualizado por el bot`, {
             total: totalFusionado,
             items: fusionados.length,
           });
@@ -685,13 +805,61 @@ export async function executeTool(
             ok: true,
             data: {
               ...orderView(actualizado),
-              ampliado: true,
-              instruccion:
-                `Se sumó al pedido #${actualizado.number}, que ahora queda en ` +
-                `$${totalFusionado.toLocaleString('es-AR')}. Confirmale el total nuevo. ` +
-                'Sigue en borrador hasta el comprobante.',
+              ampliado: sumados.length > 0,
+              instruccion: sumados.length
+                ? `Se sumó al pedido #${actualizado.number}, que ahora queda en ` +
+                  `$${totalFusionado.toLocaleString('es-AR')}. Confirmale el total nuevo. ` +
+                  'Sigue en borrador hasta el comprobante.'
+                : `Actualicé los datos del pedido #${actualizado.number}. El total no cambió: ` +
+                  `$${totalFusionado.toLocaleString('es-AR')}. No se lo anuncies como un pedido ` +
+                  'nuevo, confirmale solo lo que cambió.',
             },
           };
+        }
+
+        /*
+          No hay borrador para ampliar, pero puede haber uno CERRADO (pagado,
+          confirmado o vencido). El contexto del día lo sigue listando, y aplicarle
+          "mandá TODOS los ítems" es el pedido duplicado entrando por la otra
+          puerta: el desayuno se cobraría y se produciría dos veces. Si la llamada
+          reenvía todo lo que ese pedido ya tiene, no es un cliente que vuelve a
+          encargar lo mismo: es un agregado sobre algo cerrado, y eso lo ve una
+          persona.
+        */
+        const cerrado = recientes.find((o) => o.createdBy === 'bot' && !fusionable(o));
+        if (cerrado) {
+          const entrantes = sumarPorClave(items);
+          const reenviaTodo = [...sumarPorClave(cerrado.items).keys()].every((k) =>
+            entrantes.has(k),
+          );
+          /*
+            Con ventana, y no solo por la firma de los ítems: acá hay clientes que
+            le compran a la mamá el mismo desayuno todos los meses. Sin el corte,
+            ese pedido repetido se leía como un agregado sobre el de la vez pasada
+            y terminaba esperando a una persona en vez de cargarse.
+          */
+          const reciente = Date.now() - Date.parse(cerrado.createdAt) < 48 * 60 * 60 * 1000;
+          if (reenviaTodo && reciente) {
+            ctx.effects.escalate = {
+              reason: 'agregado_sobre_pedido_cerrado',
+              summary:
+                `Quiere sumar algo al pedido #${cerrado.number}, que ya está ${cerrado.status}. ` +
+                `Pidió: ${items.map((i) => `${i.quantity}x ${i.description}`).join(', ')}. ` +
+                'No cargué nada.',
+            };
+            log('info', `Agregado sobre pedido cerrado derivado (#${cerrado.number})`);
+            return {
+              ok: true,
+              data: {
+                ...orderView(cerrado),
+                pendiente_de_validacion: true,
+                instruccion:
+                  `El pedido #${cerrado.number} ya está cerrado y no se amplía. No cargues nada ` +
+                  'y no vuelvas a llamar esta herramienta. Decile que lo ve una persona del ' +
+                  'local, sin confirmarle el agregado y sin pedirle el pago.',
+              },
+            };
+          }
         }
 
         const total = items.reduce((sum, i) => sum + i.unitPrice * i.quantity, 0);
@@ -717,19 +885,8 @@ export async function executeTool(
           createdBy: 'bot',
         });
 
-        // Completa la ficha del contacto con lo que acaba de dar.
-        await repos.contacts.update(ctx.contact.id, {
-          fullName: draft.customerName,
-          dni: draft.customerDni ?? undefined,
-          phone: draft.customerPhone ?? undefined,
-        });
-
+        await cerrarPedido();
         ctx.effects.createdOrder = order;
-        // La consulta murió con el pedido: si quedó una ya contestada, se limpia
-        // para que no siga apareciendo en el contexto la semana que viene.
-        if (ctx.conversation.pendingReview) {
-          await repos.conversations.clearReview(ctx.conversation.id);
-        }
         bus.emit({ type: 'order', order });
         log('info', `Pedido ${order.number} creado por el bot`, { total, items: items.length });
 

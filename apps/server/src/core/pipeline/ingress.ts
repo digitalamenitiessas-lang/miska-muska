@@ -3,8 +3,9 @@
  * si vale la pena seguir procesando.
  *
  * Responsabilidades (y nada más):
- *  - deduplicar reintentos de webhook
  *  - resolver/crear contacto y conversación
+ *  - deduplicar reintentos de webhook (por conversación: el id de mensaje de
+ *    Telegram es correlativo por chat, no global)
  *  - guardar el mensaje
  *  - publicar el evento para el panel
  *
@@ -45,7 +46,9 @@ export async function ingest(
   );
 
   if (await repos.messages.alreadyProcessed(conversation.id, inbound.channelMessageId)) {
-    log('info', `Mensaje duplicado ignorado (${inbound.channel} ${inbound.channelMessageId})`);
+    // La conversación y no el canal: los ids de Telegram se repiten entre chats,
+    // así que sin ella dos líneas idénticas pueden ser dos charlas distintas.
+    log('info', `Mensaje duplicado ignorado (${conversation.id} ${inbound.channelMessageId})`);
     return null;
   }
 

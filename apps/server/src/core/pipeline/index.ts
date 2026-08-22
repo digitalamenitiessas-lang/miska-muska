@@ -62,6 +62,14 @@ export class Pipeline {
     haya que escalar, esto se muda a una columna junto con el mutex.
   */
   #answered = new Map<string, string>();
+  /*
+    Conversaciones que tienen que correr un turno aunque el último entrante ya
+    esté contestado: el equipo respondió una consulta y el bot le debe esa
+    respuesta al cliente. Es un permiso y no un borrado de la marca porque el
+    turno que estaba en vuelo la reescribe al terminar, y ahí el permiso se
+    perdía sin que nadie se enterara.
+  */
+  #forzar = new Set<string>();
 
   constructor(repos: Repositories, resolveAdapter: AdapterResolver) {
     this.#repos = repos;
@@ -100,6 +108,11 @@ export class Pipeline {
       ]);
       const text = renderQuickReply(decision.quickReply.body, settings, products);
       await this.#repos.quickReplies.countUse(decision.quickReply.key);
+      /*
+        Este entrante ya quedó contestado. No se cancela el timer pendiente: si
+        llega un mensaje NUEVO, ese turno tiene que correr igual.
+      */
+      this.#answered.set(conversation.id, stored.id);
       await this.#send(conversation.id, [{ kind: 'text', text }], {
         author: 'bot',
         intent: 'mensaje_rapido',
@@ -171,11 +184,19 @@ export class Pipeline {
       cuando disparó el timer: es lo único que distingue "ya contestado" de
       "todavía sin contestar".
     */
+    /*
+      `resumeAfterReview` es la única puerta al turno que no pasa por `route()`,
+      así que el interruptor general del panel se chequea también acá. Sin esto,
+      apagar el bot desde Ajustes no impedía que contestara una consulta resuelta.
+    */
+    if (!settings.botEnabled) return;
+
+    const forzado = this.#forzar.delete(conversationId);
     const ultimoEntrante = [...history]
       .reverse()
       .find((m) => m.direction === 'in' && m.contentKind !== 'typing');
     if (!ultimoEntrante) return;
-    if (this.#answered.get(conversationId) === ultimoEntrante.id) {
+    if (!forzado && this.#answered.get(conversationId) === ultimoEntrante.id) {
       log('info', `Turno omitido (${conversationId}): nada nuevo que contestar.`);
       return;
     }
@@ -237,12 +258,19 @@ export class Pipeline {
         motivo de la escalada vale más que "el bot falló N veces".
       */
       if (escalate) {
+        /*
+          La charla ya quedó en 'human': esta racha pertenece a una sesión del bot
+          que terminó. Si no se borra, el primer tropiezo después de que el equipo
+          conteste la consulta re-escala con el motivo equivocado y la respuesta
+          que el cliente estaba esperando no sale nunca.
+        */
+        this.#errorStreak.delete(conversationId);
         await this.#send(
           conversationId,
           [
             {
               kind: 'text',
-              text: 'Dame un minutito que lo confirmo 🙏🏻 ya te escribe alguien del local 💕',
+              text: 'Dame un minutito que lo confirmo, ya te escribe alguien del local 🙏🏻',
             },
           ],
           { author: 'system', intent: 'error', handler: 'escalate' },
@@ -251,6 +279,7 @@ export class Pipeline {
       }
 
       if (streak >= settings.escalateAfterErrors) {
+        this.#errorStreak.delete(conversationId);
         await repos.conversations.setMode(conversationId, 'human');
         await repos.conversations.setAttention(
           conversationId,
@@ -266,7 +295,7 @@ export class Pipeline {
           [
             {
               kind: 'text',
-              text: 'Dame un minutito que te contesto bien 🙏🏻 ya te escribe alguien del local 💕',
+              text: 'Dame un minutito que te contesto bien, ya te escribe alguien del local 🙏🏻',
             },
           ],
           { author: 'system', intent: 'error', handler: 'escalate' },
@@ -286,6 +315,19 @@ export class Pipeline {
     this.#answered.set(conversationId, ultimoEntrante.id);
 
     const contents: OutboundContent[] = turn.bubbles.map((text) => ({ kind: 'text', text }));
+
+    /*
+      El cliente ya escuchó la respuesta del equipo: recién ahora la consulta deja
+      de ser contexto. Se limpia acá y no al contestarla en el panel, porque entre
+      las dos cosas el turno puede fallar, y una consulta resuelta que no se borra
+      hace que el modelo la anuncie de nuevo en cada turno de las próximas 48 h.
+    */
+    if (conversation.pendingReview?.resueltoEn) {
+      await repos.conversations.clearReview(conversationId);
+      await repos.conversations.setAttention(conversationId, false, null);
+      const limpia = await repos.conversations.get(conversationId);
+      if (limpia) bus.emit({ type: 'conversation', conversation: limpia });
+    }
 
     await this.#send(conversationId, contents, {
       author: 'bot',
@@ -342,12 +384,27 @@ export class Pipeline {
    * se saltearía solo.
    */
   async resumeAfterReview(conversationId: string): Promise<void> {
-    this.#answered.delete(conversationId);
+    this.#forzar.add(conversationId);
     this.#scheduleAgentTurn(conversationId);
+  }
+
+  /**
+   * Contestó una persona, así que el turno que el debounce dejó pendiente no
+   * tiene que volver a hablar sobre el mismo mensaje del cliente.
+   *
+   * Contrapartida asumida: después de un mensaje del operador el bot se queda
+   * callado sobre ese entrante hasta que el cliente escriba de nuevo. Es lo que
+   * corresponde: cuando habla una persona, manda la persona.
+   */
+  async #marcarContestadoPorPersona(conversationId: string): Promise<void> {
+    const previos = await this.#repos.messages.history(conversationId, 10);
+    const ultimo = [...previos].reverse().find((m) => m.direction === 'in');
+    if (ultimo) this.#answered.set(conversationId, ultimo.id);
   }
 
   /** API pública para que un operador escriba desde el panel. */
   async sendAsOperator(conversationId: string, text: string): Promise<void> {
+    await this.#marcarContestadoPorPersona(conversationId);
     await this.#send(conversationId, [{ kind: 'text', text }], {
       author: 'human',
       handler: 'operator',
@@ -359,6 +416,7 @@ export class Pipeline {
   async sendQuickReply(conversationId: string, key: string): Promise<boolean> {
     const qr = await this.#repos.quickReplies.get(key);
     if (!qr) return false;
+    await this.#marcarContestadoPorPersona(conversationId);
     const [settings, products] = await Promise.all([
       this.#repos.settings.read(),
       this.#repos.products.list(),

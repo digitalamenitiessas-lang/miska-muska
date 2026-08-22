@@ -110,9 +110,15 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
     if (!resolved) return reply.code(409).send({ error: 'Acá no hay ninguna consulta abierta' });
     if (devolverAlBot !== false) {
       await repos.conversations.setMode(id, 'bot');
-      await repos.conversations.setAttention(id, false, null);
-      // El cliente quedó esperando: el bot retoma él mismo con la respuesta del
-      // equipo, en vez de esperar a que la persona vuelva a escribir.
+      /*
+        El cliente quedó esperando: el bot retoma él mismo con la respuesta del
+        equipo, en vez de esperar a que la persona vuelva a escribir.
+
+        La alerta NO se apaga acá. Se apaga cuando el bot logró transmitir la
+        respuesta, en el pipeline. Si el turno de retomada falla, la charla tiene
+        que seguir marcada: si no, el equipo tipeó una respuesta que el cliente
+        nunca recibió y nada en el panel lo dice.
+      */
       await pipeline.resumeAfterReview(id);
     }
     const conversation = await repos.conversations.get(id);
@@ -124,6 +130,12 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
   app.delete('/api/conversations/:id/review', async (req) => {
     const { id } = req.params as { id: string };
     await repos.conversations.clearReview(id);
+    /*
+      La alerta se apaga con la consulta: era su único motivo. La charla queda en
+      modo humano a propósito — si se descartó, alguien la está atendiendo — y por
+      eso el botón del panel dice "Descartar y sigo yo".
+    */
+    await repos.conversations.setAttention(id, false, null);
     const conversation = await repos.conversations.get(id);
     if (conversation) bus.emit({ type: 'conversation', conversation });
     return { ok: true };

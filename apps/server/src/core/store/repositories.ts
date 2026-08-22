@@ -56,6 +56,13 @@ function toContact(r: Row): Contact {
   };
 }
 
+/** Forma mínima que tiene que tener el jsonb para que la pausa lo tome en serio. */
+function esPendingReview(value: unknown): value is PendingReview {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const v = value as Partial<PendingReview>;
+  return typeof v.pedido === 'string' && typeof v.producto === 'string';
+}
+
 function toConversation(r: Row): Conversation {
   return {
     id: String(r.id),
@@ -70,10 +77,11 @@ function toConversation(r: Row): Conversation {
     unreadCount: Number(r.unread_count ?? 0),
     needsAttention: Boolean(r.needs_attention),
     attentionReason: str(r.attention_reason),
-    // jsonb vuelve ya parseado. Se castea sin validar a propósito: la pausa solo
-    // actúa si hay objeto y `resueltoEn` es null, así que una fila con forma
-    // desconocida no frena ventas, se ignora.
-    pendingReview: (r.pending_review ?? null) as PendingReview | null,
+    // jsonb vuelve ya parseado, pero la columna no tiene CHECK: se comprueba la
+    // forma antes de confiar. Sin esto, cualquier valor truthy sin las claves
+    // esperadas (un {} escrito a mano) dejaba la charla con una consulta abierta
+    // para siempre, y con eso `crear_pedido` rechazando todo.
+    pendingReview: esPendingReview(r.pending_review) ? r.pending_review : null,
     createdAt: iso(r.created_at),
     updatedAt: iso(r.updated_at),
   };
@@ -334,8 +342,22 @@ export function createRepositories() {
     ): Promise<PendingReview> {
       const actual = (await conversations.get(id))?.pendingReview ?? null;
       const abierta = actual && !actual.resueltoEn ? actual : null;
+      const juntar = (previo: string | null, nuevo: string | null): string | null => {
+        if (!nuevo) return previo;
+        if (!previo) return nuevo;
+        return previo.includes(nuevo) ? previo : `${previo} + ${nuevo}`;
+      };
       const review: PendingReview = abierta
-        ? { ...abierta, pedido: `${abierta.pedido} + ${data.pedido}` }
+        ? {
+            ...abierta,
+            // Se acumulan los tres campos, no solo el pedido: con dos consultas
+            // sobre productos distintos, el panel mostraba los dos cambios
+            // atribuidos al primer producto y con la frase del primer cliente.
+            // Es la información con la que se decide si se pierde una venta.
+            pedido: juntar(abierta.pedido, data.pedido) ?? data.pedido,
+            producto: juntar(abierta.producto, data.producto) ?? data.producto,
+            textoCliente: juntar(abierta.textoCliente, data.textoCliente),
+          }
         : {
             id: newId('rev_'),
             ...data,

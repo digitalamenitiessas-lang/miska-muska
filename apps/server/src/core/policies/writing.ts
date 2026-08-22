@@ -16,8 +16,17 @@
  * a Mica sería un bug, no una mejora.
  */
 
-/** Signos de apertura del español. El equipo escribe solo el de cierre. */
-export const APERTURA = /[¿¡]/g;
+/*
+  Signos de apertura del español. El equipo escribe solo el de cierre.
+
+  Los dos regex quedan privados a propósito: llevan la bandera `g`, así que
+  guardan `lastIndex` entre llamadas y basta que alguien de afuera les haga
+  `.test()` para que la siguiente normalización arranque desde la mitad del texto.
+  Es un bug que aparece una vez cada mil mensajes; no exportarlos lo hace
+  imposible.
+*/
+const SIGNO_PEGADO_A_ESPACIO = /([ \t])[ \t]*[¿¡]+/g;
+const APERTURA = /[¿¡]+/g;
 
 /*
   "copa" no se usa: no es una palabra de la casa. El mapa es CERRADO y está
@@ -25,7 +34,7 @@ export const APERTURA = /[¿¡]/g;
   futuro que se llame Copa. Si aparece una forma que no está acá, sale igual y se
   agrega a mano: reescritura libre no, porque no sería auditable.
 */
-export const COPA: Array<[RegExp, string]> = [
+const COPA: Array<[RegExp, string]> = [
   [/\bte coparí([ao])\b/gi, 'te gustarí$1'],
   [/\bte copan\b/gi, 'te gustan'],
   [/\bte copa\b/gi, 'te gusta'],
@@ -53,11 +62,17 @@ export function normalizeWriting(text: string): WritingResult {
   const fixes: string[] = [];
   let out = text;
 
-  const sinApertura = out.replace(APERTURA, '');
+  /*
+    Dos pasadas en vez de borrar y después aplastar espacios. Aplastar todos los
+    runs de dos o más espacios del mensaje entero rompía la sangría de las listas
+    del equipo (la carta de cookies, los renglones de datos con ▫️) cada vez que
+    aparecía un signo en cualquier otra parte del texto. Acá solo se toca el hueco
+    donde estaba el signo.
+  */
+  const sinApertura = out.replace(SIGNO_PEGADO_A_ESPACIO, '$1').replace(APERTURA, '');
   if (sinApertura !== out) {
     fixes.push('signo de apertura');
-    // Borrar el signo puede dejar un espacio doble: "Hola. ¡Mirá" → "Hola.  Mirá".
-    out = sinApertura.replace(/[ \t]{2,}/g, ' ');
+    out = sinApertura;
   }
 
   for (const [re, to] of COPA) {

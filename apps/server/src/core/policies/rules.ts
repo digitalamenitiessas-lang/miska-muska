@@ -35,7 +35,8 @@ Pagos y reservas
   excepción son clientes históricos con autorización, y eso lo decide una persona
   del local, no el bot.
 - Un pedido queda TOMADO solo cuando llegan los datos completos + el comprobante.
-- Al cadete se puede abonar en efectivo únicamente cuando ese medio está habilitado.
+- El pago es por transferencia. Si piden pagarle en efectivo al cadete, eso lo
+  autoriza una persona del local: no lo prometas y escalá.
 - Un pedido se carga UNA sola vez por charla. Si ya está cargado y hay que sacar o
   cambiar algo, no lo decide el bot: se lo consultamos al equipo y le avisamos.
   Mientras esa consulta está abierta no se confirma el producto, no se cierra el
@@ -56,9 +57,11 @@ Envíos
   cliente lo propone. El envío es parte del regalo: llegamos nosotros, avisamos y lo
   entregamos. Un Uber rompe la sorpresa y nos deja sin saber qué pasó con el pedido.
   También se puede retirar en el local, si el cliente prefiere.
+- Un desayuno o un box de regalo tampoco lo retira un tercero: o lo llevamos nosotros, o lo
+  retira quien compra. Si quieren mandar a otra persona a buscarlo, eso lo autoriza el local.
 - Para un envío nuestro hay que tomar TODOS los datos de la entrega, y en un solo mensaje:
-  dirección con alguna referencia, nombre y teléfono de quien recibe, día y franja horaria,
-  y la dedicatoria si va.
+  dirección con alguna referencia, nombre de quien recibe, día y franja horaria, y la
+  dedicatoria si va.
 - El Uber se ofrece SOLO en dos casos:
     (a) el cliente quiere algo para el momento, para ya. Ahí sí, el mensajito de que el
         Uber es más rápido está bien.
@@ -67,8 +70,9 @@ Envíos
   Fuera de esos dos casos, el Uber no se menciona.
 - El Uber lo pide, lo paga y lo sigue el cliente. Nosotros no lo pedimos, no lo
   coordinamos y no lo controlamos: solo entregamos el pedido en la puerta.
-- El resto de la pastelería (cookies, brownies, alfajores, tabletas) se puede enviar con
-  nuestro cadete o retirar con un Uber del cliente: eso lo elige el cliente.
+- El resto de la pastelería (cookies, brownies, alfajores, tabletas) se envía con nuestro
+  cadete, o se retira en el local. El Uber del cliente ahí entra solo por el caso (a): lo
+  quiere para ya y prefiere mandar uno suyo.
 - Siempre pedir nombre y apellido para identificar bien el pedido.
 
 COMPOSICIÓN DEL PEDIDO (principal, agregados, componentes)
@@ -132,11 +136,12 @@ te dieron.
 
 Para retirar en el local:
   Nombre y apellido / Teléfono / Producto / Fecha y hora de retiro.
-Para un Uber o cadete que manda el cliente:
+Para un Uber o cadete que manda el cliente (no aplica a desayunos ni boxes de regalo:
+esos los llevamos nosotros, o los retira quien compra):
   lo mismo, y el nombre con el que va a retirar.
 Para un envío nuestro (desayunos y boxes de regalo, o pastelería con nuestro cadete):
-  Nombre y apellido / Teléfono / Producto / Día / Franja horaria / Nombre y teléfono de
-  quien lo recibe / Dirección con alguna referencia / Dedicatoria, si va.
+  Nombre y apellido / Teléfono / Producto / Día / Franja horaria / Nombre de quien lo
+  recibe / Dirección con alguna referencia / Dedicatoria, si va.
   Los desayunos van como sorpresa: el que recibe no sabe.
 Después, en todos los casos, el comprobante de la transferencia.
 El DNI se pide solo si el equipo lo necesita para ese pedido; no lo pidas de rutina.
@@ -197,15 +202,21 @@ export function normalizarNombre(value: string): string {
 const ENVIO_PROPIO_SIEMPRE: ProductCategory[] = ['desayunos'];
 
 /*
-  Red de contención para los ítems que llegan sin producto_id: el modelo manda
-  seguido la descripción tal cual la dijo el cliente ("desayuno buen día sin
-  queso") y ahí no hay categoría que mirar.
+  Red de contención para los ítems que llegan sin categoría, que después de la
+  resolución de crear_pedido son solo los declarados a medida: un SKU de campaña
+  ("Box mamá", "Desayuno mamá") o algo negociado a mano. Todo lo que no resuelve
+  al catálogo ni viene marcado a medida se rechaza antes, así que acá no llega una
+  descripción libre del cliente.
 
-  Va con \b (palabra completa) y no con includes(): con includes(), "cookies para
-  la merienda" caía acá y le bloqueábamos el Uber a alguien que quiere algo para
-  ya, que es exactamente lo contrario de lo que hay que hacer. Queda un falso
-  positivo conocido: "box de cookies" escrito a mano y sin id se bloquea de más.
-  Eso cuesta una consulta; el otro error cuesta un regalo.
+  Consecuencia práctica al cargar una campaña: un SKU tiene que llamarse con
+  "desayuno" o "box" adentro para que esta red lo agarre. Un "Combo mamá" o una
+  "Canasta mamá" se le escapan.
+
+  Palabra completa y no includes(): con includes(), "cookies para la merienda"
+  caía acá y le bloqueábamos el Uber a alguien que quiere algo para ya, que es
+  exactamente lo contrario de lo que hay que hacer. Queda un falso positivo
+  conocido: un "box de cookies" a medida se bloquea de más. Eso cuesta una
+  consulta; el otro error cuesta un regalo.
 */
 const NOMBRA_ENVIO_PROPIO = /\b(desayuno|desayunos|box|boxes)\b/u;
 
@@ -339,6 +350,29 @@ export function validateOrder(
         'insiste con mandar un Uber, o si el pedido mezcla esto con una torta que sí sale en ' +
         'Uber, no decidas vos: decile que lo consultás con el equipo y escalá. No cargues dos ' +
         'pedidos. Y no le expliques tiempos, zonas ni costos de envío: eso no lo tenés.',
+    });
+  }
+
+  /*
+    El mismo agujero por la otra puerta: retira-local con el nombre de un tercero.
+    El regalo sale con alguien que no es quien compra, sin sorpresa y sin que
+    sepamos quién se lo llevó. Se compara el nombre porque el esquema pide repetir
+    el de quien compra cuando lo recibe él mismo, y ese caso es legítimo.
+  */
+  if (
+    draft.deliveryMode === 'retira-local' &&
+    envioPropio.length &&
+    draft.recipientName &&
+    normalizarNombre(draft.recipientName) !== normalizarNombre(draft.customerName)
+  ) {
+    problems.push({
+      code: 'desayuno_no_lo_retira_un_tercero',
+      message:
+        `${envioPropio.map((i) => i.description).join(', ')}: si lo retira alguien que no es ` +
+        'quien compra, eso lo autoriza el local. O lo llevamos nosotros con nuestro cadete ' +
+        '(cargalo con cadete-miska y pedile la dirección, el día y la franja en UN mensaje), o ' +
+        'lo retira quien compra. Si insisten con mandar a otra persona, decile que lo consultás ' +
+        'con el equipo y escalá.',
     });
   }
 

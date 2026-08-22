@@ -118,7 +118,8 @@ const CATALOG: SeedProduct[] = [
  * Mensajes rápidos: los textos que el equipo ya usaba en WhatsApp, con el ajuste
  * de forma que pidió el local — sin signos de apertura, sin las fórmulas de
  * apertura ("muchas gracias por escribirnos", "muchas gracias por tu consulta") y
- * con un emoji por mensaje en vez de tres.
+ * con un emoji por mensaje en vez de tres. Tampoco piden el DNI de rutina: eso lo
+ * pide el equipo cuando lo necesita para un pedido puntual.
  *
  * Lo que NO se toca: los datos duros ({{alias}}, {{titular}}, {{direccion}},
  * links, precios), el registro informal del equipo ("amor", "porqe", "qe",
@@ -171,7 +172,7 @@ const QUICK_REPLIES = [
     triggers: ['encargar', 'encargo', 'para el sabado', 'para mañana', 'reservar'],
     body:
       'Para completar el pedido te pido estos datos por favor 🥰\n\n' +
-      '▫️Nombre y apellido:\n▫️Dni:\n▫️Número de tel:\n▫️producto:\n▫️fecha y hora de retiro:\n\n' +
+      '▫️Nombre y apellido:\n▫️Número de tel:\n▫️producto:\n▫️fecha y hora de retiro:\n\n' +
       'Con los datos y comprobante queda el pedido tomado!\n\n' +
       'Alias: {{alias}}\n\nMercado Pago\n{{titular}}\n\n' +
       'Por favor enviar COMPROBANTE de la transferencia ☺️ gracias!',

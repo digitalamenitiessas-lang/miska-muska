@@ -98,7 +98,7 @@ Telegram / WhatsApp
    ▼
 adapter.parseWebhook()  →  InboundMessage   ← formato canónico, sin rastro del canal
    ▼
-ingress   deduplica el reintento del webhook, resuelve contacto y conversación, persiste
+ingress   resuelve contacto y conversación, deduplica el reintento del webhook, persiste
    ▼
 router    ¿bot apagado? ¿la tomó una persona? ¿matchea un mensaje rápido corto?
    ▼
