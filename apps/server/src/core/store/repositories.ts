@@ -751,11 +751,13 @@ export function createRepositories() {
       const row = await one<{ value: Partial<BotSettings> }>(
         "SELECT value FROM settings WHERE key = 'bot'",
       );
-      return { ...DEFAULT_SETTINGS, ...(row?.value ?? {}) };
+      return { ...DEFAULT_SETTINGS, ...sinBlancos(row?.value ?? {}) };
     },
 
     async write(patch: Partial<BotSettings>): Promise<BotSettings> {
-      const next = { ...(await settings.read()), ...patch };
+      // Se limpia al escribir Y al leer: al escribir para que el blanco no quede
+      // guardado, y al leer para curar el que ya está en la base.
+      const next = { ...(await settings.read()), ...sinBlancos(patch) };
       await exec(
         `INSERT INTO settings (key, value) VALUES ('bot', $1::jsonb)
          ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value`,
@@ -855,6 +857,33 @@ export function createRepositories() {
 }
 
 export type Repositories = ReturnType<typeof createRepositories>;
+
+/*
+  Campos que el bot le dice al cliente palabra por palabra y que por lo tanto no
+  pueden quedar vacíos. Pasó de verdad: alguien guardó Ajustes con el nombre del
+  agente en blanco y el saludo salió como "soy , en que te puedo ayudar?". Un
+  string vacío no es nulo, así que el merge sobre DEFAULT_SETTINGS lo tomaba como
+  un valor legítimo y pisaba el valor bueno.
+
+  No están las URLs ni el modelo a propósito: ahí un vacío puede ser intencional
+  ("no tenemos cursos"), y para el modelo ya hay un respaldo en `brain.ts`.
+*/
+const OBLIGATORIOS = [
+  'agentName',
+  'address',
+  'transferAlias',
+  'transferHolder',
+] as const satisfies ReadonlyArray<keyof BotSettings>;
+
+/** Saca de un parche los obligatorios que vengan en blanco, para que gane el valor por defecto. */
+function sinBlancos(patch: Partial<BotSettings>): Partial<BotSettings> {
+  const limpio: Partial<BotSettings> = { ...patch };
+  for (const campo of OBLIGATORIOS) {
+    const valor = limpio[campo];
+    if (typeof valor === 'string' && !valor.trim()) delete limpio[campo];
+  }
+  return limpio;
+}
 
 export const DEFAULT_SETTINGS: BotSettings = {
   botEnabled: true,

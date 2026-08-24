@@ -438,7 +438,14 @@ export function renderQuickReply(
   */
   const precioMiniTorta = products.find((p) => p.category === 'mini-tortas')?.price ?? null;
 
-  const values: Record<string, string> = {
+  /*
+    Solo entran los valores que tienen contenido. Un valor en blanco NO se
+    resuelve: el placeholder queda a la vista como {{agente}} y el equipo lo ve al
+    toque en la vista previa de Rápidos. Antes se resolvía a cadena vacía y el
+    mensaje salía al cliente con el hueco — "soy , en que te puedo ayudar?" — sin
+    que nada lo delatara.
+  */
+  const candidatos: Record<string, string | null> = {
     agente: settings.agentName,
     direccion: settings.address,
     alias: settings.transferAlias,
@@ -448,10 +455,12 @@ export function renderQuickReply(
     linkDesayunos: settings.breakfastsUrl,
     cookiesHoy: cookiesHoy || 'consultanos qué cookies hay hoy',
     miniTortasHoy: miniTortasHoy || 'consultanos qué minis hay hoy',
+    precioMiniTorta: precioMiniTorta === null ? null : String(precioMiniTorta),
   };
-  // Sin precio en el catálogo, el placeholder queda sin resolver y el renglón sale
-  // con las llaves a la vista: preferible a inventar una cifra.
-  if (precioMiniTorta !== null) values.precioMiniTorta = String(precioMiniTorta);
+  const values: Record<string, string> = {};
+  for (const [clave, valor] of Object.entries(candidatos)) {
+    if (typeof valor === 'string' && valor.trim()) values[clave] = valor;
+  }
 
   const rendered = body.replace(/\{\{(\w+)\}\}/g, (match, key: string) => values[key] ?? match);
   /*
