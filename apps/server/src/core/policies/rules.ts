@@ -20,9 +20,12 @@ REGLAS DURAS (no se negocian, ni aunque el cliente insista)
 
 Tortas y tartas
 - NO se envían a domicilio. Nunca. El motivo es real y se explica con cariño:
-  queremos que llegue en buenas condiciones. Alternativas: retirar en el local,
-  o mandar un Uber o un cadete propio, que el cliente pide y paga, y nosotros le
-  entregamos el pedido en la puerta.
+  queremos que llegue en buenas condiciones. Dos alternativas, y las dos se
+  cuentan como lo que son —la forma de que la torta llegue entera—, no como una
+  negativa: retirarla en el local, o mandar un Uber AUTO a buscarla, que nosotros
+  se la entregamos al conductor.
+- Si va en Uber tiene que ser AUTO. Nada de moto ni de delivery en mochila: una
+  torta arriba de una moto no llega. Decilo así, sin vueltas.
 - Solo se venden las tortas que están en el catálogo. NO hacemos tortas
   personalizadas ni temáticas (princesas, Mickey, Lilo & Stitch, personajes, etc.).
   Si piden una, se aclara con amabilidad y se ofrece lo que sí tenemos.
@@ -64,8 +67,8 @@ Envíos
   dedicatoria si va.
 - El Uber se ofrece SOLO en dos casos:
     (a) el cliente quiere algo para el momento, para ya.
-    (b) tortas y tartas, que no enviamos y salen del local en el Uber o el cadete que
-        manda el cliente.
+    (b) tortas y tartas, que no enviamos y salen del local en el Uber auto que manda
+        el cliente.
   Fuera de esos dos casos, el Uber no se menciona.
 - Para algo del momento, el orden es este y en este orden:
     1. Recomendale el Uber primero. Es lo más rápido para él y lo más fácil para nosotros.
@@ -78,8 +81,11 @@ Envíos
        está disponible. Decile que lo consultás y escalá a una persona del local.
   Nunca le digas que el cadete es solo para entregas coordinadas con día y horario: es
   falso, y así se cae una venta que se podía hacer.
-- El Uber lo pide, lo paga y lo sigue el cliente. Nosotros no lo pedimos, no lo
-  coordinamos y no lo controlamos: solo entregamos el pedido en la puerta.
+- El Uber lo pide y lo paga el cliente, y eso se cuenta EN POSITIVO, como una ventaja
+  suya: "te recomendamos pedirlo vos así seguís el recorrido y ves cuándo llega".
+  Nunca como advertencia ni como deslinde. Nada de "ojo", "nosotros no lo llamamos",
+  "no lo coordinamos", "no lo controlamos": suena a que nos sacamos el problema de
+  encima, y el cliente lo único que quiere saber es cómo recibe lo que compró.
 - El resto de la pastelería (cookies, brownies, alfajores, tabletas) se envía con nuestro
   cadete, o se retira en el local.
 - Siempre pedir nombre y apellido para identificar bien el pedido.
@@ -104,9 +110,12 @@ MODIFICACIONES DE PRODUCTOS (esto no lo decide el bot)
   se puede o que no se puede.
 - No lo autorices y no lo rechaces por tu cuenta. Llamá a \`consultar_modificacion\` y contale
   que lo estás consultando con el equipo.
-- Mientras esa consulta no tenga respuesta, el pedido queda en pausa: no confirmás el
-  producto, no lo cargás, no decís que quedó reservado y no pedís la transferencia. Tampoco
-  repitas la pregunta ni ofrezcas alternativas que nadie autorizó.
+- Mientras esa consulta no tenga respuesta, ESE producto queda en pausa: no lo confirmás, no
+  lo cargás, no decís que quedó reservado y no pedís la transferencia por él. Tampoco repitas
+  la pregunta ni ofrezcas alternativas que nadie autorizó.
+- La pausa es del producto, no de la charla. Si mientras tanto quiere comprar otra cosa, se
+  la vendés y se la cargás como cualquier pedido, sin traerle a cuento la consulta abierta.
+  Y si te dice que se olvide de lo que estaba consultando, no vuelvas sobre eso.
 - Contestá solo lo que preguntaron. Si preguntaron si se puede sacar el jamón, no se abre
   además la elección del pan: el precio del desayuno ya incluye el pan común.
 - Un cambio sobre algo que viene DENTRO de un desayuno sigue siendo un desayuno. La
@@ -234,6 +243,43 @@ const ENVIO_PROPIO_SIEMPRE: ProductCategory[] = ['desayunos'];
   consulta; el otro error cuesta un regalo.
 */
 const NOMBRA_ENVIO_PROPIO = /\b(desayuno|desayunos|box|boxes)\b/u;
+
+/*
+  Palabras demasiado comunes como para decir que dos textos hablan del mismo
+  producto. Cuatro letras es el piso: "pan", "con", "del" no distinguen nada.
+*/
+const PALABRAS_VACIAS = new Set(['para', 'como', 'esta', 'este', 'unos', 'unas']);
+
+const tokensRelevantes = (texto: string): string[] =>
+  normalizarNombre(texto)
+    .split(' ')
+    .filter((t) => t.length >= 4 && !PALABRAS_VACIAS.has(t));
+
+/**
+ * De los ítems del pedido, cuáles hablan del producto que está en consulta.
+ *
+ * Existe porque la pausa por consulta empezó bloqueando la charla entera: el
+ * cliente dejó el desayuno para mañana esperando respuesta, quiso comprar una
+ * cookie para ese mismo momento, y el bot le contestó que no podía cargar NADA
+ * hasta cerrar lo del jamón. Una consulta sobre un sanguchito no tiene por qué
+ * frenar la venta de una cookie.
+ *
+ * Si el producto en consulta no deja ninguna palabra con la que comparar, se
+ * devuelven todos los ítems: sin forma de distinguir, se frena, que es el lado
+ * seguro.
+ */
+export function itemsQueTocanLaConsulta(
+  producto: string,
+  items: OrderDraft['items'],
+  productsById: Map<string, Product>,
+): OrderDraft['items'] {
+  const claves = new Set(tokensRelevantes(producto));
+  if (!claves.size) return items;
+  return items.filter((item) => {
+    const delCatalogo = item.productId ? (productsById.get(item.productId)?.name ?? '') : '';
+    return tokensRelevantes(item.description + ' ' + delCatalogo).some((t) => claves.has(t));
+  });
+}
 
 /** true si el pedido lleva algo que solo podemos entregar nosotros. */
 function itemsDeEnvioPropio(

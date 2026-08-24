@@ -19,6 +19,7 @@ import type {
   ProductCategory,
 } from '../types/domain.js';
 import {
+  itemsQueTocanLaConsulta,
   normalizarNombre,
   notaDeUsoMensajeRapido,
   validateOrder,
@@ -414,17 +415,6 @@ export async function executeTool(
           se escribe cuando el turno terminó.
         */
         const consulta = ctx.effects.pendingReview ?? pendienteDe(ctx.conversation);
-        if (consulta) {
-          return {
-            ok: false,
-            error:
-              `Hay una consulta sin responder: ${consulta.pedido} (${consulta.producto}). ` +
-              'Hasta que alguien del local la conteste, el pedido no se carga. No confirmes el ' +
-              'producto, no digas que quedó reservado, no pidas la transferencia y no vuelvas a ' +
-              'llamar esta herramienta en este turno. Cerrá diciéndole que lo estás consultando ' +
-              'y que en un rato le confirman, sin repetir lo que ya le dijiste.',
-          };
-        }
 
         /*
           Antes era `(input.modalidad as Order['deliveryMode']) ?? 'retira-local'`.
@@ -520,6 +510,29 @@ export async function executeTool(
               problemasItems.map((p) => `- ${p}`).join('\n') +
               '\nCorregí eso y reintentá. No inventes precios ni cambies el producto.',
           };
+        }
+
+        /*
+          La pausa por consulta frena SOLO el producto que se está consultando, no
+          la charla entera. Empezó bloqueando todo, y con eso el cliente que dejó
+          un desayuno esperando respuesta y quiso comprar una cookie para ese
+          momento se encontró con que el bot no podía cargarle nada. Una consulta
+          sobre un sanguchito no tiene por qué frenar la venta de una cookie.
+        */
+        if (consulta) {
+          const frenados = itemsQueTocanLaConsulta(consulta.producto, items, productsById);
+          if (frenados.length) {
+            return {
+              ok: false,
+              error:
+                `Hay una consulta sin responder sobre ${consulta.producto}: ${consulta.pedido}. ` +
+                `Hasta que alguien del local la conteste no se puede cargar ` +
+                `${frenados.map((i) => i.description).join(', ')}. No confirmes ese producto, no ` +
+                'digas que quedó reservado, no pidas la transferencia por él y no vuelvas a ' +
+                'llamar esta herramienta en este turno con ese ítem. Si el cliente quiere ' +
+                'comprar OTRA cosa, eso sí se puede cargar: llamá de nuevo solo con esos ítems.',
+            };
+          }
         }
 
         /*

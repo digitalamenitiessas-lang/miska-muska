@@ -112,12 +112,39 @@ export function sinSaludoInicial(text: string): string {
   return sinSaludo;
 }
 
+/*
+  Muletillas de entusiasmo con las que el modelo arranca las burbujas. Es la
+  primera queja que hizo el local ("me suena a inteligencia artificial") y la
+  prohibición está en el prompt, pero volvió a aparecer en producción: un
+  "Buenísimo." antes de cada confirmación.
+
+  Solo se corta cuando la muletilla es una oración entera —termina en punto o
+  signo— y lo que sigue arranca en mayúscula. "Buenísimo. Retiralo con el
+  nombre" pierde el "Buenísimo."; "Buenísimo, quedan dos kinder" se deja como
+  está, porque cortarlo dejaría la frase empezando en minúscula.
+
+  No está "dale", que sí es una palabra de la casa.
+*/
+const ARRANQUE_SOBREACTUADO =
+  /^\s*(buen[íi]simo|genial|excelente|perfecto|qu[ée] (lindo|hermoso|bueno|mimo))\s*[!.…]+\s+/i;
+
+/** Saca la muletilla de entusiasmo con la que arranca una burbuja, si la hay. */
+export function sinArranqueSobreactuado(text: string): string {
+  const cortado = text.replace(ARRANQUE_SOBREACTUADO, '');
+  if (!cortado || cortado === text) return text;
+  const primera = cortado[0];
+  if (primera !== primera.toUpperCase()) return text;
+  return cortado;
+}
+
 /** Normaliza las burbujas de un turno y descarta las que queden vacías. */
 export function normalizeBubbles(bubbles: string[]): { bubbles: string[]; fixes: string[] } {
   const fixes: string[] = [];
   const out: string[] = [];
   for (const bubble of bubbles) {
-    const result = normalizeWriting(bubble);
+    const podado = sinArranqueSobreactuado(bubble);
+    if (podado !== bubble) fixes.push('arranque sobreactuado');
+    const result = normalizeWriting(podado);
     fixes.push(...result.fixes);
     // Una burbuja que era solo puntuación puede quedar vacía, y un texto vacío
     // hace fallar el envío en el canal.

@@ -383,9 +383,12 @@ export function buildDailyContext(input: DailyContextInput): string {
   if (pendingReview && !pendingReview.resueltoEn) {
     parts.push(
       `CONSULTA ABIERTA, esperando que la conteste alguien del local: "${pendingReview.pedido}" ` +
-        `sobre ${pendingReview.producto}. El pedido está EN PAUSA: no confirmes el cambio, no lo ` +
-        'rechaces, no cargues el pedido y no pidas la transferencia. Si el cliente insiste, ' +
-        'decile que lo estás consultando, sin repetir lo mismo con otras palabras.',
+        `sobre ${pendingReview.producto}. Lo que está EN PAUSA es ESE producto: no confirmes el ` +
+        'cambio, no lo rechaces, no lo cargues y no pidas la transferencia por él. Si el cliente ' +
+        'insiste, decile que lo estás consultando, sin repetir lo mismo con otras palabras.\n' +
+        'La pausa NO alcanza al resto de la charla. Si quiere comprar otra cosa, se la vendés y ' +
+        'se la cargás normalmente, sin mencionarle la consulta pendiente. Y si te dice que deja ' +
+        'sin efecto lo que estaba consultando, no insistas con eso: seguí con lo que quiere ahora.',
     );
   } else if (pendingReview?.resueltoEn && esReciente(pendingReview.resueltoEn)) {
     /*
