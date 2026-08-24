@@ -86,6 +86,32 @@ export function normalizeWriting(text: string): WritingResult {
   return { text: out.trim(), fixes };
 }
 
+/*
+  Saludos con los que arrancan varios mensajes rápidos del equipo. Están bien
+  cuando el mensaje abre la charla, y quedan mal cuando la charla ya empezó: el
+  cliente pregunta por un desayuno en el quinto mensaje y el bot le contesta
+  "Holaa! Tenemos 4 opciones…", como si recién se conocieran.
+
+  Se resuelve acá y no editando cada texto del equipo porque el mismo texto sirve
+  para los dos casos: lo único que cambia es si ya hubo conversación.
+*/
+const SALUDO_INICIAL = /^\s*(hola+|buenas|buen d[ií]a|buenas tardes|buenas noches)\b[\s!¡,.:]*/i;
+
+/**
+ * Saca el saludo con el que arranca un texto, si tiene uno.
+ *
+ * Devuelve el texto igual si al sacarlo quedaría empezando en minúscula: eso
+ * pasa cuando el saludo y la frase siguiente son una sola oración ("Hola! como
+ * estas?"), y ahí cortar deja un mensaje peor que el original.
+ */
+export function sinSaludoInicial(text: string): string {
+  const sinSaludo = text.replace(SALUDO_INICIAL, '').trimStart();
+  if (!sinSaludo || sinSaludo === text.trimStart()) return text;
+  const primera = sinSaludo[0];
+  if (primera !== primera.toUpperCase()) return text;
+  return sinSaludo;
+}
+
 /** Normaliza las burbujas de un turno y descarta las que queden vacías. */
 export function normalizeBubbles(bubbles: string[]): { bubbles: string[]; fixes: string[] } {
   const fixes: string[] = [];

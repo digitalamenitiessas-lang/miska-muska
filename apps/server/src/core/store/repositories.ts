@@ -380,17 +380,22 @@ export function createRepositories() {
      * La marca de tiempo se arma en TS y viaja como parámetro: `to_char` daría un
      * offset de solo horas ("-03") y `Date.parse` lo rechaza.
      */
-    async answerReview(id: string, respuesta: string): Promise<Conversation | null> {
+    async answerReview(
+      id: string,
+      respuesta: string,
+      enElChat = false,
+    ): Promise<Conversation | null> {
       const row = await one(
         `UPDATE conversations
          SET pending_review = pending_review || jsonb_build_object(
-               'respuesta', $2::text, 'resueltoEn', $3::text),
+               'respuesta', $2::text, 'resueltoEn', $3::text,
+               'respondidaEnElChat', $4::boolean),
              updated_at = now()
          WHERE id = $1
            AND pending_review IS NOT NULL
            AND pending_review->>'resueltoEn' IS NULL
          RETURNING *`,
-        [id, respuesta, nowIso()],
+        [id, respuesta, nowIso(), enElChat],
       );
       return row ? toConversation(row) : null;
     },

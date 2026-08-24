@@ -388,11 +388,24 @@ export function buildDailyContext(input: DailyContextInput): string {
         'decile que lo estás consultando, sin repetir lo mismo con otras palabras.',
     );
   } else if (pendingReview?.resueltoEn && esReciente(pendingReview.resueltoEn)) {
+    /*
+      Dos textos distintos según quién contestó. Si la respuesta salió por el
+      botón del panel, el cliente todavía no la escuchó y el bot tiene que
+      transmitirla. Si una persona le escribió directo en el chat, el cliente ya
+      la leyó: repetirla es la conversación en la que el bot se disculpaba y
+      volvía a anunciar lo mismo tres veces.
+    */
     parts.push(
-      `EL EQUIPO YA CONTESTÓ la consulta de "${pendingReview.pedido}" sobre ` +
-        `${pendingReview.producto}: ${pendingReview.respuesta}. Decíselo con tus palabras, sin ` +
-        'agregar motivos ni condiciones que el equipo no dijo, y retomá donde quedaste: sin ' +
-        'volver a saludar y sin volver a pedir datos que ya tenés.',
+      pendingReview.respondidaEnElChat
+        ? 'UNA PERSONA DEL LOCAL YA LE CONTESTÓ EN EL CHAT la consulta de ' +
+          `"${pendingReview.pedido}" sobre ${pendingReview.producto}, con estas palabras: ` +
+          `"${pendingReview.respuesta}". El cliente YA lo leyó: no se lo repitas ni se lo ` +
+          'anuncies como novedad. La consulta está CERRADA y el pedido sigue normalmente. Si ' +
+          'el cliente da por hecho que está resuelto, tiene razón.'
+        : `EL EQUIPO YA CONTESTÓ la consulta de "${pendingReview.pedido}" sobre ` +
+          `${pendingReview.producto}: ${pendingReview.respuesta}. Decíselo con tus palabras, ` +
+          'sin agregar motivos ni condiciones que el equipo no dijo, y retomá donde quedaste: ' +
+          'sin volver a saludar y sin volver a pedir datos que ya tenés.',
     );
   }
 

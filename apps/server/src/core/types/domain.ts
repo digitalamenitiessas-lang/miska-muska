@@ -50,6 +50,12 @@ export interface PendingReview {
   resueltoEn: string | null;
   /** Lo que contestó el equipo, con sus palabras. No es null si hay `resueltoEn`. */
   respuesta: string | null;
+  /**
+   * true si una persona la contestó ESCRIBIÉNDOLE al cliente en el chat, en vez
+   * de usar el botón del panel. Cambia lo que tiene que hacer el bot: la
+   * respuesta ya la recibió el cliente, así que no se repite.
+   */
+  respondidaEnElChat?: boolean;
 }
 
 export interface Conversation {

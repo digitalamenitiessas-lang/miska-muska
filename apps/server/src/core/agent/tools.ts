@@ -25,6 +25,7 @@ import {
   type OrderDraft,
 } from '../policies/rules.js';
 import { renderQuickReply } from './persona.js';
+import { sinSaludoInicial } from '../policies/writing.js';
 import { bus, log } from '../events/bus.js';
 
 export interface ToolDefinition {
@@ -387,11 +388,15 @@ export async function executeTool(
         const products = await repos.products.list();
         await repos.quickReplies.countUse(clave);
         ctx.effects.quickReplyUsed = clave;
+        const renderizado = renderQuickReply(qr.body, settings, products);
         return {
           ok: true,
           data: {
             clave,
-            texto: renderQuickReply(qr.body, settings, products),
+            // Si la charla ya empezó, se le saca el saludo con el que arranca.
+            // El equipo escribió estos textos para abrir una conversación, y a
+            // mitad de charla ese "Holaa!" hace que el bot parezca reiniciarse.
+            texto: ctx.conversation.lastOutboundAt ? sinSaludoInicial(renderizado) : renderizado,
             nota_de_uso: notaDeUsoMensajeRapido(clave),
           },
         };

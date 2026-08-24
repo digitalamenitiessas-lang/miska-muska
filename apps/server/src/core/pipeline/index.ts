@@ -404,6 +404,24 @@ export class Pipeline {
 
   /** API pública para que un operador escriba desde el panel. */
   async sendAsOperator(conversationId: string, text: string): Promise<void> {
+    /*
+      Si había una consulta de modificación abierta, este mensaje LA CONTESTA.
+
+      El equipo contesta escribiéndole al cliente, no apretando el botón del
+      panel: es lo natural, y es lo que hicieron. Sin esto la consulta quedaba
+      abierta para siempre y el bot seguía diciendo "todavía la estoy
+      consultando" mientras el historial mostraba a una persona diciendo que sí.
+      El cliente insistía, el bot se disculpaba y volvía a decir lo mismo.
+    */
+    const conversacion = await this.#repos.conversations.get(conversationId);
+    if (conversacion?.pendingReview && !conversacion.pendingReview.resueltoEn) {
+      await this.#repos.conversations.answerReview(conversationId, text, true);
+      await this.#repos.conversations.setAttention(conversationId, false, null);
+      const refrescada = await this.#repos.conversations.get(conversationId);
+      if (refrescada) bus.emit({ type: 'conversation', conversation: refrescada });
+      log('info', `Consulta cerrada por un mensaje del operador (${conversationId})`);
+    }
+
     await this.#marcarContestadoPorPersona(conversationId);
     await this.#send(conversationId, [{ kind: 'text', text }], {
       author: 'human',
