@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Order, type OrderStatus } from '../api';
 import {
   DELIVERY_LABEL,
@@ -26,11 +26,23 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
   const [filter, setFilter] = useState<OrderStatus | 'todos'>('todos');
   const [loading, setLoading] = useState(true);
 
+  /*
+    Número de orden de la carga en curso. Un turno del bot dispara varias cargas
+    casi juntas, y sin esto gana la que CONTESTA última, no la que SALIÓ última:
+    una respuesta pedida antes de que el pedido existiera puede llegar después y
+    devolver la lista al estado anterior, donde se queda hasta el próximo evento.
+    Es exactamente la forma en que las tarjetas parecen "no actualizarse".
+  */
+  const ultimaCarga = useRef(0);
+
   const load = useCallback(async () => {
+    const mia = ++ultimaCarga.current;
     try {
-      setOrders(await api.orders());
+      const lista = await api.orders();
+      if (mia !== ultimaCarga.current) return; // llegó tarde: ya hay una más nueva
+      setOrders(lista);
     } catch (err) {
-      toast(`No pude cargar los pedidos: ${String(err)}`);
+      if (mia === ultimaCarga.current) toast(`No pude cargar los pedidos: ${String(err)}`);
     } finally {
       setLoading(false);
     }
@@ -54,8 +66,21 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
   const pendingMoney = useMemo(
     () =>
       orders
-        .filter((o) => o.status !== 'cancelado' && o.status !== 'entregado')
+        // Un entregado con saldo ES plata a cobrar: acá se entrega contra seña y
+        // el resto se paga al retirar. Antes se descontaban los entregados y esta
+        // tarjeta decía $0 mientras la fila de abajo mostraba "debe $X" en rojo.
+        .filter((o) => o.status !== 'cancelado')
         .reduce((sum, o) => sum + Math.max(0, o.total - o.paid), 0),
+    [orders],
+  );
+
+  /*
+    "Falta el comprobante" es plata sin registrar, no un estado. Antes contaba los
+    borradores, que es exactamente lo que ya muestra el chip Borrador de abajo, y
+    dejaba afuera al pedido que salió de borrador sin que nadie registrara un peso.
+  */
+  const sinCobrar = useMemo(
+    () => orders.filter((o) => o.status !== 'cancelado' && o.total > 0 && o.paid <= 0).length,
     [orders],
   );
 
@@ -81,11 +106,15 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
         <Tile label="Pedidos totales" value={String(orders.length)} />
         <Tile
           label="Sin comprobante"
-          value={String(counts.get('borrador') ?? 0)}
-          note="Borradores: falta la transferencia"
+          value={String(sinCobrar)}
+          note="No se registró ni un peso todavía"
         />
         <Tile label="Por entregar" value={String((counts.get('confirmado') ?? 0) + (counts.get('en-preparacion') ?? 0) + (counts.get('listo') ?? 0))} />
-        <Tile label="Por cobrar" value={money(pendingMoney)} note="Total menos lo ya transferido" />
+        <Tile
+          label="Por cobrar"
+          value={money(pendingMoney)}
+          note="Total menos lo cobrado, incluidos los entregados"
+        />
         {sinPrecio > 0 ? (
           <Tile label="Sin precio" value={String(sinPrecio)} note="Cargales el total a mano" />
         ) : null}

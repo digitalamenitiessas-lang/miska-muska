@@ -50,6 +50,18 @@ export default function App() {
   const [authError, setAuthError] = useState(false);
   /** Se incrementa con cada evento del servidor: las vistas lo usan para refrescar. */
   const [tick, setTick] = useState(0);
+  /*
+    Contador aparte, solo para los eventos que tocan pedidos. Antes la vista de
+    Pedidos recargaba con CUALQUIER evento, y un turno del bot emite ocho o diez
+    (mensaje, conversación, tecleo, pedido, log…): eran ocho GET por turno, varios
+    de ellos disparados ANTES de que el pedido existiera.
+
+    Tiene que ser un contador y no "el último evento": React junta varias
+    actualizaciones en un solo render, y el bot emite el evento del pedido y un log
+    en la línea siguiente. Guardando el último, el del pedido queda tapado por el
+    log y la recarga no pasa nunca — justo en el caso que importa.
+  */
+  const [orderTick, setOrderTick] = useState(0);
   const [lastEvent, setLastEvent] = useState<LiveEvent | null>(null);
   const toast = useToast();
 
@@ -83,6 +95,11 @@ export default function App() {
       switch (event.type) {
         case 'hello':
           setConnected(true);
+          // (Re)conexión: puede que se hayan cargado pedidos mientras no estábamos.
+          setOrderTick((t) => t + 1);
+          break;
+        case 'order':
+          setOrderTick((t) => t + 1);
           break;
         case 'conversation': {
           const incoming = event.conversation;
@@ -217,7 +234,7 @@ export default function App() {
           />
         ) : (
           <div className="content">
-            {view === 'pedidos' ? <Pedidos tick={tick} toast={toast.show} /> : null}
+            {view === 'pedidos' ? <Pedidos tick={orderTick} toast={toast.show} /> : null}
             {view === 'catalogo' ? <Catalogo toast={toast.show} /> : null}
             {view === 'campanas' ? <Campanas toast={toast.show} /> : null}
             {view === 'rapidos' ? <Rapidos toast={toast.show} /> : null}
