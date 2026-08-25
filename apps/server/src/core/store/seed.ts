@@ -121,10 +121,12 @@ const CATALOG: SeedProduct[] = [
  * con un emoji por mensaje en vez de tres. Tampoco piden el DNI de rutina: eso lo
  * pide el equipo cuando lo necesita para un pedido puntual.
  *
+ * Tampoco dicen "amor": el local prefiere el nombre de la persona, o nada.
+ *
  * Lo que NO se toca: los datos duros ({{alias}}, {{titular}}, {{direccion}},
- * links, precios), el registro informal del equipo ("amor", "porqe", "qe",
- * minúsculas al arrancar) y los emojis que hacen de viñeta de una lista, que son
- * estructura y no decoración.
+ * links, precios), el registro informal del equipo ("porqe", "qe", minúsculas al
+ * arrancar) y los emojis que hacen de viñeta de una lista, que son estructura y
+ * no decoración.
  */
 const QUICK_REPLIES = [
   {
@@ -134,7 +136,7 @@ const QUICK_REPLIES = [
     triggers: ['hola', 'holaa', 'buenas', 'buen dia', 'buenas tardes', 'buenas noches'],
     body:
       'Hola! como estas? 🫶🏻\n' +
-      'soy {{agente}}, en que te puedo ayudar?',
+      'en que te puedo ayudar?',
   },
   {
     key: 'desayunos',
@@ -201,7 +203,7 @@ const QUICK_REPLIES = [
     autoSend: false,
     triggers: ['envian tortas', 'envio de torta', 'mandan tortas', 'delivery de torta'],
     body:
-      'no enviamos tortas amor, porqe queremos qe llegue en buenas condiciones, ' +
+      'no enviamos tortas, porqe queremos qe llegue en buenas condiciones, ' +
       'podes retirar del local, estamos en {{direccion}}, o pedir un uber auto y aca le entregamos 🙏🏻',
   },
   {
@@ -238,7 +240,9 @@ const QUICK_REPLIES = [
     autoSend: false,
     triggers: ['curso', 'cursos', 'clases', 'taller'],
     body:
-      'Tenemos cursos 🥰 te paso la info completa acá: {{linkCursos}}\n' +
+      'Tenemos cursos 🥰 los online los tenés todos acá: {{linkCursos}}\n' +
+      'Los presenciales van cambiando cada semana, así que consultame cuál hay ahora y te ' +
+      'cuento.\n' +
       'La inscripción queda confirmada únicamente con el pago, porque los cupos son limitados. ' +
       'te gustaría que te reserve un lugar?',
   },
@@ -248,8 +252,32 @@ const QUICK_REPLIES = [
     autoSend: false,
     triggers: ['cafe', 'cafeteria', 'capuchino', 'cortado'],
     body:
-      'Cafetería no enviamos amor 🙏🏻 pero te esperamos en el local para tomar algo rico, ' +
+      'Cafetería no enviamos 🙏🏻 pero te esperamos en el local para tomar algo rico, ' +
       'estamos en {{direccion}}',
+  },
+  {
+    /*
+      Texto del equipo, con sus emojis y sus viñetas. Es el único caso de reserva
+      que existe: el cumpleaños, el día del cumpleaños y solo para desayunar. La
+      merienda es por orden de llegada y no se reserva.
+    */
+    key: 'reservas-cumple',
+    label: 'Reserva de cumpleaños (el único caso que se reserva)',
+    autoSend: false,
+    triggers: ['reserva', 'reservar', 'reservas', 'cumple', 'cumpleaños', 'festejar'],
+    body:
+      'Festejá tu cumple en Miska Muska! 🥳\n\n' +
+      'Si cumplís años, te regalamos una mini torta + una infusión para arrancar tu día muuuy ' +
+      'feliz (en el local te mostramos las opciones)\n\n' +
+      'Solo tenés que venir a desayunar con 1 o hasta 4 personas más (máximo 5 en total) y ' +
+      'consumir entre todxs $30.000 o más 🫶\n\n' +
+      '📅 Podés reservar:\n' +
+      '▫️Lunes a sábados de 8 a 13 hs\n' +
+      '▫️Domingos de 14 a 16 hs\n\n' +
+      '💵 Seña: $10.000 por transferencia (se descuenta del total)\n' +
+      '⏰ Tolerancia: 15 minutos\n' +
+      '❗Si cancelás el mismo día o no venís, la seña no se reintegra.\n\n' +
+      'Escribinos con la fecha, cuántos vienen y el horario, y listo! Te guardamos la mesa 🎈',
   },
   {
     key: 'web',

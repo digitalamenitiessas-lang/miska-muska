@@ -878,6 +878,7 @@ const OBLIGATORIOS = [
   'address',
   'transferAlias',
   'transferHolder',
+  'scheduleText',
 ] as const satisfies ReadonlyArray<keyof BotSettings>;
 
 /** Saca de un parche los obligatorios que vengan en blanco, para que gane el valor por defecto. */
@@ -901,8 +902,12 @@ export const DEFAULT_SETTINGS: BotSettings = {
   escalateAfterErrors: 2,
   typingMsPerChar: 22,
   maxTypingMs: 3200,
-  openHour: 9,
-  closeHour: 21,
+  scheduleText:
+    'Lunes a sábado de 8:00 a 13:30 y de 16:00 a 21:30. Entre las 13:00 y las 16:00 ' +
+    'atendemos por el carrito de adelante, y también hacemos envíos en esa franja. ' +
+    'Domingos de 14:00 a 21:30.',
+  openHour: 8,
+  closeHour: 22,
   address: 'Marcos Paz 473, San Miguel de Tucumán',
   transferAlias: 'MISKATUC',
   transferHolder: 'MISKA MUSKA SAS (Mercado Pago)',

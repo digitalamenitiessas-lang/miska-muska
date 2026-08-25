@@ -206,6 +206,19 @@ export function Ajustes({
             <Field label="Página de cursos" value={draft.coursesUrl} onChange={(v) => set('coursesUrl', v)} />
             <Field label="Categoría desayunos" value={draft.breakfastsUrl} onChange={(v) => set('breakfastsUrl', v)} />
           </div>
+          <label className="label" style={{ marginTop: 12 }}>
+            Horario, tal cual lo cuenta el bot
+          </label>
+          <textarea
+            rows={3}
+            value={draft.scheduleText}
+            onChange={(e) => set('scheduleText', e.target.value)}
+            style={{ width: '100%' }}
+          />
+          <p className="small muted">
+            Va en el prompt tal como lo escribas. Es texto libre porque el horario real no entra en
+            dos números: es partido, cambia los domingos, y en el medio está el carrito.
+          </p>
           {/* `wrap`: la aclaración de al lado es larga y en pantalla angosta
               empujaba la fila fuera de la tarjeta en vez de bajar de línea. */}
           <div className="row wrap" style={{ gap: 12, marginTop: 12 }}>

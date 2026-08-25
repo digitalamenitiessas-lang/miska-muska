@@ -277,7 +277,16 @@ export interface BotSettings {
   /** Retardo simulado de tipeo, en ms por carácter (humaniza la respuesta). */
   typingMsPerChar: number;
   maxTypingMs: number;
-  /** Horario del local, para avisar demoras fuera de hora. */
+  /**
+   * Horario del local tal cual se lo cuenta al cliente. Es texto libre porque el
+   * horario real no entra en dos números: es partido, cambia los domingos, y
+   * entre las 13 y las 16 atienden por el carrito de adelante.
+   */
+  scheduleText: string;
+  /**
+   * Franja gruesa, solo para decidir si el local está cerrado y no prometer
+   * entregas inmediatas. No es lo que el bot cita: para eso está `scheduleText`.
+   */
   openHour: number;
   closeHour: number;
   /** Datos que el bot cita textualmente. */

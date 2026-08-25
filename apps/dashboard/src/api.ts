@@ -160,6 +160,8 @@ export interface Settings {
   escalateAfterErrors: number;
   typingMsPerChar: number;
   maxTypingMs: number;
+  /** Horario tal cual lo cuenta el bot. Texto libre: el real es partido y cambia los domingos. */
+  scheduleText: string;
   openHour: number;
   closeHour: number;
   address: string;
