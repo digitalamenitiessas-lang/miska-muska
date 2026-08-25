@@ -157,7 +157,6 @@ export interface QuickReply {
 
 export interface Settings {
   botEnabled: boolean;
-  agentName: string;
   activeChannels: ChannelId[];
   model: string;
   effort: string;
@@ -333,6 +332,22 @@ export const api = {
     post<{ ok: true }>(`/api/campaigns/${id}/active`, { active }),
   upsertSku: (campaignId: string, body: Partial<CampaignSku>) =>
     post<CampaignSku>(`/api/campaigns/${campaignId}/skus`, body),
+
+  /**
+   * Sube una foto y devuelve su dirección pública, para guardarla en el producto.
+   * Va como cuerpo binario con el content-type del archivo: un archivo por
+   * request, así que el sobre de multipart no aportaría nada.
+   */
+  uploadMedia: (file: File) =>
+    request<{ id: string; url: string; advertencia?: string }>('/api/media', {
+      method: 'POST',
+      body: file,
+      headers: {
+        'content-type': file.type,
+        // encodeURIComponent porque un encabezado HTTP no admite acentos.
+        'x-filename': encodeURIComponent(file.name),
+      },
+    }),
 
   quickReplies: () => get<QuickReply[]>('/api/quick-replies'),
   saveQuickReply: (body: Partial<QuickReply>) => post<QuickReply>('/api/quick-replies', body),

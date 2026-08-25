@@ -221,6 +221,28 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dedupe ON messages (conversation_
 `,
   },
   {
+    id: 5,
+    name: 'archivos-subidos',
+    sql: `
+-- Fotos subidas desde el panel. Van en la base y no en el disco del servidor a
+-- propósito: el bot no guarda nada en disco, y por eso el proceso es
+-- descartable — se puede borrar y recrear sin perder nada. Guardarlas en /opt
+-- rompería justo esa propiedad, y la primera vez que alguien recree el
+-- contenedor se quedaría sin fotos y sin saber por qué.
+--
+-- El límite del cuerpo del servidor ya está en 5 MB, que es también el máximo
+-- que acepta Meta para una imagen, así que no hace falta otra restricción acá.
+CREATE TABLE media (
+  id         text PRIMARY KEY,
+  mime_type  text NOT NULL,
+  filename   text,
+  bytes      bytea NOT NULL,
+  size       integer NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+`,
+  },
+  {
     id: 4,
     name: 'foto-de-producto',
     sql: `

@@ -753,6 +753,30 @@ export function createRepositories() {
     },
   };
 
+  /*
+    Archivos que sube el equipo desde el panel. Hoy son las fotos de los
+    productos; el día que haya que mandar un PDF o un audio, entra por acá mismo.
+  */
+  const media = {
+    async insert(file: {
+      mimeType: string;
+      filename: string | null;
+      bytes: Buffer;
+    }): Promise<{ id: string }> {
+      const id = newId('m_');
+      await exec(
+        'INSERT INTO media (id, mime_type, filename, bytes, size) VALUES ($1, $2, $3, $4, $5)',
+        [id, file.mimeType, file.filename, file.bytes, file.bytes.length],
+      );
+      return { id };
+    },
+
+    async get(id: string): Promise<{ mimeType: string; bytes: Buffer } | null> {
+      const row = await one('SELECT mime_type, bytes FROM media WHERE id = $1', [id]);
+      return row ? { mimeType: String(row.mime_type), bytes: row.bytes as Buffer } : null;
+    },
+  };
+
   const settings = {
     async read(): Promise<BotSettings> {
       const row = await one<{ value: Partial<BotSettings> }>(
@@ -860,7 +884,10 @@ export function createRepositories() {
     },
   };
 
-  return { contacts, conversations, messages, products, orders, campaigns, quickReplies, settings, metrics };
+  return {
+    contacts, conversations, messages, products, orders, campaigns, quickReplies, media,
+    settings, metrics,
+  };
 }
 
 export type Repositories = ReturnType<typeof createRepositories>;
@@ -876,7 +903,6 @@ export type Repositories = ReturnType<typeof createRepositories>;
   ("no tenemos cursos"), y para el modelo ya hay un respaldo en `brain.ts`.
 */
 const OBLIGATORIOS = [
-  'agentName',
   'address',
   'transferAlias',
   'transferHolder',
@@ -895,7 +921,6 @@ function sinBlancos(patch: Partial<BotSettings>): Partial<BotSettings> {
 
 export const DEFAULT_SETTINGS: BotSettings = {
   botEnabled: true,
-  agentName: 'Mica',
   activeChannels: ['telegram'],
   // Modelo de OpenRouter. 1M de contexto, soporta tools y reasoning, y cuesta
   // menos de la mitad que Opus con calidad muy parecida para atención.

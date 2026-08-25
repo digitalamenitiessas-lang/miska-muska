@@ -46,6 +46,18 @@ export async function buildServer(deps: ApiDeps): Promise<FastifyInstance> {
     },
   );
 
+  /*
+    Las fotos que sube el panel llegan como cuerpo binario crudo, con el
+    content-type del archivo. Sin multipart y sin dependencia nueva: el panel
+    manda UN archivo por request, así que el sobre de multipart no aporta nada.
+    El límite de 5 MB de arriba es también el máximo que acepta Meta por imagen.
+  */
+  app.addContentTypeParser(
+    ['image/jpeg', 'image/png', 'image/webp'],
+    { parseAs: 'buffer' },
+    (_req: FastifyRequest, body: Buffer, done) => done(null, body),
+  );
+
   // CORS a mano: una dependencia menos, y con el panel en Vercel el origen es
   // otro dominio, así que esto pasa a ser necesario y no decorativo.
   app.addHook('onRequest', async (req, reply) => {
@@ -53,7 +65,7 @@ export async function buildServer(deps: ApiDeps): Promise<FastifyInstance> {
     if (originAllowed(origin)) {
       reply.header('access-control-allow-origin', origin!);
       reply.header('vary', 'Origin');
-      reply.header('access-control-allow-headers', 'content-type, authorization');
+      reply.header('access-control-allow-headers', 'content-type, authorization, x-filename');
       reply.header('access-control-allow-methods', 'GET, POST, PATCH, DELETE, OPTIONS');
       reply.header('access-control-max-age', '600');
     }
@@ -73,6 +85,25 @@ export async function buildServer(deps: ApiDeps): Promise<FastifyInstance> {
     if (provided !== config.adminToken) {
       reply.code(401).send({ error: 'No autorizado' });
     }
+  });
+
+  /*
+    Las fotos se sirven FUERA de /api, y por lo tanto sin el token del panel.
+    Tiene que ser así: quien las descarga no es el navegador del equipo sino
+    Telegram y los servidores de Meta, que no tienen forma de autenticarse. Lo
+    que se expone es una foto de producto con un id imposible de adivinar, no
+    datos de nadie.
+  */
+  app.get('/media/:id', async (req: FastifyRequest, reply: FastifyReply) => {
+    const { id } = req.params as { id: string };
+    const file = await deps.repos.media.get(id);
+    if (!file) return reply.code(404).send({ error: 'No existe' });
+    return reply
+      .header('content-type', file.mimeType)
+      // El contenido de un id nunca cambia: se puede cachear para siempre, y así
+      // Meta no vuelve a descargarla en cada mensaje.
+      .header('cache-control', 'public, max-age=31536000, immutable')
+      .send(file.bytes);
   });
 
   app.get('/health', async () => ({

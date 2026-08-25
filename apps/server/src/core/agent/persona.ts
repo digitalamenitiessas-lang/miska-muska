@@ -471,7 +471,6 @@ export function renderQuickReply(
     que nada lo delatara.
   */
   const candidatos: Record<string, string | null> = {
-    agente: settings.agentName,
     direccion: settings.address,
     alias: settings.transferAlias,
     titular: settings.transferHolder,

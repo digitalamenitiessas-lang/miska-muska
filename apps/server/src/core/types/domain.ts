@@ -274,8 +274,6 @@ export interface QuickReply {
 export interface BotSettings {
   /** Interruptor general: si está en false, el bot no responde nada. */
   botEnabled: boolean;
-  /** Nombre con el que se presenta el bot. */
-  agentName: string;
   activeChannels: ChannelId[];
   /** Slug de modelo de OpenRouter, ej. `anthropic/claude-sonnet-5`. */
   model: string;

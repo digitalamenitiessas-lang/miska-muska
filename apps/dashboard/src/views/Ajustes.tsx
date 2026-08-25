@@ -153,14 +153,7 @@ export function Ajustes({
         <section className="card">
           <div className="card-pad">
             <h3 className="card-title">Cómo escribe</h3>
-            <label className="label">Se presenta como</label>
-            <input
-              type="text"
-              value={draft.agentName}
-              onChange={(e) => set('agentName', e.target.value)}
-            />
-
-            <label className="label" style={{ marginTop: 10 }}>
+            <label className="label">
               Velocidad de tipeo simulada ({draft.typingMsPerChar} ms por carácter)
             </label>
             <input
@@ -223,7 +216,7 @@ export function Ajustes({
               empujaba la fila fuera de la tarjeta en vez de bajar de línea. */}
           <div className="row wrap" style={{ gap: 12, marginTop: 12 }}>
             <div>
-              <label className="label">Abre</label>
+              <label className="label">Abre (aprox.)</label>
               <input
                 type="number"
                 min={0}
@@ -234,7 +227,7 @@ export function Ajustes({
               />
             </div>
             <div>
-              <label className="label">Cierra</label>
+              <label className="label">Cierra (aprox.)</label>
               <input
                 type="number"
                 min={0}
@@ -244,8 +237,10 @@ export function Ajustes({
                 style={{ width: 90 }}
               />
             </div>
-            <span className="small muted" style={{ alignSelf: 'flex-end' }}>
-              Fuera de horario el bot sigue atendiendo pero no promete entregas inmediatas.
+            <span className="small muted" style={{ alignSelf: 'flex-end', maxWidth: 420 }}>
+              Franja gruesa, solo para saber si el local está cerrado: fuera de ella el bot sigue
+              atendiendo pero no promete entregas inmediatas. El horario que le CUENTA al cliente
+              es el de arriba.
             </span>
           </div>
         </div>

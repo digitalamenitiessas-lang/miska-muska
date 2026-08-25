@@ -216,6 +216,29 @@ INSERT INTO _migrations (id, name) VALUES (3, 'deduplicacion-por-conversacion')
   ON CONFLICT (id) DO NOTHING;
 
 -- ========================================================================
+-- Migración 5: archivos-subidos
+-- ========================================================================
+-- Fotos subidas desde el panel. Van en la base y no en el disco del servidor a
+-- propósito: el bot no guarda nada en disco, y por eso el proceso es
+-- descartable — se puede borrar y recrear sin perder nada. Guardarlas en /opt
+-- rompería justo esa propiedad, y la primera vez que alguien recree el
+-- contenedor se quedaría sin fotos y sin saber por qué.
+--
+-- El límite del cuerpo del servidor ya está en 5 MB, que es también el máximo
+-- que acepta Meta para una imagen, así que no hace falta otra restricción acá.
+CREATE TABLE media (
+  id         text PRIMARY KEY,
+  mime_type  text NOT NULL,
+  filename   text,
+  bytes      bytea NOT NULL,
+  size       integer NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+INSERT INTO _migrations (id, name) VALUES (5, 'archivos-subidos')
+  ON CONFLICT (id) DO NOTHING;
+
+-- ========================================================================
 -- Migración 4: foto-de-producto
 -- ========================================================================
 -- La foto del producto, como URL pública. No se guarda el archivo: los dos

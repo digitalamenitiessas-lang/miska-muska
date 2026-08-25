@@ -6,6 +6,7 @@
 import type { FastifyInstance } from 'fastify';
 import type { ApiDeps } from './server.js';
 import { bus } from '../core/events/bus.js';
+import { config } from '../config.js';
 import { matchQuickReplies } from '../core/pipeline/router.js';
 import { renderQuickReply } from '../core/agent/persona.js';
 import type { ConversationMode, OrderStatus, Product, ProductCategory } from '../core/types/domain.js';
@@ -245,6 +246,38 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
     const { ids, available } = req.body as { ids: string[]; available: boolean };
     const updated = await repos.products.setAvailabilityMany(ids ?? [], available);
     return { ok: true, updated };
+  });
+
+  /**
+   * Sube una foto y devuelve su dirección pública.
+   *
+   * La URL se arma con `PUBLIC_URL`, que es la que ve el mundo: el servidor
+   * escucha en 127.0.0.1 detrás de un proxy con un prefijo de ruta, así que el
+   * host del request no alcanza para reconstruirla. Sin `PUBLIC_URL` la foto se
+   * guarda igual pero la dirección solo sirve en la misma máquina, y eso se
+   * avisa en vez de devolver un link roto.
+   */
+  app.post('/api/media', async (req, reply) => {
+    const tipo = String(req.headers['content-type'] ?? '').split(';')[0].trim();
+    if (!Buffer.isBuffer(req.body)) {
+      return reply.code(415).send({
+        error: `No puedo con archivos de tipo "${tipo || 'desconocido'}". Tiene que ser una ` +
+          'imagen jpg, png o webp.',
+      });
+    }
+    if (!req.body.length) return reply.code(400).send({ error: 'El archivo vino vacío' });
+
+    const filename = String(req.headers['x-filename'] ?? '').slice(0, 120) || null;
+    const { id } = await repos.media.insert({ mimeType: tipo, filename, bytes: req.body });
+
+    const base = config.publicUrl.replace(/\/$/, '');
+    return {
+      id,
+      url: base ? `${base}/media/${id}` : `/media/${id}`,
+      advertencia: base
+        ? undefined
+        : 'Falta PUBLIC_URL: la dirección es relativa y WhatsApp no va a poder descargarla.',
+    };
   });
 
   // --- Pedidos ------------------------------------------------------------
