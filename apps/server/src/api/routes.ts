@@ -200,6 +200,8 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
       limitedEdition: body.limitedEdition ?? current.limitedEdition,
       pickupOnly: body.pickupOnly ?? current.pickupOnly,
       notes: body.notes ?? current.notes,
+      // Cadena vacía = "sacale la foto"; undefined = "no la toques".
+      imageUrl: body.imageUrl === undefined ? current.imageUrl : body.imageUrl || null,
       sortOrder: body.sortOrder ?? current.sortOrder,
     });
   });
@@ -227,6 +229,7 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
       limitedEdition: body.limitedEdition ?? false,
       pickupOnly: body.pickupOnly ?? false,
       notes: body.notes ?? null,
+      imageUrl: body.imageUrl ?? null,
       sortOrder: body.sortOrder ?? 999,
     });
   });

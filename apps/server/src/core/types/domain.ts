@@ -144,6 +144,15 @@ export interface Product {
   /** true si NO se puede enviar a domicilio (tortas: solo retiro o Uber). */
   pickupOnly: boolean;
   notes: string | null;
+  /**
+   * Foto del producto, como URL pública HTTPS. El bot la manda cuando el cliente
+   * quiere ver algo antes de comprarlo, y es lo que hace falta para los cursos
+   * presenciales, que cambian cada semana.
+   *
+   * URL y no archivo: Telegram y WhatsApp descargan el link ellos mismos, así que
+   * lo mismo sirve en los dos y no hay que resubir nada al cambiar de canal.
+   */
+  imageUrl: string | null;
   /** Orden de aparición dentro de la categoría. */
   sortOrder: number;
   updatedAt: string;

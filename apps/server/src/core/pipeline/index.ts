@@ -317,6 +317,16 @@ export class Pipeline {
     const contents: OutboundContent[] = turn.bubbles.map((text) => ({ kind: 'text', text }));
 
     /*
+      Las fotos van después del texto, no antes: primero se explica y después se
+      muestra, que es como manda una foto una persona. El degradado por canal se
+      ocupa del resto — si algún día hay un canal sin imágenes, ahí se convierte
+      en texto con el link, y acá no cambia nada.
+    */
+    for (const photo of toolContext.effects.photos ?? []) {
+      contents.push({ kind: 'image', url: photo.url, caption: photo.caption });
+    }
+
+    /*
       El cliente ya escuchó la respuesta del equipo: recién ahora la consulta deja
       de ser contexto. Se limpia acá y no al contestarla en el panel, porque entre
       las dos cosas el turno puede fallar, y una consulta resuelta que no se borra

@@ -10,6 +10,8 @@ export function Catalogo({ toast }: { toast: (text: string) => void }) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
+  /** Producto cuya foto se está cargando, si hay alguno. */
+  const [editandoFoto, setEditandoFoto] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -60,6 +62,17 @@ export function Catalogo({ toast }: { toast: (text: string) => void }) {
     } catch (err) {
       toast(`No pude guardar: ${String(err)}`);
       void load();
+    }
+  };
+
+  const saveFoto = async (id: string, url: string) => {
+    try {
+      const next = await api.updateProduct(id, { imageUrl: url });
+      setProducts((prev) => prev.map((p) => (p.id === next.id ? next : p)));
+      setEditandoFoto(null);
+      toast(url ? 'Foto guardada' : 'Foto quitada');
+    } catch (err) {
+      toast('No pude guardar la foto: ' + String(err));
     }
   };
 
@@ -124,6 +137,15 @@ export function Catalogo({ toast }: { toast: (text: string) => void }) {
                     }}
                   >
                     <Switch checked={p.availableToday} onChange={(next) => void toggle(p, next)} />
+                    {/* La miniatura es también el botón: si ya hay foto se ve, y si
+                        no, queda el marco vacío invitando a cargarla. */}
+                    <button
+                      className="foto-mini"
+                      title={p.imageUrl ? 'Cambiar la foto' : 'Cargar una foto'}
+                      onClick={() => setEditandoFoto(p.id)}
+                    >
+                      {p.imageUrl ? <img src={p.imageUrl} alt="" /> : <span>+</span>}
+                    </button>
                     <span className="grow truncate" title={p.notes ?? p.name}>
                       {p.name}
                       {p.limitedEdition ? ' ✨' : ''}
@@ -158,10 +180,98 @@ export function Catalogo({ toast }: { toast: (text: string) => void }) {
         })}
       </div>
 
+      {editandoFoto ? (
+        <FotoDialogo
+          producto={products.find((p) => p.id === editandoFoto)!}
+          onCerrar={() => setEditandoFoto(null)}
+          onGuardar={(url) => void saveFoto(editandoFoto, url)}
+        />
+      ) : null}
+
       <p className="small muted" style={{ marginTop: 14 }}>
         ✨ edición limitada (el bot invita a consultar los sabores del mes) · 🚫🛵 no se envía a
         domicilio (el bot ofrece retiro en el local o Uber del cliente)
       </p>
     </>
+  );
+}
+
+/**
+ * Carga de la foto de un producto: se pega una URL pública y se ve la vista
+ * previa antes de guardar.
+ *
+ * Por qué una URL y no subir el archivo: los dos canales descargan el link
+ * ellos mismos (Telegram con sendPhoto, WhatsApp Cloud API con `image.link`),
+ * así que la misma URL sirve en los dos y no hay que resubir nada al migrar de
+ * canal. Alojar los archivos nosotros significaría almacenamiento, limpieza y
+ * un dominio público que hoy no hacen falta: la foto ya está en la tienda o en
+ * Instagram del local.
+ *
+ * WhatsApp además EXIGE https y que sea alcanzable desde afuera, y falla en
+ * silencio si no. Por eso la vista previa: si acá no se ve, al cliente tampoco
+ * le va a llegar.
+ */
+function FotoDialogo({
+  producto,
+  onCerrar,
+  onGuardar,
+}: {
+  producto: Product;
+  onCerrar: () => void;
+  onGuardar: (url: string) => void;
+}) {
+  const [url, setUrl] = useState(producto.imageUrl ?? '');
+  const limpia = url.trim();
+  const esHttps = limpia.startsWith('https://');
+
+  return (
+    <div className="foto-fondo" onClick={onCerrar}>
+      <div className="foto-dialogo card" onClick={(e) => e.stopPropagation()}>
+        <div className="card-pad">
+          <h3 className="card-title">Foto de {producto.name}</h3>
+          <label className="label">Dirección de la imagen</label>
+          <input
+            type="url"
+            autoFocus
+            placeholder="https://miskamuska.com.ar/…/torta.jpg"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            style={{ width: '100%' }}
+          />
+          <p className="small muted">
+            Tiene que empezar con <code>https://</code> y abrirse sin contraseña. Sirve la de la
+            tienda online o la de Instagram. WhatsApp no acepta otra cosa, y no avisa cuando falla.
+          </p>
+
+          <div className="foto-preview">
+            {limpia && esHttps ? (
+              <img src={limpia} alt="" />
+            ) : (
+              <span className="small muted">
+                {limpia ? 'La dirección tiene que empezar con https://' : 'Pegá la dirección y la ves acá'}
+              </span>
+            )}
+          </div>
+
+          <div className="row" style={{ gap: 8, marginTop: 12 }}>
+            <button
+              className="btn btn-primary"
+              disabled={Boolean(limpia) && !esHttps}
+              onClick={() => onGuardar(limpia)}
+            >
+              Guardar
+            </button>
+            {producto.imageUrl ? (
+              <button className="btn btn-ghost" onClick={() => onGuardar('')}>
+                Quitar la foto
+              </button>
+            ) : null}
+            <button className="btn btn-ghost" onClick={onCerrar}>
+              Cancelar
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
   );
 }

@@ -161,8 +161,14 @@ export function degradeForChannel(
     }
 
     case 'image':
+      /*
+        Los dos canales cortan el pie de foto en 1024 caracteres, y WhatsApp además
+        rechaza el mensaje entero si se pasa. Se recorta acá, en el degradado, y no
+        en quien la manda: es una limitación del canal, y este es el lugar donde
+        viven las limitaciones de los canales.
+      */
       return caps.supportsImages
-        ? [content]
+        ? [{ ...content, caption: content.caption?.slice(0, 1024) }]
         : degradeForChannel(
             { kind: 'text', text: [content.caption, content.url].filter(Boolean).join('\n') },
             caps,

@@ -214,3 +214,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_messages_dedupe ON messages (conversation_
 
 INSERT INTO _migrations (id, name) VALUES (3, 'deduplicacion-por-conversacion')
   ON CONFLICT (id) DO NOTHING;
+
+-- ========================================================================
+-- Migración 4: foto-de-producto
+-- ========================================================================
+-- La foto del producto, como URL pública. No se guarda el archivo: los dos
+-- canales aceptan un link y lo descargan ellos (Telegram con sendPhoto, WhatsApp
+-- Cloud API con image.link), así que guardar la URL es lo único que funciona
+-- igual en los dos y sobrevive al cambio de canal sin resubir nada.
+--
+-- Meta exige que sea HTTPS y públicamente accesible, y no acepta cualquier
+-- formato. Eso se valida al mandarla, no acá: una restricción en la base
+-- rechazaría la fila sin poder explicarle nada a nadie.
+ALTER TABLE products ADD COLUMN IF NOT EXISTS image_url text;
+
+INSERT INTO _migrations (id, name) VALUES (4, 'foto-de-producto')
+  ON CONFLICT (id) DO NOTHING;

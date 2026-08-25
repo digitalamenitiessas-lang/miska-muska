@@ -60,6 +60,8 @@ export interface Message {
   author: 'bot' | 'human' | 'system';
   contentKind: string;
   text: string;
+  /** Contenido canónico completo. Para las imágenes trae la url. */
+  payload?: unknown;
   intent: string | null;
   handler: string | null;
   latencyMs: number | null;
@@ -83,6 +85,8 @@ export interface Product {
   limitedEdition: boolean;
   pickupOnly: boolean;
   notes: string | null;
+  /** Foto del producto, como URL pública HTTPS. El bot la manda como imagen. */
+  imageUrl: string | null;
   sortOrder: number;
 }
 

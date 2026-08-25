@@ -102,7 +102,7 @@ ingress   resuelve contacto y conversación, deduplica el reintento del webhook,
    ▼
 router    ¿bot apagado? ¿la tomó una persona? ¿matchea un mensaje rápido corto?
    ▼
-agent     OpenRouter con 8 herramientas (catálogo, pedidos, consultas, escalar…)
+agent     OpenRouter con 9 herramientas (catálogo, fotos, pedidos, consultas, escalar…)
    ▼
 egress    degrada al canal, parte los textos largos, simula tipeo, envía, registra
    ▼
@@ -150,9 +150,17 @@ Las guardas aplican a lo que hace **el bot**. `POST /api/orders` no pasa por
 poder cargar la excepción que el bot no puede.
 
 **Herramientas.** `buscar_catalogo`, `disponibilidad_hoy`, `mensaje_rapido`,
-`crear_pedido`, `consultar_modificacion`, `consultar_pedido`,
+`mandar_foto`, `crear_pedido`, `consultar_modificacion`, `consultar_pedido`,
 `registrar_nota_cliente`, `escalar_a_humano`. Nunca dice un precio de memoria: lo
 consulta.
+
+**Fotos.** Cada producto puede tener una foto, que se carga desde Catálogo pegando
+su dirección. El bot la manda como imagen de verdad, no como un link: el modelo
+canónico tiene un contenido `image` y cada canal lo resuelve como corresponde
+(`sendPhoto` en Telegram, `image.link` en WhatsApp). Por eso se guarda una URL y
+no un archivo: la misma foto sirve en los dos canales y no hay que resubir nada al
+migrar. Tiene que ser HTTPS y pública — WhatsApp no acepta otra cosa y falla en
+silencio si no lo es, así que el panel muestra la vista previa antes de guardar.
 
 **Mensajes rápidos.** Los textos que el equipo ya tenía pulidos en WhatsApp están
 cargados tal cual, con variables (`{{alias}}`, `{{cookiesHoy}}`, `{{direccion}}`).

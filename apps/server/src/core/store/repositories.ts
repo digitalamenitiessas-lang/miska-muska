@@ -122,6 +122,7 @@ function toProduct(r: Row): Product {
     limitedEdition: Boolean(r.limited_edition),
     pickupOnly: Boolean(r.pickup_only),
     notes: str(r.notes),
+    imageUrl: str(r.image_url),
     sortOrder: Number(r.sort_order ?? 0),
     updatedAt: iso(r.updated_at),
   };
@@ -512,15 +513,16 @@ export function createRepositories() {
     async upsert(p: Omit<Product, 'updatedAt'>): Promise<Product> {
       const row = await one(
         `INSERT INTO products (id, name, category, price, available_today, limited_edition,
-           pickup_only, notes, sort_order, updated_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+           pickup_only, notes, image_url, sort_order, updated_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())
          ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, category = EXCLUDED.category,
            price = EXCLUDED.price, available_today = EXCLUDED.available_today,
            limited_edition = EXCLUDED.limited_edition, pickup_only = EXCLUDED.pickup_only,
-           notes = EXCLUDED.notes, sort_order = EXCLUDED.sort_order, updated_at = now()
+           notes = EXCLUDED.notes, image_url = EXCLUDED.image_url,
+           sort_order = EXCLUDED.sort_order, updated_at = now()
          RETURNING *`,
         [p.id, p.name, p.category, p.price, p.availableToday, p.limitedEdition, p.pickupOnly,
-         p.notes, p.sortOrder],
+         p.notes, p.imageUrl ?? null, p.sortOrder],
       );
       return toProduct(row!);
     },

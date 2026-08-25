@@ -477,9 +477,19 @@ export function Inbox({
 function Bubble({ message }: { message: Message }) {
   const out = message.direction === 'out';
   const authorClass = out ? ` by-${message.author}` : '';
+  /*
+    Si el mensaje es una imagen, se muestra la imagen. Con solo el texto el
+    operador leía "[imagen]" y no tenía forma de saber cuál mandó el bot.
+  */
+  const foto =
+    message.contentKind === 'image'
+      ? (message.payload as { url?: string } | null)?.url
+      : undefined;
+
   return (
     <div className={`bubble ${out ? 'bubble-out' : 'bubble-in'}${authorClass}`}>
-      {message.text}
+      {foto ? <img className="bubble-foto" src={foto} alt={message.text} /> : null}
+      {foto ? message.text.replace(/^[imagen]s*/, '') : message.text}
       <div className="bubble-foot">
         <span>{clock(message.createdAt)}</span>
         {out ? (

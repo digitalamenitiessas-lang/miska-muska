@@ -304,6 +304,9 @@ export async function seed(): Promise<void> {
       limitedEdition: p.limitedEdition ?? false,
       pickupOnly: p.pickupOnly ?? false,
       notes: p.notes ?? null,
+      // La foto la carga el local desde el panel: no viene en el catálogo semilla,
+      // y si ya la cargó, no se la pisamos al re-seedear.
+      imageUrl: prev?.imageUrl ?? null,
       sortOrder: index,
     };
     await repos.products.upsert(product);

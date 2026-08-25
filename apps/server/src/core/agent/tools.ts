@@ -54,8 +54,30 @@ export interface ToolContext {
      * modo 'human' recién se escribe cuando el turno terminó.
      */
     pendingReview?: PendingReview;
+    /**
+     * Fotos que el modelo pidió mandar en este turno. El pipeline las convierte
+     * en contenido de imagen después de las burbujas de texto.
+     *
+     * Van como efecto y no dentro del texto porque una foto NO es un link: el
+     * modelo canónico tiene un contenido `image` propio, y cada canal lo manda
+     * como corresponde (Telegram con sendPhoto, WhatsApp con image.link). Si
+     * mañana aparece un canal sin imágenes, el degradado la convierte en texto
+     * solo ahí, sin tocar nada de esto.
+     */
+    photos?: Array<{ url: string; caption?: string }>;
   };
 }
+
+/** Cuántas fotos como mucho por turno: más que esto es spam, no atención. */
+const MAX_FOTOS_POR_TURNO = 2;
+
+/*
+  Meta solo descarga imágenes por HTTPS público, y falla en silencio con
+  cualquier otra cosa: sin esto, una URL http:// o un archivo local se vería bien
+  en el panel y no le llegaría nunca al cliente de WhatsApp. Telegram es más
+  permisivo, pero se valida igual para que el mismo dato sirva en los dos canales.
+*/
+const FOTO_VALIDA = /^https:\/\/\S+$/i;
 
 /** Cuánto tiempo el pedido de esta charla sigue siendo "el pedido de esta charla". */
 const PEDIDO_ABIERTO_MS = 24 * 60 * 60 * 1000;
@@ -205,6 +227,29 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   ),
 
   tool(
+    'mandar_foto',
+    'Le manda al cliente la foto de un producto del catálogo, como imagen de verdad. ' +
+      'Usala cuando quiera VER algo antes de decidir: una torta, un box, o el curso ' +
+      'presencial de esta semana. Solo funciona con productos que tienen foto cargada: eso te ' +
+      'lo dice el campo tiene_foto de buscar_catalogo y disponibilidad_hoy. Si no tiene foto, ' +
+      'no la inventes ni pegues un link: describí el producto con palabras. Mandá una foto por ' +
+      'vez, y no más de dos en un mismo turno.',
+    {
+      producto_id: {
+        type: 'string',
+        description: 'Id del producto cuya foto querés mandar (lo devuelve buscar_catalogo).',
+      },
+      texto: {
+        type: 'string',
+        description:
+          'Lo que va escrito junto a la foto, una línea. Opcional: si el mensaje anterior ya ' +
+          'lo explicó, dejalo vacío en vez de repetir.',
+      },
+    },
+    ['producto_id'],
+  ),
+
+  tool(
     'consultar_modificacion',
     'Usala SIEMPRE que pidan cambiar algo de un producto: sacar o cambiar un ingrediente, ' +
       'cambiar el bizcochuelo, reemplazar algo de un desayuno, otro tamaño, otra presentación. ' +
@@ -287,6 +332,9 @@ const productView = (p: Product) => ({
   disponible_hoy: p.availableToday,
   edicion_limitada: p.limitedEdition,
   solo_retiro: p.pickupOnly,
+  // Solo si la hay: la URL no le sirve al modelo (no la puede mandar como texto)
+  // y ocuparía tokens en cada búsqueda.
+  tiene_foto: Boolean(p.imageUrl),
   nota: p.notes ?? undefined,
 });
 
@@ -942,6 +990,58 @@ export async function executeTool(
         if (typeof input.telefono === 'string') patch.phone = input.telefono;
         if (Object.keys(patch).length) await repos.contacts.update(ctx.contact.id, patch);
         return { ok: true, data: { guardado: true } };
+      }
+
+      case 'mandar_foto': {
+        const productoId = String(input.producto_id ?? '').trim();
+        const producto = productoId ? await repos.products.get(productoId) : null;
+        if (!producto) {
+          return {
+            ok: false,
+            error:
+              `No existe el producto "${productoId}". Buscalo con buscar_catalogo y usá el id ` +
+              'que devuelve.',
+          };
+        }
+        if (!producto.imageUrl) {
+          return {
+            ok: false,
+            error:
+              `${producto.name} no tiene foto cargada. No inventes una ni le pegues un link: ` +
+              'describilo con palabras, que para eso están los datos del catálogo.',
+          };
+        }
+        if (!FOTO_VALIDA.test(producto.imageUrl)) {
+          log('warn', `Foto inválida en ${producto.id}`, producto.imageUrl);
+          return {
+            ok: false,
+            error:
+              `La foto de ${producto.name} está mal cargada y no se puede mandar. Seguí sin ` +
+              'ella y describí el producto con palabras.',
+          };
+        }
+
+        ctx.effects.photos ??= [];
+        if (ctx.effects.photos.length >= MAX_FOTOS_POR_TURNO) {
+          return {
+            ok: false,
+            error:
+              'Ya mandaste las fotos de este turno. Seguí con texto, y si hace falta mostrale ' +
+              'otra cosa, esperá al próximo mensaje del cliente.',
+          };
+        }
+        const texto = typeof input.texto === 'string' ? input.texto.trim() : '';
+        ctx.effects.photos.push({ url: producto.imageUrl, caption: texto || undefined });
+
+        return {
+          ok: true,
+          data: {
+            enviada: producto.name,
+            instruccion:
+              'La foto sale sola después de lo que escribas: no le pegues el link ni le digas ' +
+              '"mirá la imagen de arriba". Seguí la charla normalmente.',
+          },
+        };
       }
 
       case 'consultar_modificacion': {
