@@ -48,14 +48,22 @@ export function Cursos({ toast }: { toast: (text: string) => void }) {
     [toast],
   );
 
-  const guardarCurso = async (body: Partial<Course>, id?: string) => {
+  const guardarCurso = async (
+    body: Partial<Course>,
+    turnosNuevos: Array<{ label: string; capacity: number }> = [],
+    id?: string,
+  ) => {
     try {
-      if (id) await api.updateCourse(id, body);
-      else await api.createCourse(body);
+      const curso = id ? await api.updateCourse(id, body) : await api.createCourse(body);
+      // Los turnos que se cargaron antes de que el curso existiera: recién ahora
+      // hay un id al que colgarlos.
+      for (const [i, t] of turnosNuevos.entries()) {
+        await api.upsertSession(curso.id, { ...t, sortOrder: i });
+      }
       setEditando(null);
       setCreando(false);
       await load();
-      toast(id ? 'Curso actualizado' : 'Curso creado. Ahora cargale los turnos.');
+      toast(id ? 'Curso actualizado' : 'Curso creado');
     } catch (err) {
       toast(`No pude guardar: ${String(err)}`);
     }
@@ -110,7 +118,7 @@ export function Cursos({ toast }: { toast: (text: string) => void }) {
                     <strong className="grow truncate">{course.name}</strong>
                     <Switch
                       checked={course.active}
-                      onChange={(next) => void guardarCurso({ active: next }, course.id)}
+                      onChange={(next) => void guardarCurso({ active: next }, [], course.id)}
                     />
                   </div>
                   <div className="small muted">
@@ -171,7 +179,7 @@ export function Cursos({ toast }: { toast: (text: string) => void }) {
             setCreando(false);
             setEditando(null);
           }}
-          onGuardar={(body) => void guardarCurso(body, editando?.id)}
+          onGuardar={(body, turnosNuevos) => void guardarCurso(body, turnosNuevos, editando?.id)}
           onTurnosCambiados={() => void load()}
           toast={toast}
         />
@@ -426,7 +434,10 @@ function CursoDialogo({
 }: {
   curso: Course | null;
   onCerrar: () => void;
-  onGuardar: (body: Partial<Course>) => void;
+  onGuardar: (
+    body: Partial<Course>,
+    turnosNuevos: Array<{ label: string; capacity: number }>,
+  ) => void;
   onTurnosCambiados: () => void;
   toast: (text: string) => void;
 }) {
@@ -442,6 +453,14 @@ function CursoDialogo({
   const [turnos, setTurnos] = useState<CourseSession[]>([]);
   const [nuevoTurno, setNuevoTurno] = useState('');
   const [nuevoCupo, setNuevoCupo] = useState('12');
+  /*
+    Turnos de un curso que todavía no existe. Se juntan acá y se guardan cuando
+    el curso ya tiene id: los cupos son parte de crear el curso, no un segundo
+    paso que hay que acordarse de hacer.
+  */
+  const [turnosPendientes, setTurnosPendientes] = useState<
+    Array<{ label: string; capacity: number }>
+  >([]);
 
   useEffect(() => {
     if (!curso) return;
@@ -471,11 +490,19 @@ function CursoDialogo({
   };
 
   const agregarTurno = async () => {
-    if (!curso || !nuevoTurno.trim()) return;
+    const label = nuevoTurno.trim();
+    const capacity = Number(nuevoCupo) || 0;
+    if (!label) return;
+    // Curso todavía sin crear: el turno espera en memoria.
+    if (!curso) {
+      setTurnosPendientes((prev) => [...prev, { label, capacity }]);
+      setNuevoTurno('');
+      return;
+    }
     try {
       const t = await api.upsertSession(curso.id, {
-        label: nuevoTurno.trim(),
-        capacity: Number(nuevoCupo) || 0,
+        label,
+        capacity,
         sortOrder: turnos.length,
       });
       setTurnos((prev) => [...prev, t]);
@@ -483,6 +510,21 @@ function CursoDialogo({
       onTurnosCambiados();
     } catch (err) {
       toast(`No pude agregar el turno: ${String(err)}`);
+    }
+  };
+
+  /** Cambiar los cupos de un turno que ya existe, sin borrarlo y volver a crearlo. */
+  const cambiarCupo = async (turno: CourseSession, capacity: number) => {
+    if (!Number.isFinite(capacity) || capacity < 0 || capacity === turno.capacity) return;
+    try {
+      const t = await api.upsertSession(turno.courseId, { ...turno, capacity });
+      setTurnos((prev) => prev.map((x) => (x.id === t.id ? t : x)));
+      onTurnosCambiados();
+      if (capacity < (turno.taken ?? 0)) {
+        toast(`Ojo: ya hay ${turno.taken} anotados y dejaste ${capacity} cupos.`);
+      }
+    } catch (err) {
+      toast(`No pude cambiar los cupos: ${String(err)}`);
     }
   };
 
@@ -592,75 +634,92 @@ function CursoDialogo({
             )}
           </div>
 
-          {curso ? (
-            <>
-              <label className="label" style={{ marginTop: 14 }}>
-                Turnos y cupos
-              </label>
-              {turnos.length === 0 ? (
-                <p className="small muted">
-                  Sin turnos el bot no puede anotar a nadie. Cargá al menos uno.
-                </p>
-              ) : (
-                <div className="row wrap" style={{ gap: 6, marginBottom: 8 }}>
-                  {turnos.map((t) => (
-                    <span key={t.id} className="chip">
-                      {t.label} · {t.capacity} cupos
-                      <button
-                        className="btn btn-sm btn-ghost"
-                        title="Borrar el turno"
-                        onClick={() => void borrarTurno(t.id)}
-                      >
-                        ✕
-                      </button>
-                    </span>
-                  ))}
-                </div>
-              )}
-              <div className="row wrap" style={{ gap: 8 }}>
-                <input
-                  className="grow"
-                  type="text"
-                  value={nuevoTurno}
-                  onChange={(e) => setNuevoTurno(e.target.value)}
-                  placeholder="viernes 11/9, 17 hs"
-                />
-                <input
-                  type="number"
-                  min={1}
-                  value={nuevoCupo}
-                  onChange={(e) => setNuevoCupo(e.target.value)}
-                  style={{ width: 90 }}
-                  title="Cupos de ese turno"
-                />
-                <button
-                  className="btn btn-sm btn-primary"
-                  disabled={!nuevoTurno.trim()}
-                  onClick={() => void agregarTurno()}
-                >
-                  Agregar turno
-                </button>
-              </div>
-            </>
-          ) : (
-            <p className="small muted" style={{ marginTop: 12 }}>
-              Los turnos se cargan después de crear el curso.
+          <label className="label" style={{ marginTop: 14 }}>
+            Turnos y cupos
+          </label>
+          {turnos.length === 0 && turnosPendientes.length === 0 ? (
+            <p className="small muted">
+              Sin turnos el bot no puede anotar a nadie. Cargá al menos uno, con sus cupos.
             </p>
-          )}
+          ) : null}
+
+          {turnos.map((t) => (
+            <div key={t.id} className="row wrap" style={{ gap: 8, marginBottom: 6 }}>
+              <span className="grow truncate">{t.label}</span>
+              <span className="small muted">{t.taken ?? 0} anotados ·</span>
+              <input
+                type="number"
+                min={0}
+                defaultValue={t.capacity}
+                style={{ width: 80 }}
+                title="Cupos de este turno"
+                onBlur={(e) => void cambiarCupo(t, Number(e.target.value))}
+              />
+              <span className="small muted">cupos</span>
+              <button
+                className="btn btn-sm btn-ghost"
+                title="Borrar el turno"
+                onClick={() => void borrarTurno(t.id)}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+
+          {turnosPendientes.map((t, i) => (
+            <div key={`p${i}`} className="row wrap" style={{ gap: 8, marginBottom: 6 }}>
+              <span className="grow truncate">{t.label}</span>
+              <span className="small muted">{t.capacity} cupos · se crea al guardar</span>
+              <button
+                className="btn btn-sm btn-ghost"
+                onClick={() => setTurnosPendientes((prev) => prev.filter((_, j) => j !== i))}
+              >
+                ✕
+              </button>
+            </div>
+          ))}
+
+          <div className="row wrap" style={{ gap: 8, marginTop: 6 }}>
+            <input
+              className="grow"
+              type="text"
+              value={nuevoTurno}
+              onChange={(e) => setNuevoTurno(e.target.value)}
+              placeholder="viernes 11/9, 17 hs"
+            />
+            <input
+              type="number"
+              min={1}
+              value={nuevoCupo}
+              onChange={(e) => setNuevoCupo(e.target.value)}
+              style={{ width: 90 }}
+              title="Cupos de ese turno"
+            />
+            <button
+              className="btn btn-sm btn-primary"
+              disabled={!nuevoTurno.trim()}
+              onClick={() => void agregarTurno()}
+            >
+              Agregar turno
+            </button>
+          </div>
 
           <div className="row" style={{ gap: 8, marginTop: 14 }}>
             <button
               className="btn btn-primary"
               disabled={!listo || subiendo}
               onClick={() =>
-                onGuardar({
-                  name: name.trim(),
-                  description: description.trim() || null,
-                  price: precio,
-                  location: location.trim() || null,
-                  modality,
-                  imageUrl: imageUrl.trim(),
-                })
+                onGuardar(
+                  {
+                    name: name.trim(),
+                    description: description.trim() || null,
+                    price: precio,
+                    location: location.trim() || null,
+                    modality,
+                    imageUrl: imageUrl.trim(),
+                  },
+                  turnosPendientes,
+                )
               }
             >
               Guardar

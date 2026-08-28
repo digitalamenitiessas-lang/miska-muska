@@ -291,7 +291,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       'cambiar el bizcochuelo, reemplazar algo de un desayuno, otro tamaño, otra presentación. ' +
       'No importa si te parece obvio que se puede o que no se puede: no lo decidís vos. Vale ' +
       'para TODOS los productos y también en fechas especiales. Después de llamarla, contale que ' +
-      'lo estás consultando con el equipo y NO sigas con el pedido: la herramienta te dice cómo ' +
+      'lo estás consultando en cocina y NO sigas con el pedido: la herramienta te dice cómo ' +
       'seguir. NO son modificaciones y no van por acá: la cantidad, la fecha, el horario, la ' +
       'modalidad de entrega, la dedicatoria, ni AGREGAR otro producto al pedido — un agregado se ' +
       'suma al principal y se cobra aparte, no lo reemplaza.',
@@ -466,7 +466,7 @@ export async function executeTool(
             ok: false,
             error:
               `"${clave}" pide la transferencia, y hay una consulta sin responder. Ese mensaje ` +
-              'va recién cuando el equipo conteste. Por ahora contale que lo estás consultando.',
+              'va recién cuando contesten de cocina. Por ahora contale que lo estás consultando.',
           };
         }
 
@@ -812,7 +812,7 @@ export async function executeTool(
                 pendiente_de_validacion: true,
                 instruccion:
                   'No cargues ni modifiques nada y no vuelvas a llamar esta herramienta. ' +
-                  'Decile con naturalidad que lo consultás con el equipo y que en un rato le ' +
+                  'Decile con naturalidad que lo consultás en cocina y que en un rato le ' +
                   'escribe alguien del local. No confirmes ni rechaces el cambio, no le digas ' +
                   'que quedó reservado y no le pidas el pago todavía.',
               },
@@ -1255,7 +1255,7 @@ export async function executeTool(
             resultado: 'en_consulta',
             pedido_ya_cargado: yaCargado?.number,
             instruccion:
-              'Quedó la consulta para el equipo. Contale con naturalidad que lo estás ' +
+              'Quedó la consulta para cocina. Contale con naturalidad que lo estás ' +
               'consultando y que en un rato le confirman. NO confirmes el cambio, NO lo ' +
               'rechaces, NO digas que quedó reservado, NO pidas la transferencia y NO cargues ' +
               'el pedido: eso se retoma cuando una persona conteste. Y no agregues preguntas ' +

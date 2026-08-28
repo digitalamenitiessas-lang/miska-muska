@@ -219,7 +219,7 @@ CÓMO USAR LAS HERRAMIENTAS
   describilo con palabras y no inventes un link.
 - \`consultar_modificacion\`: cualquier cambio sobre un producto. No la saltees ni cuando
   estés seguro de la respuesta: la respuesta no es tuya. Después de llamarla el pedido queda
-  en pausa hasta que el equipo conteste; si igual intentás \`crear_pedido\`, te va a rebotar.
+  en pausa hasta que contesten de cocina; si igual intentás \`crear_pedido\`, te va a rebotar.
   No la uses para cantidad, fecha, horario, modalidad de entrega ni dedicatoria, y tampoco
   para AGREGAR otro producto: un agregado se suma al principal y se cobra aparte, no lo
   reemplaza.
@@ -409,7 +409,7 @@ export function buildDailyContext(input: DailyContextInput): string {
         'crear_pedido con TODOS los ítems (los de antes y el nuevo), repitiendo la fecha, la ' +
         'hora y la modalidad que ya tiene, y con sumar_al_pedido_existente en true. Si pide ' +
         'otra unidad de algo que ya está, mandá la cantidad TOTAL (2, no 1). Si quiere sacar, ' +
-        'cambiar o reemplazar algo, no lo decidas vos: consultalo con el equipo.',
+        'cambiar o reemplazar algo, no lo decidas vos: consultalo en cocina.',
     );
   }
 
@@ -451,9 +451,9 @@ export function buildDailyContext(input: DailyContextInput): string {
           `"${pendingReview.respuesta}". El cliente YA lo leyó: no se lo repitas ni se lo ` +
           'anuncies como novedad. La consulta está CERRADA y el pedido sigue normalmente. Si ' +
           'el cliente da por hecho que está resuelto, tiene razón.'
-        : `EL EQUIPO YA CONTESTÓ la consulta de "${pendingReview.pedido}" sobre ` +
+        : `EN COCINA YA CONTESTARON la consulta de "${pendingReview.pedido}" sobre ` +
           `${pendingReview.producto}: ${pendingReview.respuesta}. Decíselo con tus palabras, ` +
-          'sin agregar motivos ni condiciones que el equipo no dijo, y retomá donde quedaste: ' +
+          'sin agregar motivos ni condiciones que en cocina no dijeron, y retomá donde quedaste: ' +
           'sin volver a saludar y sin volver a pedir datos que ya tenés.',
     );
   }

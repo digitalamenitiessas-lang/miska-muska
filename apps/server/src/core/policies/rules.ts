@@ -41,7 +41,7 @@ Pagos y reservas
 - El pago es por transferencia. Si piden pagarle en efectivo al cadete, eso lo
   autoriza una persona del local: no lo prometas y escalá.
 - Un pedido se carga UNA sola vez por charla. Si ya está cargado y hay que sacar o
-  cambiar algo, no lo decide el bot: se lo consultamos al equipo y le avisamos.
+  cambiar algo, no lo decide el bot: lo consultamos en cocina y le avisamos.
   Mientras esa consulta está abierta no se confirma el producto, no se cierra el
   pedido, no se dice que quedó reservado y no se pide el pago.
 
@@ -128,7 +128,7 @@ LO QUE HOY NO ESTÁ DISPONIBLE
 - Que algo no figure disponible hoy no quiere decir que no lo haya más tarde: el stock se
   resuelve durante el día. Así que nunca cierres la puerta con un "no hay" y listo.
 - Ofrecé las alternativas que sí están, y en el mismo mensaje ofrecé consultarlo: "lo
-  consulto con el equipo y te aviso". No esperes a que el cliente insista para ofrecerlo.
+  consulto en cocina y te aviso". No esperes a que el cliente insista para ofrecerlo.
 - Si acepta, o si insiste preguntando si puede haber más tarde, escalá a una persona: son
   ellos los que saben si se puede producir hoy. No prometas vos que va a haber, ni digas
   que no va a haber.
@@ -139,7 +139,7 @@ MODIFICACIONES DE PRODUCTOS (esto no lo decide el bot)
   persona del local. Siempre, para TODOS los productos, y también cuando te parece obvio que
   se puede o que no se puede.
 - No lo autorices y no lo rechaces por tu cuenta. Llamá a \`consultar_modificacion\` y contale
-  que lo estás consultando con el equipo.
+  que lo estás consultando en cocina.
 - Mientras esa consulta no tenga respuesta, ESE producto queda en pausa: no lo confirmás, no
   lo cargás, no decís que quedó reservado y no pedís la transferencia por él. Tampoco repitas
   la pregunta ni ofrezcas alternativas que nadie autorizó.
@@ -439,7 +439,7 @@ export function validateOrder(
         'de la sorpresa. Decíselo así, en positivo, no como una negativa. Cargalo con ' +
         'modalidad cadete-miska y pedile en UN solo mensaje lo que falte. Si el cliente ' +
         'insiste con mandar un Uber, o si el pedido mezcla esto con una torta que sí sale en ' +
-        'Uber, no decidas vos: decile que lo consultás con el equipo y escalá. No cargues dos ' +
+        'Uber, no decidas vos: decile que lo consultás en cocina y escalá. No cargues dos ' +
         'pedidos. Y no le expliques tiempos, zonas ni costos de envío: eso no lo tenés.',
     });
   }
@@ -463,7 +463,7 @@ export function validateOrder(
         'quien compra, eso lo autoriza el local. O lo llevamos nosotros con nuestro cadete ' +
         '(cargalo con cadete-miska y pedile la dirección, el día y la franja en UN mensaje), o ' +
         'lo retira quien compra. Si insisten con mandar a otra persona, decile que lo consultás ' +
-        'con el equipo y escalá.',
+        'en cocina y escalá.',
     });
   }
 
