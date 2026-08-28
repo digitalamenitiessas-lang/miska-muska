@@ -930,13 +930,13 @@ export function createRepositories() {
         const value = (patch as Record<string, unknown>)[key];
         if (value === undefined) continue;
         args.push(value);
-        sets.push(`${column} = ${args.length}`);
+        sets.push(`${column} = $${args.length}`);
       }
       if (!sets.length) return courses.signup(id);
       args.push(id);
       const row = await one(
         `UPDATE course_signups SET ${sets.join(', ')}, updated_at = now()
-         WHERE id = ${args.length} RETURNING *`,
+         WHERE id = $${args.length} RETURNING *`,
         args,
       );
       return row ? toSignup(row) : null;
