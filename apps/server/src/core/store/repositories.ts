@@ -17,6 +17,9 @@ import type {
   Contact,
   Conversation,
   ConversationMode,
+  Course,
+  CourseSession,
+  CourseSignup,
   MetricPoint,
   Order,
   OrderItem,
@@ -25,6 +28,7 @@ import type {
   Product,
   ProductCategory,
   QuickReply,
+  SignupStatus,
   BotSettings,
   StoredMessage,
 } from '../types/domain.js';
@@ -178,6 +182,52 @@ function toSku(r: Row): CampaignSku {
     stockTotal: Number(r.stock_total),
     stockUsed: Number(r.stock_used),
     sortOrder: Number(r.sort_order ?? 0),
+  };
+}
+
+function toCourse(r: Row): Course {
+  return {
+    id: String(r.id),
+    name: String(r.name),
+    description: str(r.description),
+    price: Number(r.price ?? 0),
+    location: str(r.location),
+    modality: String(r.modality) as Course['modality'],
+    imageUrl: str(r.image_url),
+    active: Boolean(r.active),
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
+  };
+}
+
+function toSession(r: Row): CourseSession {
+  return {
+    id: String(r.id),
+    courseId: String(r.course_id),
+    label: String(r.label),
+    capacity: Number(r.capacity ?? 0),
+    sortOrder: Number(r.sort_order ?? 0),
+    // Viene de un LEFT JOIN con el conteo; sin él queda undefined.
+    taken: r.taken == null ? undefined : Number(r.taken),
+  };
+}
+
+function toSignup(r: Row): CourseSignup {
+  return {
+    id: String(r.id),
+    courseId: String(r.course_id),
+    sessionId: str(r.session_id),
+    contactId: str(r.contact_id),
+    conversationId: str(r.conversation_id),
+    fullName: String(r.full_name),
+    contactInfo: str(r.contact_info),
+    total: Number(r.total ?? 0),
+    paid: Number(r.paid ?? 0),
+    status: String(r.status) as SignupStatus,
+    notes: str(r.notes),
+    createdBy: String(r.created_by) as MessageAuthor,
+    createdAt: iso(r.created_at),
+    updatedAt: iso(r.updated_at),
   };
 }
 
@@ -753,6 +803,150 @@ export function createRepositories() {
     },
   };
 
+  const courses = {
+    /** Los cursos, con sus turnos y cuántos lugares quedan en cada uno. */
+    async list(opts: { onlyActive?: boolean } = {}): Promise<
+      Array<{ course: Course; sessions: CourseSession[] }>
+    > {
+      const rows = await q(
+        `SELECT * FROM courses ${opts.onlyActive ? 'WHERE active' : ''}
+         ORDER BY active DESC, created_at DESC`,
+        [],
+      );
+      const cursos = rows.map(toCourse);
+      if (!cursos.length) return [];
+      /*
+        Los cupos tomados salen de un conteo y no de una columna: una columna
+        habría que mantenerla sincronizada en cada alta, baja y cancelación, y el
+        primer olvido vende el lugar trece. Contar es barato y no se puede
+        desincronizar.
+      */
+      const sesiones = await q(
+        `SELECT s.*, COUNT(g.id) FILTER (WHERE g.status <> 'cancelado') AS taken
+         FROM course_sessions s
+         LEFT JOIN course_signups g ON g.session_id = s.id
+         WHERE s.course_id = ANY($1::text[])
+         GROUP BY s.id
+         ORDER BY s.sort_order`,
+        [cursos.map((c) => c.id)],
+      );
+      return cursos.map((course) => ({
+        course,
+        sessions: sesiones.filter((r) => String(r.course_id) === course.id).map(toSession),
+      }));
+    },
+
+    async get(id: string): Promise<Course | null> {
+      const row = await one('SELECT * FROM courses WHERE id = $1', [id]);
+      return row ? toCourse(row) : null;
+    },
+
+    async upsert(
+      c: Omit<Course, 'id' | 'createdAt' | 'updatedAt'> & { id?: string },
+    ): Promise<Course> {
+      const row = await one(
+        `INSERT INTO courses (id, name, description, price, location, modality, image_url, active)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+         ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name,
+           description = EXCLUDED.description, price = EXCLUDED.price,
+           location = EXCLUDED.location, modality = EXCLUDED.modality,
+           image_url = EXCLUDED.image_url, active = EXCLUDED.active, updated_at = now()
+         RETURNING *`,
+        [c.id ?? newId('cur_'), c.name, c.description, c.price, c.location, c.modality,
+         c.imageUrl, c.active],
+      );
+      return toCourse(row!);
+    },
+
+    async remove(id: string): Promise<void> {
+      await exec('DELETE FROM courses WHERE id = $1', [id]);
+    },
+
+    async session(id: string): Promise<CourseSession | null> {
+      const row = await one(
+        `SELECT s.*, COUNT(g.id) FILTER (WHERE g.status <> 'cancelado') AS taken
+         FROM course_sessions s
+         LEFT JOIN course_signups g ON g.session_id = s.id
+         WHERE s.id = $1 GROUP BY s.id`,
+        [id],
+      );
+      return row ? toSession(row) : null;
+    },
+
+    async upsertSession(
+      s: Omit<CourseSession, 'id' | 'taken'> & { id?: string },
+    ): Promise<CourseSession> {
+      const row = await one(
+        `INSERT INTO course_sessions (id, course_id, label, capacity, sort_order)
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (id) DO UPDATE SET label = EXCLUDED.label,
+           capacity = EXCLUDED.capacity, sort_order = EXCLUDED.sort_order
+         RETURNING *`,
+        [s.id ?? newId('tur_'), s.courseId, s.label, s.capacity, s.sortOrder],
+      );
+      return toSession(row!);
+    },
+
+    async removeSession(id: string): Promise<void> {
+      await exec('DELETE FROM course_sessions WHERE id = $1', [id]);
+    },
+
+    /** La planilla de inscriptos de un curso, en orden de anotación. */
+    async signups(courseId: string): Promise<CourseSignup[]> {
+      const rows = await q(
+        'SELECT * FROM course_signups WHERE course_id = $1 ORDER BY created_at',
+        [courseId],
+      );
+      return rows.map(toSignup);
+    },
+
+    async signup(id: string): Promise<CourseSignup | null> {
+      const row = await one('SELECT * FROM course_signups WHERE id = $1', [id]);
+      return row ? toSignup(row) : null;
+    },
+
+    async createSignup(
+      g: Omit<CourseSignup, 'id' | 'createdAt' | 'updatedAt'>,
+    ): Promise<CourseSignup> {
+      const row = await one(
+        `INSERT INTO course_signups (id, course_id, session_id, contact_id, conversation_id,
+           full_name, contact_info, total, paid, status, notes, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+         RETURNING *`,
+        [newId('ins_'), g.courseId, g.sessionId, g.contactId, g.conversationId, g.fullName,
+         g.contactInfo, g.total, g.paid, g.status, g.notes, g.createdBy],
+      );
+      return toSignup(row!);
+    },
+
+    async updateSignup(id: string, patch: Partial<CourseSignup>): Promise<CourseSignup | null> {
+      const columns: Record<string, string> = {
+        fullName: 'full_name', contactInfo: 'contact_info', total: 'total', paid: 'paid',
+        status: 'status', notes: 'notes', sessionId: 'session_id',
+      };
+      const sets: string[] = [];
+      const args: unknown[] = [];
+      for (const [key, column] of Object.entries(columns)) {
+        const value = (patch as Record<string, unknown>)[key];
+        if (value === undefined) continue;
+        args.push(value);
+        sets.push(`${column} = ${args.length}`);
+      }
+      if (!sets.length) return courses.signup(id);
+      args.push(id);
+      const row = await one(
+        `UPDATE course_signups SET ${sets.join(', ')}, updated_at = now()
+         WHERE id = ${args.length} RETURNING *`,
+        args,
+      );
+      return row ? toSignup(row) : null;
+    },
+
+    async removeSignup(id: string): Promise<void> {
+      await exec('DELETE FROM course_signups WHERE id = $1', [id]);
+    },
+  };
+
   /*
     Archivos que sube el equipo desde el panel. Hoy son las fotos de los
     productos; el día que haya que mandar un PDF o un audio, entra por acá mismo.
@@ -885,8 +1079,8 @@ export function createRepositories() {
   };
 
   return {
-    contacts, conversations, messages, products, orders, campaigns, quickReplies, media,
-    settings, metrics,
+    contacts, conversations, messages, products, orders, campaigns, courses, quickReplies,
+    media, settings, metrics,
   };
 }
 

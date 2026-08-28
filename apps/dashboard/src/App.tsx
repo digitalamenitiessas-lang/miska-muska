@@ -14,17 +14,27 @@ import { Pill, Switch, useToast } from './ui';
 import { Inbox } from './views/Inbox';
 import { Pedidos } from './views/Pedidos';
 import { Catalogo } from './views/Catalogo';
+import { Cursos } from './views/Cursos';
 import { Campanas } from './views/Campanas';
 import { Rapidos } from './views/Rapidos';
 import { Metricas } from './views/Metricas';
 import { Ajustes } from './views/Ajustes';
 
-type View = 'bandeja' | 'pedidos' | 'catalogo' | 'campanas' | 'rapidos' | 'metricas' | 'ajustes';
+type View =
+  | 'bandeja'
+  | 'pedidos'
+  | 'catalogo'
+  | 'cursos'
+  | 'campanas'
+  | 'rapidos'
+  | 'metricas'
+  | 'ajustes';
 
 const NAV: Array<{ id: View; label: string; glyph: string }> = [
   { id: 'bandeja', label: 'Bandeja', glyph: '💬' },
   { id: 'pedidos', label: 'Pedidos', glyph: '🧾' },
   { id: 'catalogo', label: 'Catálogo', glyph: '🍪' },
+  { id: 'cursos', label: 'Cursos', glyph: '🎓' },
   { id: 'campanas', label: 'Campañas', glyph: '🎁' },
   { id: 'rapidos', label: 'Rápidos', glyph: '⚡' },
   { id: 'metricas', label: 'Métricas', glyph: '📈' },
@@ -35,6 +45,7 @@ const TITLES: Record<View, string> = {
   bandeja: 'Bandeja de conversaciones',
   pedidos: 'Pedidos',
   catalogo: 'Catálogo y disponibilidad de hoy',
+  cursos: 'Cursos e inscriptos',
   campanas: 'Campañas de fechas especiales',
   rapidos: 'Mensajes rápidos',
   metricas: 'Métricas',
@@ -236,6 +247,7 @@ export default function App() {
           <div className="content">
             {view === 'pedidos' ? <Pedidos tick={orderTick} toast={toast.show} /> : null}
             {view === 'catalogo' ? <Catalogo toast={toast.show} /> : null}
+            {view === 'cursos' ? <Cursos toast={toast.show} /> : null}
             {view === 'campanas' ? <Campanas toast={toast.show} /> : null}
             {view === 'rapidos' ? <Rapidos toast={toast.show} /> : null}
             {view === 'metricas' ? <Metricas tick={tick} /> : null}

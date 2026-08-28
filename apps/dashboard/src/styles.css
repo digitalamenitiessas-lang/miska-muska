@@ -1213,3 +1213,33 @@ table.grid tbody tr:hover {
   border-radius: var(--radius-sm);
   margin-bottom: 6px;
 }
+
+/* ---------------------------------------------------------------- cursos -- */
+
+/* Tarjetas de curso: dos por fila en escritorio, una en angosto. Cada una tiene
+   el flyer, los turnos con sus cupos y el acceso a la planilla. */
+.cursos-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 14px;
+}
+
+/* Miniatura del flyer. Vertical, como los flyers de Instagram, así que se acota
+   por alto y no por ancho. */
+.curso-flyer {
+  width: 64px;
+  height: 86px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  flex: 0 0 auto;
+  display: block;
+}
+
+/* La planilla es más ancha que los diálogos de foto: es una tabla. */
+.planilla {
+  width: 100%;
+  max-width: 900px;
+  max-height: 90dvh;
+  overflow-y: auto;
+}

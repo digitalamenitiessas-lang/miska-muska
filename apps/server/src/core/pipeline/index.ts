@@ -162,7 +162,7 @@ export class Pipeline {
     const contact = await repos.contacts.get(conversation.contactId);
     if (!contact) return;
 
-    const [settings, history, products, quickReplies, activeCampaigns, openOrders] =
+    const [settings, history, products, quickReplies, activeCampaigns, openOrders, courses] =
       await Promise.all([
         repos.settings.read(),
         repos.messages.history(conversationId, 40),
@@ -170,6 +170,7 @@ export class Pipeline {
         repos.quickReplies.list(),
         repos.campaigns.listActive(),
         repos.orders.list({ conversationId, limit: 5 }),
+        repos.courses.list({ onlyActive: true }),
       ]);
 
     /*
@@ -222,6 +223,7 @@ export class Pipeline {
         outsideHours: isOutsideBusinessHours(settings),
         openOrders,
         pendingReview: conversation.pendingReview,
+        courses,
       },
     });
 

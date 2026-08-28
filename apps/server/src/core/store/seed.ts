@@ -232,7 +232,8 @@ const QUICK_REPLIES = [
       'Gracias por anotarte! 💖 Te contamos que el lugar ya quedo reservado una vez que hiciste el pago. ' +
       'Como los cupos son limitados, ese lugar queda guardado solo para vos, y te avisamos con ' +
       'anticipación que por este motivo no hacemos devoluciones ni cancelaciones en caso de que no ' +
-      'puedas venir.\nTe mandamos un link para el grupo de wp, ahí pasaremos toda la info',
+      'puedas venir.\nTe mandaremos un día antes del curso un link para el grupo de wp 💖 ahí ' +
+      'pasaremos toda la info 🤗',
   },
   {
     key: 'cursos',

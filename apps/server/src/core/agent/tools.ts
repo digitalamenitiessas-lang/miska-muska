@@ -227,6 +227,36 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   ),
 
   tool(
+    'buscar_cursos',
+    'Lista los cursos abiertos, con su precio, sus turnos y cuántos lugares quedan en cada uno. ' +
+      'Usala SIEMPRE que pregunten por cursos: los presenciales cambian cada semana, así que no ' +
+      'los cites de memoria ni supongas que sigue abierto el de la vez pasada.',
+    {},
+  ),
+
+  tool(
+    'inscribir_a_curso',
+    'Anota a una persona en un turno de un curso. Llamala cuando ya te haya dicho a qué curso ' +
+      'quiere ir, en qué turno, su nombre y apellido, y un contacto (celular o Instagram). ' +
+      'Queda anotada como PENDIENTE: el lugar se reserva recién con el pago total por ' +
+      'transferencia, así que después de anotarla pasale el alias y pedile el comprobante. ' +
+      'No le digas que ya está inscripta: eso lo confirma el local cuando ve la transferencia.',
+    {
+      curso_id: { type: 'string', description: 'Id del curso (lo devuelve buscar_cursos).' },
+      turno_id: {
+        type: 'string',
+        description: 'Id del turno elegido. Si el curso tiene un solo turno, igual mandalo.',
+      },
+      nombre_apellido: { type: 'string', description: 'Nombre y apellido de quien se anota.' },
+      contacto: {
+        type: 'string',
+        description: 'Celular o usuario de Instagram, como lo haya dado.',
+      },
+    },
+    ['curso_id', 'turno_id', 'nombre_apellido'],
+  ),
+
+  tool(
     'mandar_foto',
     'Le manda al cliente la foto de un producto del catálogo, como imagen de verdad. ' +
       'Usala cuando quiera VER algo antes de decidir: una torta, un box, o el curso ' +
@@ -239,6 +269,12 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         type: 'string',
         description: 'Id del producto cuya foto querés mandar (lo devuelve buscar_catalogo).',
       },
+      curso_id: {
+        type: 'string',
+        description:
+          'Id del curso cuyo flyer querés mandar (lo devuelve buscar_cursos). Mandá este o ' +
+          'producto_id, no los dos.',
+      },
       texto: {
         type: 'string',
         description:
@@ -246,7 +282,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           'lo explicó, dejalo vacío en vez de repetir.',
       },
     },
-    ['producto_id'],
+    [],
   ),
 
   tool(
@@ -992,23 +1028,137 @@ export async function executeTool(
         return { ok: true, data: { guardado: true } };
       }
 
-      case 'mandar_foto': {
-        const productoId = String(input.producto_id ?? '').trim();
-        const producto = productoId ? await repos.products.get(productoId) : null;
-        if (!producto) {
+      case 'buscar_cursos': {
+        const cursos = await repos.courses.list({ onlyActive: true });
+        return {
+          ok: true,
+          data: {
+            cursos: cursos.map(({ course, sessions }) => ({
+              id: course.id,
+              nombre: course.name,
+              descripcion: course.description ?? undefined,
+              precio: course.price,
+              modalidad: course.modality,
+              donde: course.location ?? undefined,
+              tiene_foto: Boolean(course.imageUrl),
+              turnos: sessions.map((t) => ({
+                id: t.id,
+                cuando: t.label,
+                lugares_libres: Math.max(0, t.capacity - (t.taken ?? 0)),
+                cupos: t.capacity,
+              })),
+            })),
+          },
+        };
+      }
+
+      case 'inscribir_a_curso': {
+        const cursoId = String(input.curso_id ?? '').trim();
+        const turnoId = String(input.turno_id ?? '').trim();
+        const nombre = String(input.nombre_apellido ?? '').trim();
+        const contacto = typeof input.contacto === 'string' ? input.contacto.trim() : '';
+
+        const curso = cursoId ? await repos.courses.get(cursoId) : null;
+        if (!curso || !curso.active) {
           return {
             ok: false,
             error:
-              `No existe el producto "${productoId}". Buscalo con buscar_catalogo y usá el id ` +
-              'que devuelve.',
+              `No hay ningún curso abierto con el id "${cursoId}". Mirá cuáles hay con ` +
+              'buscar_cursos y usá el id que devuelve.',
           };
         }
+        const turno = turnoId ? await repos.courses.session(turnoId) : null;
+        if (!turno || turno.courseId !== curso.id) {
+          return {
+            ok: false,
+            error:
+              `Ese turno no es de ${curso.name}. Preguntale a cuál quiere ir y usá el id del ` +
+              'turno que devuelve buscar_cursos.',
+          };
+        }
+        if (nombre.length < 3) {
+          return { ok: false, error: 'Falta el nombre y apellido de quien se anota.' };
+        }
+
+        /*
+          El cupo se verifica al anotar, no solo en el prompt: vender el lugar
+          trece de doce es una conversación imposible de arreglar después. Se
+          cuenta acá, contra la base, y no contra lo que el modelo leyó hace tres
+          mensajes.
+        */
+        const libres = turno.capacity - (turno.taken ?? 0);
+        if (libres <= 0) {
+          return {
+            ok: false,
+            error:
+              `El turno "${turno.label}" de ${curso.name} está completo. Ofrecele otro turno si ` +
+              'hay, y si no hay, decile que lo anotás para el próximo y escalá para que el ' +
+              'local vea si puede abrir un lugar. No lo anotes igual.',
+          };
+        }
+
+        const inscripto = await repos.courses.createSignup({
+          courseId: curso.id,
+          sessionId: turno.id,
+          contactId: ctx.contact.id,
+          conversationId: ctx.conversation.id,
+          fullName: nombre,
+          contactInfo: contacto || ctx.contact.phone,
+          total: curso.price,
+          paid: 0,
+          status: 'pendiente',
+          notes: null,
+          createdBy: 'bot',
+        });
+
+        await repos.contacts.update(ctx.contact.id, { fullName: nombre });
+        log('info', `Inscripción a curso creada (${curso.name} — ${turno.label})`, nombre);
+
+        return {
+          ok: true,
+          data: {
+            inscripto: nombre,
+            curso: curso.name,
+            turno: turno.label,
+            precio: curso.price,
+            lugares_libres_ahora: libres - 1,
+            instruccion:
+              `Quedó anotada en la planilla, PENDIENTE de pago. Pasale el alias ` +
+              `${settings.transferAlias} (${settings.transferHolder}) por el total de ` +
+              `${curso.price.toLocaleString('es-AR')} y pedile el comprobante. Avisale que el ` +
+              'lugar queda reservado recién con el pago, porque los cupos son limitados, y que ' +
+              'por eso no hay devoluciones ni cancelaciones — eso se dice ANTES de que ' +
+              'transfiera. NO le digas que ya está inscripta: eso lo confirma el local cuando ' +
+              've la transferencia.',
+          },
+        };
+      }
+
+      case 'mandar_foto': {
+        const productoId = String(input.producto_id ?? '').trim();
+        const cursoId = String(input.curso_id ?? '').trim();
+        if (!productoId && !cursoId) {
+          return { ok: false, error: 'Decime qué foto mandar: producto_id o curso_id.' };
+        }
+
+        const item = cursoId
+          ? await repos.courses.get(cursoId)
+          : await repos.products.get(productoId);
+        if (!item) {
+          return {
+            ok: false,
+            error:
+              `No existe "${cursoId || productoId}". Buscalo con ` +
+              `${cursoId ? 'buscar_cursos' : 'buscar_catalogo'} y usá el id que devuelve.`,
+          };
+        }
+        const producto = item as { name: string; id: string; imageUrl: string | null };
         if (!producto.imageUrl) {
           return {
             ok: false,
             error:
               `${producto.name} no tiene foto cargada. No inventes una ni le pegues un link: ` +
-              'describilo con palabras, que para eso están los datos del catálogo.',
+              'describilo con palabras, que para eso están los datos que sí tenés.',
           };
         }
         if (!FOTO_VALIDA.test(producto.imageUrl)) {
@@ -1017,7 +1167,7 @@ export async function executeTool(
             ok: false,
             error:
               `La foto de ${producto.name} está mal cargada y no se puede mandar. Seguí sin ` +
-              'ella y describí el producto con palabras.',
+              'ella y describí lo que estabas contando con palabras.',
           };
         }
 

@@ -125,6 +125,55 @@ export interface Order {
   updatedAt: string;
 }
 
+export interface Course {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  location: string | null;
+  modality: 'presencial' | 'online';
+  imageUrl: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CourseSession {
+  id: string;
+  courseId: string;
+  /** Como lo dice el equipo: "viernes 11/9, 17 hs". */
+  label: string;
+  capacity: number;
+  sortOrder: number;
+  /** Inscriptos que no cancelaron. Lo calcula el servidor. */
+  taken?: number;
+}
+
+export type SignupStatus = 'pendiente' | 'inscripto' | 'cancelado';
+
+/** Una fila de la planilla de inscriptos. */
+export interface CourseSignup {
+  id: string;
+  courseId: string;
+  sessionId: string | null;
+  contactId: string | null;
+  conversationId: string | null;
+  fullName: string;
+  contactInfo: string | null;
+  total: number;
+  paid: number;
+  status: SignupStatus;
+  notes: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CursoConTurnos {
+  course: Course;
+  sessions: CourseSession[];
+}
+
 export interface CampaignSku {
   id: string;
   campaignId: string;
@@ -348,6 +397,22 @@ export const api = {
         'x-filename': encodeURIComponent(file.name),
       },
     }),
+
+  courses: () => get<CursoConTurnos[]>('/api/courses'),
+  createCourse: (body: Partial<Course>) => post<Course>('/api/courses', body),
+  updateCourse: (id: string, body: Partial<Course>) =>
+    patch<Course>(`/api/courses/${id}`, body),
+  deleteCourse: (id: string) => del<{ ok: true }>(`/api/courses/${id}`),
+  upsertSession: (courseId: string, body: Partial<CourseSession>) =>
+    post<CourseSession>(`/api/courses/${courseId}/sessions`, body),
+  deleteSession: (id: string) => del<{ ok: true }>(`/api/courses/sessions/${id}`),
+  courseSignups: (courseId: string) =>
+    get<CourseSignup[]>(`/api/courses/${courseId}/signups`),
+  createSignup: (courseId: string, body: Partial<CourseSignup>) =>
+    post<CourseSignup>(`/api/courses/${courseId}/signups`, body),
+  updateSignup: (id: string, body: Partial<CourseSignup>) =>
+    patch<CourseSignup>(`/api/courses/signups/${id}`, body),
+  deleteSignup: (id: string) => del<{ ok: true }>(`/api/courses/signups/${id}`),
 
   quickReplies: () => get<QuickReply[]>('/api/quick-replies'),
   saveQuickReply: (body: Partial<QuickReply>) => post<QuickReply>('/api/quick-replies', body),

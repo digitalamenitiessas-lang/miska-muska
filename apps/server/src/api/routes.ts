@@ -370,6 +370,128 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
     });
   });
 
+  // --- Cursos -------------------------------------------------------------
+
+  app.get('/api/courses', async () => repos.courses.list());
+
+  app.post('/api/courses', async (req) => {
+    const body = req.body as Record<string, unknown>;
+    return repos.courses.upsert({
+      id: body.id as string | undefined,
+      name: String(body.name ?? 'Curso'),
+      description: (body.description as string) ?? null,
+      price: Number(body.price ?? 0),
+      location: (body.location as string) ?? null,
+      modality: body.modality === 'online' ? 'online' : 'presencial',
+      imageUrl: (body.imageUrl as string) || null,
+      active: body.active !== false,
+    });
+  });
+
+  app.patch('/api/courses/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const actual = await repos.courses.get(id);
+    if (!actual) return reply.code(404).send({ error: 'No existe' });
+    const body = req.body as Record<string, unknown>;
+    return repos.courses.upsert({
+      id: actual.id,
+      name: (body.name as string) ?? actual.name,
+      description: body.description === undefined ? actual.description : (body.description as string),
+      price: body.price === undefined ? actual.price : Number(body.price),
+      location: body.location === undefined ? actual.location : (body.location as string),
+      modality: (body.modality as 'presencial' | 'online') ?? actual.modality,
+      // Cadena vacía = "sacale la foto"; undefined = "no la toques".
+      imageUrl: body.imageUrl === undefined ? actual.imageUrl : (body.imageUrl as string) || null,
+      active: body.active === undefined ? actual.active : body.active !== false,
+    });
+  });
+
+  app.delete('/api/courses/:id', async (req) => {
+    const { id } = req.params as { id: string };
+    await repos.courses.remove(id);
+    return { ok: true };
+  });
+
+  app.post('/api/courses/:id/sessions', async (req) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as Record<string, unknown>;
+    return repos.courses.upsertSession({
+      id: body.id as string | undefined,
+      courseId: id,
+      label: String(body.label ?? ''),
+      capacity: Number(body.capacity ?? 0),
+      sortOrder: Number(body.sortOrder ?? 0),
+    });
+  });
+
+  app.delete('/api/courses/sessions/:id', async (req) => {
+    const { id } = req.params as { id: string };
+    await repos.courses.removeSession(id);
+    return { ok: true };
+  });
+
+  /** La planilla de inscriptos de un curso. */
+  app.get('/api/courses/:id/signups', async (req) => {
+    const { id } = req.params as { id: string };
+    return repos.courses.signups(id);
+  });
+
+  /** Alta a mano: alguien que se anotó por Instagram o en el mostrador. */
+  app.post('/api/courses/:id/signups', async (req) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as Record<string, unknown>;
+    const curso = await repos.courses.get(id);
+    return repos.courses.createSignup({
+      courseId: id,
+      sessionId: (body.sessionId as string) ?? null,
+      contactId: null,
+      conversationId: null,
+      fullName: String(body.fullName ?? 'Sin nombre'),
+      contactInfo: (body.contactInfo as string) ?? null,
+      total: Number(body.total ?? curso?.price ?? 0),
+      paid: Number(body.paid ?? 0),
+      status: (body.status as never) ?? 'pendiente',
+      notes: (body.notes as string) ?? null,
+      createdBy: 'human',
+    });
+  });
+
+  app.patch('/api/courses/signups/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const antes = await repos.courses.signup(id);
+    if (!antes) return reply.code(404).send({ error: 'No existe' });
+
+    const patch = req.body as Record<string, unknown>;
+    const signup = await repos.courses.updateSignup(id, patch as never);
+    if (!signup) return reply.code(404).send({ error: 'No existe' });
+
+    /*
+      Marcar a alguien como inscripto es el momento en que se le avisa: es lo que
+      pidió el local, y es el único mensaje del flujo de cursos que sale sin que
+      el cliente haya escrito. Va una sola vez —solo en la transición— y solo si
+      la persona se anotó por el chat: quien se anotó por Instagram no tiene
+      conversación a la que escribirle.
+    */
+    const seInscribioAhora = antes.status !== 'inscripto' && signup.status === 'inscripto';
+    if (seInscribioAhora && signup.conversationId) {
+      const enviado = await pipeline.sendQuickReply(signup.conversationId, 'curso-inscripcion');
+      if (!enviado) {
+        bus.emit({
+          type: 'log',
+          level: 'warn',
+          message: 'No existe el mensaje rápido curso-inscripcion: no se avisó la inscripción',
+        });
+      }
+    }
+    return signup;
+  });
+
+  app.delete('/api/courses/signups/:id', async (req) => {
+    const { id } = req.params as { id: string };
+    await repos.courses.removeSignup(id);
+    return { ok: true };
+  });
+
   // --- Mensajes rápidos ---------------------------------------------------
 
   app.get('/api/quick-replies', async () => {

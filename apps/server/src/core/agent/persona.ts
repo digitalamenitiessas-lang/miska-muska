@@ -17,6 +17,8 @@ import type {
   Campaign,
   CampaignSku,
   Contact,
+  Course,
+  CourseSession,
   Order,
   PendingReview,
   Product,
@@ -206,6 +208,10 @@ CÓMO USAR LAS HERRAMIENTAS
   cambiar algo de un pedido cargado: eso lo decide una persona.
   Si devuelve un problema, no reintentes lo mismo con otras palabras: leé qué falta,
   resolvelo con el cliente o con el local, y recién entonces reintentá.
+- \`buscar_cursos\` e \`inscribir_a_curso\`: los cursos no están en el catálogo, tienen su
+  propia herramienta. Anotar a alguien lo deja PENDIENTE de pago: el lugar se reserva recién
+  con la transferencia, así que después de anotarla pasás el alias y pedís el comprobante, y
+  NO le decís que ya está inscripta. Eso lo confirma el local cuando ve el pago.
 - \`mandar_foto\`: cuando el cliente quiere VER algo antes de decidir, o cuando le estás
   contando un curso presencial. La foto llega como imagen de verdad, no como un link, y sale
   sola después de lo que escribas: no le anuncies "te mando la foto" ni le digas "mirá la
@@ -257,6 +263,8 @@ export interface DailyContextInput {
   openOrders: Order[];
   /** Consulta de modificación abierta o recién contestada, si hay. */
   pendingReview: PendingReview | null;
+  /** Cursos abiertos, con sus turnos y los lugares que quedan. */
+  courses: Array<{ course: Course; sessions: CourseSession[] }>;
 }
 
 /** 48 h: una consulta contestada la semana pasada no es contexto de hoy. */
@@ -271,7 +279,7 @@ function esReciente(iso: string, horas = 48): boolean {
  */
 export function buildDailyContext(input: DailyContextInput): string {
   const { settings, products, campaigns, quickReplies, contact, outsideHours } = input;
-  const { openOrders, pendingReview } = input;
+  const { openOrders, pendingReview, courses } = input;
   const now = new Date();
   const fecha = now.toLocaleDateString('es-AR', {
     weekday: 'long',
@@ -333,6 +341,35 @@ export function buildDailyContext(input: DailyContextInput): string {
     parts.push(
       `CAMPAÑA ACTIVA: ${campaign.name} (${campaign.startsOn} a ${campaign.endsOn})\n${lines.join('\n')}\n` +
         (campaign.pitch ? `Cómo presentarla: ${campaign.pitch}` : ''),
+    );
+  }
+
+  /*
+    Los cursos van en el contexto del día y no en el prompt estable porque cambian
+    todas las semanas: los presenciales son de una fecha, con cupos que se van
+    llenando. Con los lugares libres adentro, el bot no necesita preguntar dos
+    veces si todavía entra alguien.
+  */
+  if (courses.length) {
+    const lineas = courses.map(({ course, sessions }) => {
+      const turnos = sessions
+        .map((t) => {
+          const libres = Math.max(0, t.capacity - (t.taken ?? 0));
+          return `    ${t.label} — ${libres === 0 ? 'COMPLETO' : `quedan ${libres} de ${t.capacity}`} (id ${t.id})`;
+        })
+        .join('\n');
+      return (
+        `  ${course.name} — ${course.price.toLocaleString('es-AR')} — ${course.modality}` +
+        `${course.location ? ` en ${course.location}` : ''} (id ${course.id})` +
+        `${course.description ? `\n    ${course.description}` : ''}` +
+        `${turnos ? `\n${turnos}` : '\n    (sin turnos cargados todavía)'}`
+      );
+    });
+    parts.push(
+      `CURSOS ABIERTOS:\n${lineas.join('\n')}\n` +
+        'Son los únicos que hay. No ofrezcas ninguno que no esté en esta lista, no des por ' +
+        'hecho que sigue abierto el de la semana pasada, y no anotes a nadie en un turno que ' +
+        'dice COMPLETO.',
     );
   }
 

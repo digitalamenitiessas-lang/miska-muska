@@ -317,3 +317,61 @@ export interface MetricPoint {
   /** Gasto real del día en dólares, según OpenRouter. */
   costUsd: number;
 }
+
+// ---------------------------------------------------------------------------
+// Cursos
+// ---------------------------------------------------------------------------
+
+/**
+ * Los cursos viven aparte del catálogo. Un producto es algo que se vende N
+ * veces; un curso es una fecha con doce lugares, y el mismo curso puede darse
+ * el viernes o el sábado. Eso son los turnos.
+ */
+export interface Course {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number;
+  /** Dónde se da: "Barrio Norte", o vacío si es online. */
+  location: string | null;
+  modality: 'presencial' | 'online';
+  /** El flyer del curso, como URL pública. El bot lo manda como imagen. */
+  imageUrl: string | null;
+  /** Apagado: el bot no lo ofrece. Es el interruptor de la carta, para cursos. */
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Un turno del curso, con sus cupos. */
+export interface CourseSession {
+  id: string;
+  courseId: string;
+  /** Como lo dice el equipo: "viernes 11/9, 17 hs". Es lo que ve el cliente. */
+  label: string;
+  capacity: number;
+  sortOrder: number;
+  /** Inscriptos que no cancelaron. Lo calcula el repositorio, no está en la tabla. */
+  taken?: number;
+}
+
+export type SignupStatus = 'pendiente' | 'inscripto' | 'cancelado';
+
+/** Una fila de la planilla de inscriptos. Es el ticket del curso. */
+export interface CourseSignup {
+  id: string;
+  courseId: string;
+  sessionId: string | null;
+  contactId: string | null;
+  conversationId: string | null;
+  fullName: string;
+  /** Celular o Instagram, como en la planilla: lo que la persona haya dado. */
+  contactInfo: string | null;
+  total: number;
+  paid: number;
+  status: SignupStatus;
+  notes: string | null;
+  createdBy: MessageAuthor;
+  createdAt: string;
+  updatedAt: string;
+}

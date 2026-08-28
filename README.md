@@ -102,7 +102,7 @@ ingress   resuelve contacto y conversación, deduplica el reintento del webhook,
    ▼
 router    ¿bot apagado? ¿la tomó una persona? ¿matchea un mensaje rápido corto?
    ▼
-agent     OpenRouter con 9 herramientas (catálogo, fotos, pedidos, consultas, escalar…)
+agent     OpenRouter con 11 herramientas (catálogo, cursos, fotos, pedidos, escalar…)
    ▼
 egress    degrada al canal, parte los textos largos, simula tipeo, envía, registra
    ▼
@@ -150,9 +150,17 @@ Las guardas aplican a lo que hace **el bot**. `POST /api/orders` no pasa por
 poder cargar la excepción que el bot no puede.
 
 **Herramientas.** `buscar_catalogo`, `disponibilidad_hoy`, `mensaje_rapido`,
-`mandar_foto`, `crear_pedido`, `consultar_modificacion`, `consultar_pedido`,
-`registrar_nota_cliente`, `escalar_a_humano`. Nunca dice un precio de memoria: lo
-consulta.
+`buscar_cursos`, `inscribir_a_curso`, `mandar_foto`, `crear_pedido`,
+`consultar_modificacion`, `consultar_pedido`, `registrar_nota_cliente`,
+`escalar_a_humano`. Nunca dice un precio de memoria: lo consulta.
+
+**Cursos.** Viven aparte del catálogo, con su propia pantalla. Un producto es algo
+que se vende N veces; un curso es una fecha con doce lugares, y el mismo curso
+puede darse el viernes o el sábado: eso son los turnos, y cada uno tiene cupos. El
+bot anota a la gente como PENDIENTE —el lugar se reserva con el pago— y el local
+la marca inscripta cuando ve la transferencia, que es cuando sale el mensaje de
+confirmación. La planilla de inscriptos de cada curso está en la misma pantalla,
+con las columnas que el local ya usaba en su hoja de cálculo.
 
 **Fotos.** Cada producto puede tener una foto, que se carga desde Catálogo pegando
 su dirección. El bot la manda como imagen de verdad, no como un link: el modelo
