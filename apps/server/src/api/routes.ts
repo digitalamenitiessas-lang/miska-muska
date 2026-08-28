@@ -71,6 +71,7 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
       return reply.code(400).send({ error: 'Modo inválido' });
     }
     await repos.conversations.setMode(id, mode);
+    pipeline.marcarCambioDeModo(id, mode);
     /*
       Al devolverla al bot se limpia la alerta, porque ya fue atendida. Pero si
       quedó una modificación sin contestar, la alerta se MANTIENE: el bot ya está
@@ -111,6 +112,7 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
     if (!resolved) return reply.code(409).send({ error: 'Acá no hay ninguna consulta abierta' });
     if (devolverAlBot !== false) {
       await repos.conversations.setMode(id, 'bot');
+      pipeline.marcarCambioDeModo(id, 'bot');
       /*
         El cliente quedó esperando: el bot retoma él mismo con la respuesta del
         equipo, en vez de esperar a que la persona vuelva a escribir.

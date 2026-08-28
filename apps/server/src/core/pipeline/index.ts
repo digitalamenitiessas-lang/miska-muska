@@ -20,6 +20,7 @@
 import type { ChannelAdapter } from '../types/channel.js';
 import type { Repositories } from '../store/repositories.js';
 import { bus, log } from '../events/bus.js';
+import type { ConversationMode } from '../types/domain.js';
 import type {
   ChannelId,
   InboundContent,
@@ -70,6 +71,13 @@ export class Pipeline {
     perdía sin que nadie se enterara.
   */
   #forzar = new Set<string>();
+  /*
+    Cuándo el operador devolvió cada charla al bot. Vive en memoria por la misma
+    razón que #answered y #errorStreak: el bot corre en una sola instancia. Se
+    compara contra el arranque del turno, para que un turno que ya estaba en
+    vuelo no le pise la decisión al operador.
+  */
+  #devueltaAlBot = new Map<string, number>();
 
   constructor(repos: Repositories, resolveAdapter: AdapterResolver) {
     this.#repos = repos;
@@ -153,6 +161,7 @@ export class Pipeline {
   }
 
   async #agentTurn(conversationId: string): Promise<void> {
+    const arrancoEn = Date.now();
     const repos = this.#repos;
     const conversation = await repos.conversations.get(conversationId);
     if (!conversation) return;
@@ -237,12 +246,36 @@ export class Pipeline {
     */
     const { escalate } = toolContext.effects;
     if (escalate) {
-      await repos.conversations.setMode(conversationId, 'human');
+      // Avisar: SIEMPRE. Que el equipo ya sepa no es motivo para dejar la alerta
+      // vieja, porque el resumen nuevo trae mejor información.
       await repos.conversations.setAttention(
         conversationId,
         true,
         `[${escalate.reason}] ${escalate.summary}`,
       );
+
+      /*
+        Tomar la charla: solo si el asunto es nuevo. Escalar hacía las dos cosas
+        siempre, y de ahí salía el "la devuelvo al bot y queda en humano igual":
+        el equipo devolvía la charla a propósito y el bot se la volvía a llevar
+        por un asunto del que ya estaba avisado.
+
+        Se relee la conversación porque entre el chequeo de modo del arranque y
+        este punto pueden pasar minutos —hasta seis rondas de herramientas— y en
+        el medio alguien pudo silenciarla o devolverla. Releer no alcanza para lo
+        segundo: una charla devuelta DURANTE el turno se lee igual que una que
+        estuvo en 'bot' todo el tiempo, y para eso está la marca.
+      */
+      const actual = await repos.conversations.get(conversationId);
+      const devueltaDuranteElTurno = (this.#devueltaAlBot.get(conversationId) ?? 0) > arrancoEn;
+      if (escalate.soloAvisar || devueltaDuranteElTurno || actual?.mode === 'muted') {
+        log(
+          'info',
+          `Escalada repetida (${conversationId}): alerta refrescada, la charla se queda como está.`,
+        );
+      } else {
+        await repos.conversations.setMode(conversationId, 'human');
+      }
       const refreshed = await repos.conversations.get(conversationId);
       if (refreshed) bus.emit({ type: 'conversation', conversation: refreshed });
     }
@@ -333,10 +366,18 @@ export class Pipeline {
       de ser contexto. Se limpia acá y no al contestarla en el panel, porque entre
       las dos cosas el turno puede fallar, y una consulta resuelta que no se borra
       hace que el modelo la anuncie de nuevo en cada turno de las próximas 48 h.
+
+      Se relee en vez de mirar la foto del arranque, por dos cosas distintas: si
+      en ESTE turno se abrió una consulta nueva, borrar por la foto la haría
+      desaparecer y el equipo nunca se enteraría de que hay alguien esperando. Y
+      si el turno escaló, la alerta no se toca: apagarla acá dejaba la charla en
+      humano sin consulta y sin motivo, o sea el reporte del dueño exactamente,
+      sin nada en pantalla que lo explicara.
     */
-    if (conversation.pendingReview?.resueltoEn) {
+    const alCerrar = await repos.conversations.get(conversationId);
+    if (alCerrar?.pendingReview?.resueltoEn) {
       await repos.conversations.clearReview(conversationId);
-      await repos.conversations.setAttention(conversationId, false, null);
+      if (!escalate) await repos.conversations.setAttention(conversationId, false, null);
       const limpia = await repos.conversations.get(conversationId);
       if (limpia) bus.emit({ type: 'conversation', conversation: limpia });
     }
@@ -383,6 +424,18 @@ export class Pipeline {
       metrics: opts.metrics,
       humanize: opts.humanize,
     });
+  }
+
+  /**
+   * El operador movió el modo desde el panel.
+   *
+   * La racha de errores pertenece a una sesión del bot que ya terminó: si no se
+   * borra, el primer tropiezo después de la devolución manda la charla a humano
+   * con un motivo viejo y ajeno.
+   */
+  marcarCambioDeModo(conversationId: string, mode: ConversationMode): void {
+    this.#errorStreak.delete(conversationId);
+    if (mode === 'bot') this.#devueltaAlBot.set(conversationId, Date.now());
   }
 
   /**

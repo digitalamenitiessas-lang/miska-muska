@@ -429,7 +429,7 @@ export function Inbox({
                   placeholder={
                     detail.conversation.mode === 'human'
                       ? 'Escribí como Miska Muska…'
-                      : 'Escribí — al enviar, la conversación pasa a modo humano si querés seguir vos'
+                      : 'Escribí — el bot sigue respondiendo; si querés seguir vos, tomá la conversación'
                   }
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}

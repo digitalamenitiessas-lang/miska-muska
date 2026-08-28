@@ -45,7 +45,12 @@ export interface ToolContext {
   settings: BotSettings;
   /** Efectos que el pipeline aplica después del turno. */
   effects: {
-    escalate?: { reason: string; summary: string };
+    /*
+      `soloAvisar`: refrescá la alerta pero NO le saques la charla al bot. Es para
+      la escalada repetida por un asunto del que el equipo YA está avisado.
+      `escalar_a_humano` no lo setea nunca: un reclamo siempre toma la charla.
+    */
+    escalate?: { reason: string; summary: string; soloAvisar?: boolean };
     quickReplyUsed?: string;
     createdOrder?: Order;
     /**
@@ -294,7 +299,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       'lo estás consultando en cocina y NO sigas con el pedido: la herramienta te dice cómo ' +
       'seguir. NO son modificaciones y no van por acá: la cantidad, la fecha, el horario, la ' +
       'modalidad de entrega, la dedicatoria, ni AGREGAR otro producto al pedido — un agregado se ' +
-      'suma al principal y se cobra aparte, no lo reemplaza.',
+      'suma al principal y se cobra aparte, no lo reemplaza. Si el contexto del día ya dice ' +
+      'CONSULTA ABIERTA por ese mismo cambio, no la vuelvas a llamar: seguís esperando la ' +
+      'respuesta.',
     {
       producto: {
         type: 'string',
@@ -756,16 +763,37 @@ export async function executeTool(
             (fechaDeclarada ?? abierto.deliveryDate) === abierto.deliveryDate;
 
           const perdidos = [...previos.keys()].filter((k) => !entrantes.has(k));
+          /*
+            La observación que autorizó una consulta ya resuelta NO es un cambio que
+            decida una persona: la persona ya lo decidió. La excepción existía en la
+            guarda de autorización pero no acá, así que el mismo cambio aprobado
+            escalaba de nuevo y la charla se volvía sola a humano.
+
+            Se acota al producto consultado y a pasar de "sin observación" a "con
+            observación": cambiar una observación YA autorizada por otra sigue
+            escalando, porque eso es un cambio nuevo. Queda un hueco conocido: si la
+            consulta fue "sin jamón" y el modelo manda "sin jamón y sin tomate", el
+            tomate entra sin que nadie lo autorice. Cerrarlo obliga a comparar prosa
+            contra `consultaResuelta.pedido`; se prefiere que quede visible en las
+            notas del pedido y en la ficha del panel, que se leen antes de producir.
+          */
+          const autorizados = consultaResuelta
+            ? new Set(
+                itemsQueTocanLaConsulta(consultaResuelta.producto, items, productsById).map((i) =>
+                  claveItem(i),
+                ),
+              )
+            : new Set<string>();
+
           const cambiados = [...previos.entries()].filter(([k, previo]) => {
             const entrante = entrantes.get(k);
-            return (
-              entrante &&
-              // Solo una BAJA la decide una persona. Una SUBA del precio del
-              // catálogo entre dos llamadas no es un cambio que pidió el cliente.
-              (entrante.quantity < previo.quantity ||
-                entrante.unitPrice < previo.unitPrice ||
-                entrante.observation !== previo.observation)
-            );
+            if (!entrante) return false;
+            // Solo una BAJA la decide una persona. Una SUBA del precio del catálogo
+            // entre dos llamadas no es un cambio que pidió el cliente.
+            if (entrante.quantity < previo.quantity) return true;
+            if (entrante.unitPrice < previo.unitPrice) return true;
+            if (entrante.observation === previo.observation) return false;
+            return !(autorizados.has(k) && !previo.observation && Boolean(entrante.observation));
           });
 
           /*
@@ -1205,6 +1233,18 @@ export async function executeTool(
         }
 
         /*
+          ¿Había una consulta sin contestar ANTES de esta llamada? Si la había, el
+          equipo ya está avisado, y si la charla está en 'bot' es porque alguien la
+          devolvió a propósito con la alerta prendida. Volver a llevársela era el
+          bug: el dueño la devolvía al bot y quedaba en humano igual.
+
+          Se mira la foto del arranque del turno y no `ctx.effects`: dos consultas
+          en el MISMO turno son la primera vez que el equipo se entera, y esa sí
+          tiene que tomar la charla.
+        */
+        const yaHabiaConsulta = pendienteDe(ctx.conversation) !== null;
+
+        /*
           Se guarda YA en la base, no como efecto diferido. Si el turno se cae
           después (el modelo se queda sin burbujas, o agota las rondas de
           herramientas), un efecto diferido se pierde justo cuando más importa.
@@ -1221,6 +1261,13 @@ export async function executeTool(
           summary:
             `${review.pedido} (${producto})` +
             (review.textoCliente ? ` — dijo: "${review.textoCliente}"` : ''),
+          /*
+            El aviso se refresca igual —el pedido fusionado es mejor información—,
+            pero la conversación se queda donde el equipo la dejó. La pausa no
+            depende del modo: la guarda de crear_pedido y el prompt siguen frenando
+            ese producto con la charla en 'bot'.
+          */
+          soloAvisar: yaHabiaConsulta,
         };
 
         /*
