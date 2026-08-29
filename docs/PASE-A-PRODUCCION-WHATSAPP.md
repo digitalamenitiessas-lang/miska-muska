@@ -2,103 +2,201 @@
 
 **Miska Muska · 30/08/2026 · para seguir en vivo, de arriba hacia abajo**
 
-Decidido: **va el número que ya usan** · **todo se hace desde el portafolio de ellas**, sin agregar al dev como admin.
+Se crea **todo en la reunión**, desde cero, en la computadora y la cuenta de la dueña. Va el número que ella ya usa en WhatsApp Business.
+
+`DUEÑA` = lo hace ella, es su cuenta y su contraseña · `DEV` = lo puede hacer él desde el teclado · **⬛ GUARDAR** = valor que se copia en el momento, no después.
 
 Versión en pantalla: https://claude.ai/code/artifact/8a93dd83-36b3-4f6d-a4a5-96b312526941
 
----
-
-## Antes del día
-
-**En la cuenta de ellas** (sesión compartida, una dueña presente)
-
-- [ ] Portafolio comercial a nombre del local — `business.facebook.com`
-- [ ] Verificación del negocio, con constancia de ARCA — **tarda 1 a 5 días hábiles**
-- [ ] App de desarrollador con caso de uso WhatsApp, **dentro de ese portafolio**
-- [ ] Usuario del sistema con token de expiración **Nunca** y permisos `whatsapp_business_messaging` + `whatsapp_business_management`
-- [ ] **Asignarle DOS activos: la app Y la cuenta de WhatsApp**, con control total
-- [ ] Nombre para mostrar: `Miska Muska` (sin mayúsculas sostenidas, sin emojis, sin URLs)
-
-> ⚠ Con un solo activo el token manda mensajes, todo se ve verde, **y los webhooks nunca llegan**. No da ningún error. Le costó una hora al bot de Turismo.
-
-**Anotar de esa sesión:** token · app secret · app ID · WABA ID
-
-**En el celular** (la dueña)
-
-- [ ] Configuración → Cuenta → **Verificación en dos pasos**: ¿está activada? ¿alguien sabe el PIN?
-- [ ] WhatsApp Business actualizado
-- [ ] Lista de grupos donde está el número
-
-> ⚠ Si la verificación en dos pasos está activada y nadie sabe el PIN, **el pase no se puede hacer**. Cambiarlo pide confirmación por mail.
-
-**En el servidor** (el dev, solo)
-
-- [ ] Generar el verify token:
-
-```bash
-ssh root@2.25.185.242 'cd /opt/miska-muska && cp .env .env.bak && TOKEN=$(openssl rand -hex 32) && sed -i "s|^WHATSAPP_VERIFY_TOKEN=.*|WHATSAPP_VERIFY_TOKEN=$TOKEN|" .env && chmod 600 .env && systemctl restart miska-bot && echo "VERIFY_TOKEN=$TOKEN"'
-```
-
-Guardar lo que imprime. El resto ya está verificado: el webhook responde, el canal espera credenciales, el panel está cerrado con token.
+> **La pregunta que va a hacer apenas se siente: sí, hoy el bot puede quedar contestando.** Nada de lo necesario exige la verificación del negocio. Lo que no se termina hoy: esa verificación (hasta 14 días hábiles) y el salto de 250 a 2.000 mensajes iniciados por el local. Ninguna de las dos frena a un bot que *responde*.
+>
+> **Bloquear 4 horas.** El trabajo real son 2 h 30 a 3 h.
 
 ---
 
-## Antes de tocar el celular, decírselo
+## Antes de sentarse
+
+- [ ] La **constancia de inscripción de ARCA** (nombre legal, CUIT, domicilio fiscal), en PDF
+- [ ] Un **mail del negocio** al que pueda entrar durante la reunión
+- [ ] **El celular con el chip del número**, cargado y a mano — le van a llegar varios códigos
+- [ ] Que entre a Facebook con **su perfil de siempre**, no uno nuevo
+- [ ] El sitio web del local, **si abre bien y es HTTPS**. Si está roto, mejor no cargarlo
+- [ ] Del lado del dev: el verify token ya generado en el servidor (ver el final)
+
+> ⚠ **No abrir una cuenta de Facebook nueva "para el negocio".** Los portafolios creados desde perfiles recién nacidos aparecen restringidos seguido. Es folklore de agencias, no doc de Meta, pero el costo de equivocarse son días.
+>
+> ⚠ **Meta deja crear hasta dos portafolios por persona.** Si ella creó uno hace años y se olvidó, queda uno de margen. Mirar el selector de arriba a la izquierda en `business.facebook.com` antes de crear nada.
+
+---
+
+## Parte 1 · Crear todo en Meta
+
+### 1. Portafolio comercial — `DUEÑA` · 10 min
+
+1. `business.facebook.com` → menú desplegable arriba a la izquierda → **"Crear portfolio comercial"**
+2. Nombre del portfolio: **`Miska Muska`** — sin caracteres especiales
+3. Nombre, apellido y **mail del negocio**
+4. **"Crear"** → abrir el mail y **confirmar la dirección**
+
+> En la consola dice **"portfolio"**, con f. Buscando "portafolio" no aparece.
+> Si no ves el desplegable, Meta rota esa pantalla: buscá cualquier botón que diga "Crear cuenta" o "Crear portfolio".
+
+**⬛ GUARDAR** — el ID del portafolio (Configuración del negocio → Información del portfolio comercial)
+
+### 2. Datos del negocio — `DUEÑA` · 10 min · **NO SALTEAR**
+
+Configuración del negocio → **"Información del negocio"** → **"Editar"**
+
+5. **Nombre legal** → el de la constancia de ARCA. **No es "Miska Muska"**: si es monotributo, es el nombre y apellido de ella
+6. **Dirección** → el domicilio fiscal, letra por letra
+7. **Teléfono** → uno donde reciba SMS
+8. **Identificación fiscal** → el **CUIT** (el campo puede figurar como "Tax ID" o "EIN")
+9. Sitio web solo si abre bien y es HTTPS
+10. **"Guardar"**
+
+> ⚠ **Este bloque se hace ANTES de que exista la cuenta de WhatsApp.** Meta avisa: *"es posible que no puedas hacer clic en Editar si el portfolio comercial se usa para una cuenta de WhatsApp Business"*. Cargado después, el botón puede estar muerto y la verificación queda trabada semanas.
+>
+> ⚠ Si el nombre legal dice "Miska Muska", **la verificación se rechaza seguro**: ningún documento lo va a decir. El nombre de fantasía va en el portfolio y en el nombre visible de WhatsApp, no acá.
+
+### 3. Registro de desarrollador — `DUEÑA` · 10 min
+
+11. `developers.facebook.com` → **"Continuar con Facebook"** → **"Siguiente"** para aceptar las condiciones
+12. Meta manda **un código al teléfono y otro al mail** → cargar los dos
+13. Elegir cualquier ocupación
+
+### 4. Crear la app — `DUEÑA` · 15 min
+
+14. `developers.facebook.com/apps` → **"Crear app"**
+15. Nombre: `Miska Muska Bot` · mail de contacto → **"Siguiente"**
+16. Caso de uso: **"Conectarse con los clientes a través de WhatsApp"** → **"Siguiente"**
+17. **"Selecciona un portfolio comercial"** → elegir **Miska Muska**
+18. Requisitos de publicación (va a estar casi vacío) → **"Siguiente"** → **"Crear app"** → pide la contraseña de Facebook
+
+**⬛ GUARDAR** — el **identificador de la app** (arriba en el panel)
+
+### 5. La cuenta de WhatsApp real — `DEV` · 10 min
+
+19. **"Comenzar a usar la API"** → lleva a **"Configuración de la API"**
+20. En el desplegable de cuenta de WhatsApp va a haber una **de prueba, creada sola**. Clic en **"Crear una cuenta de WhatsApp Business"** para crear **la real**
+
+> ⚠ **Por qué crearla ahora y no después.** Si más adelante agregás el número real desde esta misma pantalla, Meta **genera otra WABA** y terminás con tres cuentas y ningún ID que sirva.
+
+**⬛ GUARDAR** — `WABA_ID_PRUEBA`, `WABA_ID_REAL` y `PHONE_NUMBER_ID_PRUEBA`
+
+### 6. Usuario del sistema y token — `DUEÑA` · 20 min
+
+21. `business.facebook.com/settings` → **"Usuarios"** → **"Usuarios del sistema"** → botón azul
+22. Nombre: `Bot Miska Muska`, rol **administrador**
+23. Clic sobre el nombre → **"Asignar activos"**
+24. Columna izquierda **"Apps"** → tildar la app → **"Control total"** → activar **"Administrar la app"**
+25. Columna izquierda **"Cuentas de WhatsApp"** → tildar **las dos WABAs** → **"Control total"** → activar **"Administrar cuentas de WhatsApp Business"** → **"Asignar activos"**
+26. **"Generar nuevo token"** → elegir la app → permisos **`whatsapp_business_messaging`** y **`whatsapp_business_management`** → expiración **"Nunca"**
+
+> ⚠ **Los DOS activos, no uno.** Con solo la app, el token manda mensajes, todo se ve verde, **y los webhooks nunca llegan**. No da ningún error. Le costó una hora al bot de Turismo.
+>
+> ⚠ **Copiar el token antes de cerrar la ventana.** No se puede volver a ver: si se cierra, hay que generar otro.
+
+**⬛ GUARDAR** — el **token**
+
+27. `DEV` — App secret: la app → **"Configuración de la app" → "Básica"** → **"Clave secreta de la app"** → **"Mostrar"**
+
+**⬛ GUARDAR** — el **app secret**
+
+### 7. Comprobar el token antes de seguir — `DEV` · 5 min
+
+28. `developers.facebook.com/tools/debug/accesstoken/` → pegar el token → **"Depurar"**
+
+Tiene que decir **Caduca: Nunca** y listar los dos permisos. Si dice una fecha, se generó mal.
+
+---
+
+## Parte 2 · Dejar el bot andando con el número de prueba
+
+Acá se prueba **todo el circuito** sin tocar el celular del local. Si algo está mal, se descubre ahora y no con el número real muerto.
+
+29. `DEV` — Cargar en `/opt/miska-muska/.env` el token, el app secret, el `PHONE_NUMBER_ID_PRUEBA` y el verify token. Reiniciar.
+30. `DEV` — Probar el handshake (comandos abajo): tiene que imprimir `hola`
+31. `DEV` — Webhook: menú **"Configuración"** → sección Webhooks → **"Editar"** → pegar la URL y el verify token → **"Verificar y guardar"** → **"Campos de webhooks" → "Administrar"** → tildar **`messages`**
+32. `DEV` — **Suscribir la app a la WABA de prueba** (comando abajo)
+33. `DEV` — En "Configuración de la API", cargar su celular en **"Para"** → **"Enviar mensaje"**
+34. `DEV` — **Responder** desde ese celular y mirar que entre en el panel y que el bot conteste
+
+> ⚠ **El paso 32 no lo pide la consola y no da error.** Sin él, el webhook figura verificado, el token manda mensajes, y no llega un solo mensaje entrante. Es el que más se olvida.
+>
+> Si en el paso 34 no llega nada al servidor: en el panel de apps, botón **"Modo"** → pasar de **Desarrollo** a **Activo**.
+
+**Salió bien si:** le escribís al número de prueba y el bot contesta. **Recién con esto andando se toca el celular del local.**
+
+---
+
+## Antes de borrar la cuenta del celular, decírselo
 
 - La app de WhatsApp Business **de ese número deja de existir**. Todo pasa al panel.
 - **Se pierde el historial**, y la copia en Google Drive se borra con la cuenta. Solo sobrevive lo exportado por mail.
 - **El número sale de todos los grupos.** Las listas de difusión se pierden.
-- **El catálogo de la app se va.** El bot muestra los productos igual.
-- **Pasadas 24 h del último mensaje del cliente, no se le puede escribir** — ni el bot ni ellas. Hoy con la app le escriben cuando quieren. Se arregla con plantillas, que **no** entran en este pase.
+- **El catálogo, el mensaje de ausencia y las respuestas rápidas de la app se van.** Eso ahora lo hace el bot.
+- **Pasadas 24 h del último mensaje del cliente, no se le puede escribir** — ni el bot ni ellas. Se arregla con plantillas, que **no** entran en este pase.
 - **Los comprobantes sí se ven** en el panel. Eso quedó resuelto.
 
-**Terminar con un sí en voz alta de las dos.**
+**Terminar con un sí en voz alta.**
 
 ---
 
-## El día — 13 pasos
+## Parte 3 · El número real
 
-| | Quién | Paso | Verificación |
-| --- | --- | --- | --- |
-| **1** | dueña | Exportar por mail los chats que importen (menú → Más → Exportar chat → Incluir archivos) | **El mail llegó y se abre. Sin eso no se sigue** |
-| **2** | dueña | Capturas del catálogo; dejar otro admin en los grupos | — |
-| **3** | dev | `systemctl status miska-bot` + `/health` | Activo. **Si está caído, no se borra nada** |
-| **4** | juntos | Confirmar el PIN de dos pasos | Está, o se frena acá |
+35. `DUEÑA` — **Exportar por mail** los chats que importen (menú → Más → Exportar chat → Incluir archivos). **Sin ese mail no se sigue.**
+36. `DUEÑA` — Capturas del catálogo; dejar otro admin en los grupos
+37. `DUEÑA` — **¿Verificación en dos pasos activada?** Si sí, **anotar el PIN ahora**. Si nadie lo sabe, desactivarla desde la app **antes** de borrar
 
-### ⛔ 5 — PUNTO DE NO RETORNO
+**⬛ GUARDAR** — el **PIN de 6 dígitos**
 
-**La dueña, en el celular:** WhatsApp Business → **Configuración → Cuenta → Eliminar mi cuenta**, con código de país.
+### ⛔ 38 · PUNTO DE NO RETORNO — `DUEÑA`
+
+WhatsApp Business → **Configuración → Cuenta → "Eliminar mi cuenta"**, con código de país.
 
 - Meta tarda **hasta 3 minutos** en liberar el número.
 - **Que no desinstale la app**: eso no borra la cuenta y el número sigue ocupado.
-- **10 intentos de registro cada 72 h.** Pasado eso, el número queda bloqueado **3 días** con la cuenta ya borrada. Si el SMS no llega en 2 minutos: **verificación por voz**, no reintentar SMS.
+- **10 intentos de registro cada 72 h.** Pasado eso el número queda bloqueado **3 días**, con la cuenta ya borrada. Si el SMS no llega en 2 minutos: **verificación por voz**, no reintentar SMS.
 
-| | Quién | Paso | Verificación |
-| --- | --- | --- | --- |
-| **6** | juntos | WhatsApp Manager → Números → **Agregar número** | Aparece pendiente de verificación |
-| **7** | juntos | **Verificar por SMS** (el código le llega a ella) | Pasa a verificado |
-| **8** | dev | **Registrar con PIN** (abajo) | `{"success":true}` y estado *Connected* |
-| **9** | dev | Cargar las 5 variables en el `.env` y reiniciar | El log arranca sin errores |
-| **10** | dev | **Probar el handshake** (abajo) | Imprime exactamente `hola` |
-| **11** | juntos | Configurar el webhook, campo `messages` y solo ese | Meta acepta la URL |
-| **12** | dev | **Suscribir la app a la WABA** (abajo) | `{"success":true}` |
-| **13** | dev | `/health` con el switch **apagado**, probar entrante, y recién ahí prender el bot | Contesta «¿a qué hora abren?» |
+39. `DUEÑA` — `business.facebook.com` → **"Todas las herramientas" → "Administrador de WhatsApp"** → elegir la **WABA real** → **"Números de teléfono" → "Agregar número de teléfono"**
+40. `DUEÑA` — **Nombre visible** (`Miska Muska`) y **categoría** del negocio → **"Siguiente"**
+41. `DUEÑA` — El número y la forma de verificación (SMS o llamada) → cargar los 6 dígitos que llegan
 
-> ⚠ **Paso 8, si al buscar el número en WhatsApp aparece «Invitar»**: quedó en `PENDING`. Verificar por SMS no alcanza, falta este `/register`.
->
-> ⚠ **El paso 12 no lo pide la consola y no da error.** Sin él, el webhook figura verificado, el token manda mensajes, y no llega un solo mensaje entrante.
+**⬛ GUARDAR** — `PHONE_NUMBER_ID_REAL`
 
-### Los comandos
+42. `DEV` — **Registrar el número con el PIN** (comando abajo). Meta: *"solo puedes registrar un número a través de la API"*
+43. `DEV` — En el `.env`, **reemplazar los IDs de prueba por los reales**. Reiniciar
+44. `DEV` — **Suscribir la app a la WABA real** (el mismo comando del paso 32, con el otro ID)
+45. `DEV` — Desde un celular ajeno, escribirle al número del local
+
+> ⚠ **Los IDs de prueba no sirven en producción.** Es lo que más rompe integraciones que "andaban perfecto hace cinco minutos".
+
+---
+
+## Los comandos
 
 ```bash
 export BASE=https://vps.marcorossi.com.ar/miska-bot
 export TOKEN=EAAG...      # token del usuario del sistema
-export PHONE_ID=...       # el ID, no el número
-export WABA_ID=...
-export VERIFY=...         # el generado antes
+export PHONE_ID=...       # el de prueba primero, el real después
+export WABA_ID=...        # ídem
+export VERIFY=...         # el generado en el servidor
 ```
 
-**8 — registrar el número.** PIN nuevo de 6 dígitos, anotado en dos lugares.
+**Handshake** — antes de tocar el formulario de Meta:
+
+```bash
+curl -s "$BASE/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=$VERIFY&hub.challenge=hola"
+```
+
+**Suscribir la app a la WABA** — pasos 32 y 44:
+
+```bash
+curl -X POST "https://graph.facebook.com/v21.0/$WABA_ID/subscribed_apps" \
+  -H "Authorization: Bearer $TOKEN"
+```
+
+**Registrar el número** — paso 42:
 
 ```bash
 curl -s -X POST "https://graph.facebook.com/v21.0/$PHONE_ID/register" \
@@ -106,7 +204,7 @@ curl -s -X POST "https://graph.facebook.com/v21.0/$PHONE_ID/register" \
   -d '{"messaging_product":"whatsapp","pin":"123456"}'
 ```
 
-**9 — las cinco variables**, en `/opt/miska-muska/.env` (backup antes, `chmod 600` después):
+**Las cinco variables**, en `/opt/miska-muska/.env` (backup antes, `chmod 600` después):
 
 ```
 WHATSAPP_ACCESS_TOKEN=EAAG...
@@ -118,17 +216,10 @@ WHATSAPP_GRAPH_VERSION=v21.0
 
 `WHATSAPP_APP_SECRET` **no es opcional**: vacío, el bot acepta webhooks sin validar la firma y nada lo avisa.
 
-**10 — handshake:**
+**Generar el verify token** — el dev, antes de la reunión:
 
 ```bash
-curl -s "$BASE/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=$VERIFY&hub.challenge=hola"
-```
-
-**12 — suscribir la app a la WABA:**
-
-```bash
-curl -X POST "https://graph.facebook.com/v21.0/$WABA_ID/subscribed_apps" \
-  -H "Authorization: Bearer $TOKEN"
+ssh root@2.25.185.242 'cd /opt/miska-muska && cp .env .env.bak && TOKEN=$(openssl rand -hex 32) && sed -i "s|^WHATSAPP_VERIFY_TOKEN=.*|WHATSAPP_VERIFY_TOKEN=$TOKEN|" .env && chmod 600 .env && systemctl restart miska-bot && echo "VERIFY_TOKEN=$TOKEN"'
 ```
 
 ---
@@ -136,7 +227,7 @@ curl -X POST "https://graph.facebook.com/v21.0/$WABA_ID/subscribed_apps" \
 ## Verificación final
 
 ```bash
-curl -s "$BASE/health" | jq '.channels'      # whatsapp: configured:true, ok:true
+curl -s "$BASE/health" | jq '.channels'      # configured:true, ok:true
 curl -s "https://graph.facebook.com/v21.0/$WABA_ID/subscribed_apps" -H "Authorization: Bearer $TOKEN"
 ```
 
@@ -146,7 +237,7 @@ curl -s "https://graph.facebook.com/v21.0/$WABA_ID/subscribed_apps" -H "Authoriz
 - [ ] **Mandar una foto** → se ve la imagen, no `[imagen]`
 - [ ] Pedirle la foto de un producto → llega la imagen
 - [ ] Tomar un pedido completo → aparece en Pedidos y en la Comanda
-- [ ] La firma del webhook rechaza (abajo) → **401**
+- [ ] La firma del webhook rechaza → **401**
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}\n' -X POST "$BASE/webhooks/whatsapp" \
@@ -163,33 +254,49 @@ Si da **200**, el app secret quedó vacío: apagar y arreglar en el momento.
 
 | Síntoma | Qué es | Qué se hace |
 | --- | --- | --- |
+| `131037` al mandar | El nombre visible todavía no está aprobado | **No hay nada roto y nada que tocar.** Todo queda hecho y el bot arranca solo cuando Meta lo aprueba. Meta no publica plazo: entre 24 h y varios días. **No le prometas una fecha a la dueña** |
 | El SMS no llega | — | Verificación **por voz**. No reintentar SMS |
-| `133016` | Se agotaron los 10 intentos | **72 h bloqueado.** Publicar otro número en Instagram y avisar en el local |
-| Aparece «Invitar» al buscar el número | Quedó `PENDING` | El `/register` del paso 8 |
-| Webhook verificado y no llega nada | Falta el paso 12, o falta el activo «Cuentas de WhatsApp» | Los dos son silenciosos: revisar ambos |
-| Meta no valida la callback URL | Verify token distinto, o el bot caído | Correr el handshake del paso 10 |
+| `133016` | Se agotaron los 10 intentos de registro | **72 h bloqueado.** Publicar otro número en Instagram y avisar en el local |
+| `133006` al mandar | El número no está registrado | El `/register` del paso 42 |
+| Aparece «Invitar» al buscar el número | Quedó `PENDING`, mismo caso | Ídem |
+| Webhook verificado y no llega nada | Falta el `subscribed_apps`, o falta el activo «Cuentas de WhatsApp» | Los dos son silenciosos: revisar ambos |
+| Meta no valida la callback URL | Verify token distinto, o el bot caído | Correr el handshake |
 | `(#200) Permissions error` | La WABA no está asignada al usuario del sistema | Asignar el activo |
-| `190 access token expired` | Quedó el token temporal de 24 h | Regenerar el permanente — **necesita a una dueña** |
+| `190 access token expired` | Quedó un token temporal | Regenerar el permanente — **necesita a la dueña** |
+| «No cumple los requisitos para la verificación» | Portafolio recién creado | **No pasa nada.** El bot funciona igual; se reintenta más adelante |
 | El bot contesta mal | — | Apagar el switch en Ajustes → Canales. **No apaga el webhook**: los mensajes se siguen guardando |
 | Volver atrás | — | `POST /$PHONE_ID/deregister` → reinstalar la app → verificar por SMS. **No vuelven historial, grupos ni catálogo** |
 
-**Regla de oro:** si a las dos horas del paso 5 el número no recibe mensajes, **parar**. Cada intento fallido acerca el bloqueo de 72 h. Retomar al día siguiente.
+**Regla de oro:** si a las dos horas del paso 38 el número no recibe mensajes, **parar**. Cada intento fallido acerca el bloqueo de 72 h. Retomar al día siguiente.
+
+---
+
+## Antes de irse
+
+- [ ] **Método de pago** cargado — Configuración del negocio → **"Pagos"**. Responder dentro de las 24 h hoy no cuesta, pero varios proveedores reportan que sin medio de pago los números se desactivan. Son 10 minutos y saca la duda
+- [ ] **Verificación del negocio** iniciada — Configuración → **"Centro de seguridad"** → **"Iniciar verificación"**, con la constancia de ARCA. **Decile "hasta 14 días hábiles"**, que es lo que Meta se compromete a sostener. Y aclarale que **no es el tilde azul**, que es otra cosa
+- [ ] Las credenciales pasadas por un canal privado y **borradas de ahí**
+- [ ] El **PIN** anotado en dos lugares: el gestor del dev y uno de ella
+- [ ] Capacitación del panel con las chicas que atienden — que una conteste una conversación sola
+
+> La constancia de ARCA sirve para la verificación porque **la emite el fisco, no el negocio**: Meta rechaza los documentos fiscales emitidos por uno mismo. Una factura de Miska Muska no sirve.
+>
+> ⚠ Si después editan los datos del negocio, **hay que rehacer la verificación**. Cargarlos bien la primera vez.
 
 ---
 
 ## Después
 
-- **Sin plantillas, no se puede escribir fuera de las 24 h.** Es la limitación que queda abierta; implementarlo son 2-3 días de trabajo cuando lo decidan.
+- **Sin plantillas no se puede escribir fuera de las 24 h.** Es la limitación abierta; implementarlo son 2-3 días de trabajo cuando lo decidan.
 - **1 de octubre:** Meta pasa a cobrar por mensaje, también dentro de las 24 h. Si el bot parte una respuesta en tres globitos, cuesta el triple: hay que consolidar respuestas antes de esa fecha.
-- **Verificación del negocio**, si no salió: sin ella el tope es 250 destinatarios únicos cada 24 h para conversaciones que inicia el local. Responder no cuenta y es ilimitado.
 - **Envíos masivos:** son lo único que puede hacer que Meta baje el número. Dejar acordado que pasan antes por el dev.
-- Primera semana: `journalctl -u miska-bot --since today | grep -iE 'whatsapp|429'` y el *quality rating* en WhatsApp Manager.
+- Primera semana: `journalctl -u miska-bot --since today | grep -iE 'whatsapp|429'` y el *quality rating* en el Administrador de WhatsApp.
 
 <details>
 <summary>Lo que se descartó, por si hay que volver</summary>
 
-- **Número nuevo primero**, migrando el de siempre a las 2-4 semanas. Era la recomendación original: los comprobantes no se veían *(resuelto)*, no hay plantillas *(sigue)*, y el punto de no retorno tiene un modo de falla de 3 días *(sigue)*.
+- **Número nuevo primero**, migrando el de siempre a las 2-4 semanas. Era la recomendación original: los comprobantes no se veían *(resuelto)*, no hay plantillas *(sigue)*, y el punto de no retorno tiene un modo de falla de 3 días *(sigue, y por eso todo lo demás se prueba antes)*.
 - **Coexistence** (el mismo número en la app y en la API): exige socio de Meta o un intermediario con su facturación, y deja sin catálogo, listas de difusión, respuestas rápidas ni etiquetas.
-- **El dev como admin del portafolio.** La contra: nada del lado de Meta se resuelve sin coordinar una sesión con ellas — ni regenerar un token vencido, ni corregir una plantilla rechazada.
+- **El dev como admin del portafolio.** La contra: nada del lado de Meta se resuelve sin coordinar una sesión con ella.
 
 </details>
