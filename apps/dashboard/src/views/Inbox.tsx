@@ -7,6 +7,7 @@ import {
   type Message,
 } from '../api';
 import { CHANNEL_LABEL, Empty, ORDER_STATUS_LABEL, ORDER_STATUS_TONE, Pill, clock, money, timeAgo } from '../ui';
+import { ComandaPedido } from './Comanda';
 
 type Filter = 'todas' | 'sin-leer' | 'consultas' | 'atencion' | 'bot' | 'humano';
 
@@ -531,6 +532,8 @@ function Rail({
   toast: (text: string) => void;
 }) {
   const { contact, orders, conversation } = detail;
+  /* La comanda del pedido que se está mirando, abierta desde la ficha. */
+  const [comanda, setComanda] = useState<string | null>(null);
   const [notes, setNotes] = useState(contact?.notes ?? '');
   const [dirty, setDirty] = useState(false);
 
@@ -538,6 +541,8 @@ function Rail({
     setNotes(contact?.notes ?? '');
     setDirty(false);
   }, [contact?.id, contact?.notes]);
+
+  const abierto = orders.find((o) => o.id === comanda) ?? null;
 
   const save = async () => {
     if (!contact) return;
@@ -614,10 +619,22 @@ function Rail({
                   {o.deliveryDate} {o.deliveryTime ?? ''}
                 </div>
               ) : null}
+              <button
+                className="btn btn-sm btn-ghost"
+                style={{ marginTop: 6 }}
+                title="Ver la comanda: todo lo que sabemos de este pedido"
+                onClick={() => setComanda(o.id)}
+              >
+                Comanda
+              </button>
             </div>
           ))
         )}
       </div>
+
+      {abierto ? (
+        <ComandaPedido pedido={abierto} onCerrar={() => setComanda(null)} toast={toast} />
+      ) : null}
     </>
   );
 }

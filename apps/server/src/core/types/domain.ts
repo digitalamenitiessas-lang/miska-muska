@@ -185,6 +185,18 @@ export interface OrderItem {
    * cierra. Vive en la columna `items` (jsonb), así que no necesita migración.
    */
   observation?: string;
+  /**
+   * Quién autorizó esa modificación y con qué palabras.
+   *
+   * La observación sola dice "sin jamón" y no dice si alguien lo aprobó. La
+   * consulta que sí lo dice vive en `conversations.pending_review` y se BORRA
+   * apenas el bot le transmite la respuesta al cliente, o sea días antes de que
+   * el pedido se produzca. Copiarla acá es lo único que hace que en la mesa de
+   * producción se pueda saber que el cambio se aprobó, cuándo, y qué se contestó.
+   *
+   * Vive en la columna `items` (jsonb), como `observation`: sin migración.
+   */
+  authorization?: { pedido: string; respuesta: string; en: string };
 }
 
 export interface Order {

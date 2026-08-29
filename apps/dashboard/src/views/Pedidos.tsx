@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Order, type OrderStatus } from '../api';
+import { ComandaPedido } from './Comanda';
 import {
   DELIVERY_LABEL,
   Empty,
@@ -25,6 +26,12 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
   const [orders, setOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<OrderStatus | 'todos'>('todos');
   const [loading, setLoading] = useState(true);
+  /*
+    Pedido abierto en la comanda. Se guarda el id y no el objeto: mientras la
+    hoja está abierta puede llegar un cambio por el stream, y con el objeto
+    congelado la comanda mostraría el pedido de hace un rato.
+  */
+  const [comanda, setComanda] = useState<string | null>(null);
 
   /*
     Número de orden de la carga en curso. Un turno del bot dispara varias cargas
@@ -100,6 +107,8 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
     }
   };
 
+  const abierto = orders.find((o) => o.id === comanda) ?? null;
+
   return (
     <>
       <div className="tiles">
@@ -160,7 +169,13 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
                   return (
                     <tr key={o.id}>
                       <td className="mono">
-                        <strong>{o.number}</strong>
+                        <button
+                          className="link-numero"
+                          title="Ver la comanda: todo lo que sabemos de este pedido"
+                          onClick={() => setComanda(o.id)}
+                        >
+                          <strong>{o.number}</strong>
+                        </button>
                         <div className="small muted">{o.createdBy === 'bot' ? '🤖' : '👤'}</div>
                       </td>
                       <td>
@@ -241,6 +256,13 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
                               → {ORDER_STATUS_LABEL[next]}
                             </button>
                           ) : null}
+                          <button
+                            className="btn btn-sm btn-ghost"
+                            title="Ver la comanda"
+                            onClick={() => setComanda(o.id)}
+                          >
+                            Comanda
+                          </button>
                           {o.status !== 'cancelado' && o.status !== 'entregado' ? (
                             <button
                               className="btn btn-sm btn-ghost"
@@ -260,6 +282,10 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
           </div>
         )}
       </section>
+
+      {abierto ? (
+        <ComandaPedido pedido={abierto} onCerrar={() => setComanda(null)} toast={toast} />
+      ) : null}
     </>
   );
 }

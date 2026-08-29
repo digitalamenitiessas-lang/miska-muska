@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, type Course, type CourseSession, type CourseSignup, type CursoConTurnos } from '../api';
 import { Empty, Pill, Switch, money } from '../ui';
+import { ComandaInscripcion } from './Comanda';
 
 /**
  * Cursos, aparte del catálogo.
@@ -208,11 +209,14 @@ function Planilla({
   toast: (text: string) => void;
 }) {
   const [agregando, setAgregando] = useState(false);
+  /* Igual que en pedidos: se guarda el id, para que la ficha siga viva. */
+  const [comanda, setComanda] = useState<string | null>(null);
   const activos = inscriptos.filter((i) => i.status !== 'cancelado');
   const cobrado = activos.reduce((sum, i) => sum + i.paid, 0);
   const porCobrar = activos.reduce((sum, i) => sum + Math.max(0, i.total - i.paid), 0);
   const turno = (id: string | null) =>
     curso.sessions.find((t) => t.id === id)?.label ?? 'sin turno';
+  const abiertaLaFicha = inscriptos.find((i) => i.id === comanda) ?? null;
 
   const agregarAMano = async (body: Partial<CourseSignup>) => {
     try {
@@ -270,7 +274,15 @@ function Planilla({
                     const saldo = Math.max(0, i.total - i.paid);
                     return (
                       <tr key={i.id} style={{ opacity: i.status === 'cancelado' ? 0.5 : 1 }}>
-                        <td>{i.fullName}</td>
+                        <td>
+                          <button
+                            className="link-numero"
+                            title="Ver la ficha: todo lo que sabemos de esta inscripción"
+                            onClick={() => setComanda(i.id)}
+                          >
+                            {i.fullName}
+                          </button>
+                        </td>
                         <td className="small">{i.contactInfo ?? '—'}</td>
                         <td className="small">{turno(i.sessionId)}</td>
                         <td className="mono" style={{ textAlign: 'right' }}>
@@ -308,6 +320,13 @@ function Planilla({
                         </td>
                         <td>
                           <div className="row" style={{ gap: 4 }}>
+                            <button
+                              className="btn btn-sm btn-ghost"
+                              title="Ver la ficha"
+                              onClick={() => setComanda(i.id)}
+                            >
+                              Ficha
+                            </button>
                             {i.status !== 'inscripto' ? (
                               <button
                                 className="btn btn-sm btn-primary"
@@ -337,6 +356,15 @@ function Planilla({
               </table>
             </div>
           )}
+
+          {abiertaLaFicha ? (
+            <ComandaInscripcion
+              inscripto={abiertaLaFicha}
+              curso={curso}
+              onCerrar={() => setComanda(null)}
+              toast={toast}
+            />
+          ) : null}
 
           {agregando ? (
             <AnotarAMano

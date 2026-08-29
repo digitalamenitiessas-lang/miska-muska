@@ -97,6 +97,8 @@ export interface OrderItem {
   unitPrice: number;
   /** Modificacion pedida sobre este item. La decide una persona. */
   observation?: string;
+  /** Quién autorizó esa modificación y con qué palabras, copiado al cerrar. */
+  authorization?: { pedido: string; respuesta: string; en: string };
 }
 
 export interface Order {

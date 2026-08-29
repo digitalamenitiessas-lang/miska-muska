@@ -649,6 +649,29 @@ export async function executeTool(
         }
 
         /*
+          Se copia la autorización al ítem. La consulta que la respalda se borra
+          en cuanto el bot le transmite la respuesta al cliente, y el pedido se
+          produce días después: sin esta copia, en la comanda queda "sin jamón"
+          sin ninguna forma de saber si eso lo aprobó alguien o lo inventó el bot.
+
+          Se sella solo lo que la consulta cubre y solo si trae observación: un
+          ítem cualquiera del mismo pedido no queda marcado como autorizado.
+        */
+        if (consultaResuelta?.respuesta) {
+          const alcanzados = new Set(
+            itemsQueTocanLaConsulta(consultaResuelta.producto, items, productsById),
+          );
+          for (const item of items) {
+            if (!item.observation || !alcanzados.has(item)) continue;
+            (item as Order['items'][number]).authorization = {
+              pedido: consultaResuelta.pedido,
+              respuesta: consultaResuelta.respuesta,
+              en: consultaResuelta.resueltoEn ?? new Date().toISOString(),
+            };
+          }
+        }
+
+        /*
           UN PEDIDO POR CHARLA, Y SOLO PUEDE CRECER.
 
           El modelo no tiene herramienta para modificar un pedido: `crear_pedido`

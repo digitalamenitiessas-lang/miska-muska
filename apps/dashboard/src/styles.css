@@ -1243,3 +1243,161 @@ table.grid tbody tr:hover {
   max-height: 90dvh;
   overflow-y: auto;
 }
+
+/* ------------------------------------------------------------- comanda --- */
+
+/*
+  La hoja de un pedido o de una inscripción. Comparte el fondo del visor de
+  fotos (.foto-fondo) porque es el mismo gesto: se abre encima, se cierra
+  tocando afuera. Angosta a propósito: se lee de arriba hacia abajo, y así
+  entra en una A4 sin reacomodar nada al imprimir.
+*/
+.comanda {
+  width: 100%;
+  max-width: 620px;
+  max-height: 92dvh;
+  overflow-y: auto;
+}
+
+.comanda-bloque {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
+}
+
+.comanda-titulo {
+  font-family: var(--font-brand);
+  font-size: 11.5px;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  font-weight: 500;
+  margin: 0 0 8px;
+}
+
+/* Etiqueta a la izquierda y dato a la derecha, alineados en columna: leído en
+   vertical, el ojo encuentra el campo que busca sin tener que leer el resto. */
+.comanda-dato {
+  display: grid;
+  grid-template-columns: 128px 1fr;
+  gap: 10px;
+  padding: 3px 0;
+  font-size: 13px;
+}
+
+.comanda-label {
+  font-family: var(--font-brand);
+  font-size: 11.5px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding-top: 1px;
+}
+
+.comanda-valor {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.comanda-items td {
+  vertical-align: top;
+}
+
+/*
+  La modificación autorizada. Va destacada porque es el dato que hace que el
+  producto salga distinto de como está en la carta: si se pierde entre el resto,
+  se produce mal y no hay vuelta atrás.
+*/
+.comanda-observacion {
+  margin-top: 3px;
+  padding: 3px 7px;
+  background: var(--warn-soft);
+  border-left: 3px solid var(--yellow);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
+.comanda-charla {
+  margin-top: 10px;
+  max-height: 320px;
+  overflow-y: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  background: var(--cream);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/*
+  Impresión. El panel entero se esconde y queda la hoja sola, en flujo normal:
+  sin `visibility` no alcanza —el fondo fijo se lleva la primera página— y con
+  `display:none` sobre los ancestros la comanda se iría con ellos, porque está
+  dentro del árbol de la aplicación y no en un portal.
+*/
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  .comanda,
+  .comanda * {
+    visibility: visible;
+  }
+
+  .no-imprimir {
+    display: none !important;
+  }
+
+  .foto-fondo {
+    position: static;
+    background: none;
+    padding: 0;
+    display: block;
+  }
+
+  /* La ficha de un inscripto se abre DENTRO del overlay de la planilla, que
+     tiene su propio scroll. En pantalla no molesta; al imprimir, un ancestro
+     con scroll es un recorte esperando pasar. */
+  .planilla,
+  .foto-dialogo {
+    overflow: visible;
+    max-height: none;
+  }
+
+  .comanda {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    max-width: none;
+    max-height: none;
+    overflow: visible;
+    border: none;
+    box-shadow: none;
+  }
+
+  /* La charla, si está abierta, se imprime entera: en papel no hay scroll. */
+  .comanda-charla {
+    max-height: none;
+    overflow: visible;
+  }
+}
+
+/* Texto de una celda que además abre algo. Hereda el tamaño de la tabla y solo
+   se subraya al pasar por encima: una fila llena de links subrayados se lee
+   como un formulario, no como una planilla. */
+.link-numero {
+  background: none;
+  border: none;
+  padding: 0;
+  font: inherit;
+  color: var(--navy);
+  cursor: pointer;
+  text-align: left;
+}
+
+.link-numero:hover {
+  text-decoration: underline;
+}
