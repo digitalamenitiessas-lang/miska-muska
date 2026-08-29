@@ -7,6 +7,12 @@
 > Las afirmaciones sobre el comportamiento del sistema están verificadas contra el archivo y la línea
 > que se citan, sobre el commit `d760ce4`. Las que dependen de Meta salen de su documentación y pueden
 > haber cambiado; donde una fuente contradice a otra, está dicho en el texto en vez de resuelto de prepo.
+>
+> **Actualizado el 30/08/2026** con lo aprendido del runbook del **Bot de Turismo SMT** (equipo DIA,
+> despliegue del 25/08/2026), que hizo este mismo trámite en Meta hace unos días. De ahí salen el paso
+> 16B-bis y las dos fallas silenciosas de la tabla de problemas. Su infraestructura es otra —Nginx y PM2
+> en el VPS compartido del municipio— así que la parte de despliegue no se toma de ahí. Y su documento no
+> cubre el caso nuestro: migrar un número que hoy está en la app de WhatsApp Business.
 
 ### Verificado en vivo contra el servidor, el 29/08/2026
 
@@ -268,9 +274,32 @@ developers.facebook.com → la app → **WhatsApp → Configuration → Webhook 
 - Verify token: el mismo valor de `WHATSAPP_VERIFY_TOKEN`, carácter por carácter.
 
 Después, en **Webhook fields**, suscribirse a **`messages`** y solo a ese. Los demás campos no rompen nada pero tampoco sirven: `parseWebhook()` itera los `changes` sin mirar `change.field` (`adapter.ts:139-141`), así que un payload de otro campo se descarta después de calcular el HMAC al pedo.
+
+Se puede hacer lo mismo por API y saltearse el formulario, que es donde se cuela el error de tipeo del verify token:
+
+```bash
+export APP_ID=...
+export APP_SECRET=...
+curl -X POST "https://graph.facebook.com/v21.0/$APP_ID/subscriptions" \
+  -d "object=whatsapp_business_account" \
+  -d "callback_url=$BASE/webhooks/whatsapp" \
+  -d "verify_token=$VERIFY" \
+  -d "fields=messages" \
+  -d "access_token=$APP_ID|$APP_SECRET"
+```
+
+**16B-bis. (DEV, 1 min) Suscribir la app a la cuenta de WhatsApp. SIN ESTO NO LLEGA NINGÚN MENSAJE.**
+
+Es un paso aparte del webhook y es el que más se olvida, porque la consola no lo pide y no da ningún error: el webhook queda verificado, el token manda mensajes, y los entrantes simplemente nunca aparecen.
+
+```bash
+curl -X POST "https://graph.facebook.com/v21.0/$WABA_ID/subscribed_apps" \
+  -H "Authorization: Bearer $TOKEN"
+# esperado: {"success":true}
+```
+
 *Verificación:*
 ```bash
-export WABA_ID=...
 curl -s "https://graph.facebook.com/v21.0/$WABA_ID/subscribed_apps" -H "Authorization: Bearer $TOKEN"
 # tiene que listar la app
 ```
@@ -364,6 +393,8 @@ No hay nada que deshacer. Se cierra la reunión, se pasa al carril A, y no se pe
 | Error **133016** (agotó los 10 intentos) | No hay atajo. **El número queda bloqueado 72 horas** y el local se queda sin WhatsApp esos 3 días. Plan de contingencia: publicar en Instagram un número alternativo (el chip de prueba) y avisar en el local | 3 días | — |
 | El PIN no anda | Si el número tenía 2FA en la app, hay que mandar **ese** PIN. Si nadie lo sabe, se resetea desde WhatsApp Manager → Settings del número → Two-step verification → Change PIN. **No hay endpoint para apagar la 2FA.** Hay una inconsistencia entre páginas de Meta sobre si se puede desactivar: asumí que solo se puede *cambiar* | 10 min a horas | — |
 | Meta no valida la callback URL | Es siempre una de tres: el verify token no coincide carácter por carácter, el bloque de Caddy quedó con `handle` en vez de `handle_path`, o el bot está caído. Correr la prueba 6 | 5 min | — |
+| **El webhook quedó verificado y los mensajes entrantes nunca llegan, sin ningún error** | Las dos causas conocidas, las dos silenciosas: (a) falta el `POST /$WABA_ID/subscribed_apps` del paso 16B-bis; (b) al usuario del sistema se le asignó **la app pero no la cuenta de WhatsApp**. Tienen que ser los **dos activos**, con control total. Con solo la app, el token manda mensajes igual y todo se ve verde | 15 min | — |
+| **Al buscar el número en WhatsApp aparece "Invitar"** | El número quedó `PENDING`: verificarlo por SMS no alcanza, falta el `/register` con el PIN. La consola no lo dice | 3 min | — |
 | Entra `(#200) Permissions error` | La WABA no está asignada al System User, o falta un permiso, o la app está en otro portfolio que la WABA | 10 min | — |
 | Entra `190 access token expired` | Quedó puesto el token temporal de 24 h del panel. Regenerar el de System User con expiración Nunca | 10 min | — |
 | El bot contesta mal o de más | Apagar el switch en Ajustes → Canales. **Ojo: apagar el switch NO apaga el webhook.** Meta sigue mandando y el servidor sigue guardando; solo deja de responder el bot. Para cortar de verdad hay que quitar la suscripción a `messages` en Meta | 30 s | — |
