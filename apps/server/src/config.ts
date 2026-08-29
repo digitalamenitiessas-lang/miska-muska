@@ -23,6 +23,12 @@ export const config = {
   dashboardOrigins: parseOrigins(),
   /** URL pública del servidor (para registrar webhooks). */
   publicUrl: env('PUBLIC_URL', ''),
+  /*
+    Días que se guarda un adjunto de un cliente antes de borrarlo. El MENSAJE
+    queda para siempre; lo que vence es el archivo, que es lo único que pesa.
+    Tres meses cubren cualquier reclamo por un pedido y dejan la base chica.
+  */
+  mediaRetencionDias: Number(env('MEDIA_RETENCION_DIAS', '90')) || 90,
 
   database: {
     /**

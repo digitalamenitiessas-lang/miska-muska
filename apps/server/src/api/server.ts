@@ -98,8 +98,30 @@ export async function buildServer(deps: ApiDeps): Promise<FastifyInstance> {
     const { id } = req.params as { id: string };
     const file = await deps.repos.media.get(id);
     if (!file) return reply.code(404).send({ error: 'No existe' });
+    /*
+      Dos encabezados que importan desde que esto también sirve lo que MANDA el
+      cliente y no solo lo que sube el equipo.
+
+      `nosniff`: sin esto, un navegador puede decidir por su cuenta que un archivo
+      es HTML aunque el content-type diga otra cosa, y ejecutarlo.
+
+      `attachment` para todo lo que no sea una imagen conocida: un PDF o un audio
+      se bajan, no se abren en una pestaña de nuestro dominio. El tipo se guarda ya
+      filtrado contra una lista blanca, así que esto es la segunda vuelta de llave.
+    */
+    const esImagen = /^image\/(jpeg|png|webp|gif|heic|heif)$/.test(file.mimeType);
+    /*
+      El nombre se sanea antes de mandarlo: viaja en un encabezado y lo eligió
+      quien mandó el archivo, así que una comilla o un salto de línea ahí adentro
+      es una forma conocida de partir la respuesta en dos.
+    */
+    const nombre = (file.filename ?? '').replace(/[^\w. -]/g, '').slice(0, 80);
+    const disposicion =
+      (esImagen ? 'inline' : 'attachment') + (nombre ? `; filename="${nombre}"` : '');
     return reply
       .header('content-type', file.mimeType)
+      .header('x-content-type-options', 'nosniff')
+      .header('content-disposition', disposicion)
       // El contenido de un id nunca cambia: se puede cachear para siempre, y así
       // Meta no vuelve a descargarla en cada mensaje.
       .header('cache-control', 'public, max-age=31536000, immutable')

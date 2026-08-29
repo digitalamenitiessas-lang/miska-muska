@@ -29,12 +29,59 @@ export interface ConversationRef {
 // Entrada
 // ---------------------------------------------------------------------------
 
+/*
+  `url`: dirección propia del archivo, servida por este servidor.
+
+  El `mediaId` es del canal y no sirve para mostrar nada: en Telegram hay que
+  cambiarlo por un link que vence, y en WhatsApp hay que ir a buscarlo con el
+  token de la cuenta. Ninguna de las dos cosas puede hacer un navegador. Así que
+  el adjunto se baja una vez, se guarda, y lo que queda en el mensaje es una
+  dirección nuestra que no vence y que el panel abre sin más trámite.
+
+  Es opcional porque se completa DESPUÉS de guardar el mensaje: el mensaje
+  aparece en la bandeja al instante y la foto se suma cuando terminó de bajar.
+
+  `mediaError`: por qué NO está el archivo. Se escribe siempre que la descarga no
+  llegue a buen puerto, y existe para que el panel pueda distinguir "todavía está
+  bajando" de "esto no va a llegar nunca". Sin esa diferencia, un comprobante
+  perdido se ve igual que uno en camino y el operador espera de gusto.
+*/
 export type InboundContent =
   | { kind: 'text'; text: string }
-  | { kind: 'image'; mediaId: string; mimeType?: string; caption?: string }
-  | { kind: 'document'; mediaId: string; filename?: string; mimeType?: string; caption?: string }
-  | { kind: 'audio'; mediaId: string; mimeType?: string; durationSec?: number; voice?: boolean }
-  | { kind: 'video'; mediaId: string; mimeType?: string; caption?: string }
+  | {
+      kind: 'image';
+      mediaId: string;
+      mimeType?: string;
+      caption?: string;
+      url?: string;
+      mediaError?: string;
+    }
+  | {
+      kind: 'document';
+      mediaId: string;
+      filename?: string;
+      mimeType?: string;
+      caption?: string;
+      url?: string;
+      mediaError?: string;
+    }
+  | {
+      kind: 'audio';
+      mediaId: string;
+      mimeType?: string;
+      durationSec?: number;
+      voice?: boolean;
+      url?: string;
+      mediaError?: string;
+    }
+  | {
+      kind: 'video';
+      mediaId: string;
+      mimeType?: string;
+      caption?: string;
+      url?: string;
+      mediaError?: string;
+    }
   | { kind: 'sticker'; mediaId: string; emoji?: string }
   | { kind: 'location'; latitude: number; longitude: number; name?: string; address?: string }
   /** Respuesta a un botón o fila de lista que enviamos antes. */
@@ -92,8 +139,8 @@ export interface ListSection {
 
 export type OutboundContent =
   | { kind: 'text'; text: string; previewUrl?: boolean }
-  | { kind: 'image'; url: string; caption?: string }
-  | { kind: 'document'; url: string; filename?: string; caption?: string }
+  | { kind: 'image'; url?: string; caption?: string }
+  | { kind: 'document'; url?: string; filename?: string; caption?: string }
   | { kind: 'buttons'; text: string; buttons: QuickReplyButton[]; footer?: string }
   | { kind: 'list'; text: string; buttonLabel: string; sections: ListSection[]; footer?: string }
   /**

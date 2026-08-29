@@ -1205,6 +1205,35 @@ table.grid tbody tr:hover {
 
 /* La foto dentro de la burbuja del chat: ancho completo de la burbuja, alto
    acotado para que un mensaje con imagen no empuje el resto fuera de vista. */
+/* El archivo que no se pudo bajar. Se dice con todas las letras porque la
+   alternativa —quedarse callado— es que el operador espere un comprobante que
+   no va a llegar nunca. */
+.bubble-sin-archivo {
+  margin-bottom: 4px;
+  padding: 5px 9px;
+  border-radius: var(--radius-sm);
+  background: var(--warn-soft);
+  font-size: 12.5px;
+}
+
+/* Un audio dentro de la burbuja: los controles nativos del navegador, a lo
+   ancho de la burbuja, porque el operador lo que necesita es apretar play. */
+.bubble-audio {
+  display: block;
+  width: 100%;
+  min-width: 220px;
+  margin-bottom: 6px;
+}
+
+/* Un PDF o un archivo cualquiera: se abre en otra pestaña. */
+.bubble-archivo {
+  display: inline-block;
+  margin-bottom: 4px;
+  font-weight: 600;
+  color: var(--navy);
+  word-break: break-word;
+}
+
 .bubble-foto {
   display: block;
   width: 100%;
@@ -1212,6 +1241,21 @@ table.grid tbody tr:hover {
   object-fit: cover;
   border-radius: var(--radius-sm);
   margin-bottom: 6px;
+}
+
+/*
+  La foto que manda el cliente se ve ENTERA, aunque quede chica.
+
+  `cover` recorta para llenar el cuadro, y en la foto de un producto eso queda
+  bien. Pero lo que manda un cliente suele ser la captura del homebanking, que es
+  angosta y muy alta: recortada, lo que se pierde es el monto y el CBU, o sea lo
+  único que hay que mirar. Chica y completa se puede leer de un vistazo, y el
+  clic la abre en grande.
+*/
+.bubble-foto-entera {
+  object-fit: contain;
+  max-height: 320px;
+  background: var(--cream);
 }
 
 /* ---------------------------------------------------------------- cursos -- */

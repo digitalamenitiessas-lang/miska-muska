@@ -67,7 +67,14 @@ export interface ChannelAdapter {
 
   send(message: OutboundMessage): Promise<SendResult>;
 
-  downloadMedia?(mediaId: string): Promise<MediaPayload>;
+  /**
+   * Baja un adjunto del canal.
+   *
+   * `maxBytes` no es una sugerencia: un documento de WhatsApp puede pesar 100 MB
+   * y esto termina en memoria y después en una columna de Postgres. El adaptador
+   * tiene que mirar el tamaño ANTES de bajarlo y fallar si no entra.
+   */
+  downloadMedia?(mediaId: string, maxBytes?: number): Promise<MediaPayload>;
   markRead?(channelMessageId: string, ref: ConversationRef): Promise<void>;
   setTyping?(ref: ConversationRef, durationMs: number): Promise<void>;
 

@@ -475,22 +475,99 @@ export function Inbox({
   );
 }
 
+/** Los tipos de mensaje que traen un archivo colgado. */
+const TRAE_ARCHIVO = ['image', 'document', 'audio'];
+
+/**
+ * Lo que el mensaje trae colgado, si es que trae algo.
+ *
+ * Son TRES estados y no dos, que es la diferencia entre servir y estorbar:
+ *
+ *  - con `url`, el archivo, que es lo normal;
+ *  - con `mediaError`, el aviso de que no se pudo bajar. El servidor lo escribe
+ *    siempre que la descarga se cae, así que este cartel aparece solo cuando de
+ *    verdad no va a llegar nada;
+ *  - sin ninguna de las dos y recién llegado, "bajando". Se limita al primer
+ *    minuto: pasado eso, un mensaje sin archivo y sin motivo es uno viejo, de
+ *    antes de que esto existiera, y decirle "bajando" sería mentira.
+ */
+function Adjunto({ message }: { message: Message }) {
+  const kind = message.contentKind;
+  if (!TRAE_ARCHIVO.includes(kind)) return null;
+
+  const payload = message.payload as
+    | { url?: string; filename?: string; voice?: boolean; mediaError?: string }
+    | null;
+  const url = payload?.url;
+  const glifo = kind === 'image' ? '📷' : kind === 'audio' ? '🎤' : '📎';
+
+  if (!url) {
+    const reciente = Date.now() - new Date(message.createdAt).getTime() < 60_000;
+    if (payload?.mediaError || !reciente) {
+      return (
+        <div className="bubble-sin-archivo" title={payload?.mediaError}>
+          ⚠ {glifo} no pudimos guardar el archivo — miralo en el celular
+        </div>
+      );
+    }
+    return (
+      <div className="small muted" style={{ marginBottom: 4 }}>
+        {glifo} bajando el archivo…
+      </div>
+    );
+  }
+
+  if (kind === 'image') {
+    // El link abre la foto entera: un CBU no se lee en una miniatura de 260 px.
+    return (
+      <a href={url} target="_blank" rel="noreferrer" title="Abrir la foto en grande">
+        <img
+          className={`bubble-foto${message.direction === 'in' ? ' bubble-foto-entera' : ''}`}
+          src={url}
+          alt={message.text}
+        />
+      </a>
+    );
+  }
+
+  if (kind === 'audio') {
+    // Controles nativos: el operador necesita escucharlo, no una forma de onda.
+    return <audio className="bubble-audio" src={url} controls preload="none" />;
+  }
+
+  return (
+    <a className="bubble-archivo" href={url} target="_blank" rel="noreferrer">
+      📎 {payload?.filename ?? 'abrir el archivo'}
+    </a>
+  );
+}
+
+/**
+ * Quita el "[imagen]" / "[archivo]" del texto, que es una etiqueta que puso el
+ * servidor y no algo que haya escrito el cliente.
+ *
+ * Solo se aplica cuando el archivo se ve. Si no se pudo bajar, el texto queda
+ * entero: el nombre del PDF puede ser lo único que le quede al operador.
+ */
+export const sinEtiquetaDeAdjunto = (text: string) =>
+  text.replace(/^\[(imagen|archivo[^\]]*|audio|mensaje de voz)\]\s*/i, '');
+
 function Bubble({ message }: { message: Message }) {
   const out = message.direction === 'out';
   const authorClass = out ? ` by-${message.author}` : '';
   /*
-    Si el mensaje es una imagen, se muestra la imagen. Con solo el texto el
-    operador leía "[imagen]" y no tenía forma de saber cuál mandó el bot.
+    Se calcula acá y no se deduce del componente: `<Adjunto/>` es un elemento
+    JSX y siempre es truthy, aunque el componente devuelva null. Con esa forma,
+    el ternario del texto tomaba SIEMPRE la primera rama y le recortaba la
+    etiqueta a todos los mensajes.
   */
-  const foto =
-    message.contentKind === 'image'
-      ? (message.payload as { url?: string } | null)?.url
-      : undefined;
+  const payload = message.payload as { url?: string } | null;
+  const archivoALaVista = TRAE_ARCHIVO.includes(message.contentKind) && Boolean(payload?.url);
 
   return (
     <div className={`bubble ${out ? 'bubble-out' : 'bubble-in'}${authorClass}`}>
-      {foto ? <img className="bubble-foto" src={foto} alt={message.text} /> : null}
-      {foto ? message.text.replace(/^[imagen]s*/, '') : message.text}
+      <Adjunto message={message} />
+      {archivoALaVista ? sinEtiquetaDeAdjunto(message.text) : message.text}
       <div className="bubble-foot">
         <span>{clock(message.createdAt)}</span>
         {out ? (

@@ -9,6 +9,7 @@
  *  - `numeric` vuelve como STRING, para no perder precisión: hay que convertirlo
  */
 
+import { randomBytes } from 'node:crypto';
 import type { QueryResultRow } from 'pg';
 import { dateOnly, exec, iso, isoOrNull, newId, nowIso, one, q, TIMEZONE } from './db.js';
 import type {
@@ -524,6 +525,20 @@ export function createRepositories() {
         error,
       ]);
     },
+
+    /*
+      Reescribe el contenido de un mensaje ya guardado. Existe por una sola cosa:
+      el adjunto se baja DESPUÉS de guardar el mensaje —para que la bandeja no
+      tenga que esperar la descarga— y al terminar hay que dejarle la dirección
+      al payload. No es una puerta general para editar mensajes.
+    */
+    async setPayload(id: string, payload: unknown): Promise<StoredMessage | null> {
+      const row = await one('UPDATE messages SET payload = $2 WHERE id = $1 RETURNING *', [
+        id,
+        JSON.stringify(payload),
+      ]);
+      return row ? toMessage(row) : null;
+    },
   };
 
   const products = {
@@ -948,26 +963,99 @@ export function createRepositories() {
   };
 
   /*
-    Archivos que sube el equipo desde el panel. Hoy son las fotos de los
-    productos; el día que haya que mandar un PDF o un audio, entra por acá mismo.
+    Archivos: las fotos de producto que sube el equipo, y los adjuntos que mandan
+    los clientes —entre ellos el comprobante de la transferencia—.
+
+    El id se saca de `randomBytes` y no de `newId`: la dirección /media/:id se
+    sirve SIN token, porque quien la descarga es Telegram o Meta y no tienen forma
+    de autenticarse. Mientras del otro lado hubo solo fotos de producto, un id
+    medio adivinable no importaba. Ahora del otro lado hay un comprobante bancario
+    con nombre, CBU y monto, y `newId` no sirve para eso: sus primeros ocho
+    caracteres son la hora en base32 —o sea, se deducen— y los otros ocho salen de
+    `Math.random()`, que no es un generador criptográfico y cuyo estado se puede
+    reconstruir mirando unas pocas salidas. Estos son 128 bits que no se adivinan.
+
+    Los ids viejos siguen funcionando: acá no se valida el formato, se busca por
+    clave primaria.
   */
   const media = {
     async insert(file: {
       mimeType: string;
       filename: string | null;
       bytes: Buffer;
+      /** 'panel' es una foto de producto y no vence; 'cliente' es un adjunto entrante. */
+      origin?: 'panel' | 'cliente';
+      /** De qué charla vino, cuando es un adjunto entrante. */
+      conversationId?: string | null;
     }): Promise<{ id: string }> {
-      const id = newId('m_');
+      const id = `m_${randomBytes(16).toString('hex')}`;
       await exec(
-        'INSERT INTO media (id, mime_type, filename, bytes, size) VALUES ($1, $2, $3, $4, $5)',
-        [id, file.mimeType, file.filename, file.bytes, file.bytes.length],
+        `INSERT INTO media (id, mime_type, filename, bytes, size, origin, conversation_id)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+        [
+          id,
+          file.mimeType,
+          file.filename,
+          file.bytes,
+          file.bytes.length,
+          file.origin ?? 'panel',
+          file.conversationId ?? null,
+        ],
       );
       return { id };
     },
 
-    async get(id: string): Promise<{ mimeType: string; bytes: Buffer } | null> {
-      const row = await one('SELECT mime_type, bytes FROM media WHERE id = $1', [id]);
-      return row ? { mimeType: String(row.mime_type), bytes: row.bytes as Buffer } : null;
+    async get(
+      id: string,
+    ): Promise<{ mimeType: string; filename: string | null; bytes: Buffer } | null> {
+      const row = await one('SELECT mime_type, filename, bytes FROM media WHERE id = $1', [id]);
+      return row
+        ? {
+            mimeType: String(row.mime_type),
+            filename: row.filename === null ? null : String(row.filename),
+            bytes: row.bytes as Buffer,
+          }
+        : null;
+    },
+
+    /**
+     * Cuántos bytes lleva guardados una charla en las últimas 24 h.
+     *
+     * Es el techo diario por cliente. Sin esto, cualquiera que tenga el WhatsApp
+     * del local puede mandar archivos hasta llenar la base, y el tope por archivo
+     * no lo frena: frena el tamaño de cada uno, no cuántos.
+     */
+    async bytesRecientesDe(conversationId: string): Promise<number> {
+      const row = await one<{ total: string }>(
+        `SELECT COALESCE(SUM(size), 0)::text AS total FROM media
+         WHERE conversation_id = $1 AND created_at > now() - interval '24 hours'`,
+        [conversationId],
+      );
+      return Number(row?.total ?? 0);
+    },
+
+    /**
+     * Borra los adjuntos de clientes más viejos que `dias`.
+     *
+     * El MENSAJE no se borra: sigue diciendo que el cliente mandó una foto, y la
+     * charla se lee igual. Lo que vence es el archivo, que después de unos meses
+     * ya no le sirve a nadie y es lo único que pesa. Las fotos de producto
+     * (`origin = 'panel'`) no se tocan nunca: son parte del catálogo.
+     */
+    async purgarAdjuntosViejos(dias: number): Promise<number> {
+      return exec(
+        `DELETE FROM media
+         WHERE origin = 'cliente' AND created_at < now() - ($1 || ' days')::interval`,
+        [String(dias)],
+      );
+    },
+
+    /** Cuánto pesa hoy la tabla, para poder mirarlo antes de que la base diga que no. */
+    async pesoTotal(): Promise<{ archivos: number; bytes: number }> {
+      const row = await one<{ archivos: string; bytes: string }>(
+        'SELECT count(*)::text AS archivos, COALESCE(SUM(size), 0)::text AS bytes FROM media',
+      );
+      return { archivos: Number(row?.archivos ?? 0), bytes: Number(row?.bytes ?? 0) };
     },
   };
 

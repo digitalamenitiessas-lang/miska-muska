@@ -8,6 +8,7 @@ import {
   type Message,
   type Order,
 } from '../api';
+import { sinEtiquetaDeAdjunto } from './Inbox';
 import {
   CHANNEL_LABEL,
   DELIVERY_LABEL,
@@ -150,8 +151,11 @@ function Charla({ mensajes }: { mensajes: Message[] }) {
               otra cara obligaría a volver a entender qué es cada cosa. */}
           {utiles.map((m) => {
             const sale = m.direction === 'out';
-            const foto =
-              m.contentKind === 'image' ? (m.payload as { url?: string } | null)?.url : undefined;
+            const adjunto = m.payload as
+              | { url?: string; filename?: string; mediaError?: string }
+              | null;
+            const foto = m.contentKind === 'image' ? adjunto?.url : undefined;
+            const texto = adjunto?.url ? sinEtiquetaDeAdjunto(m.text) : m.text;
             return (
               <div
                 key={m.id}
@@ -160,9 +164,15 @@ function Charla({ mensajes }: { mensajes: Message[] }) {
                 }`}
               >
                 {foto ? <img className="bubble-foto" src={foto} alt={m.text} /> : null}
-                {!foto && m.contentKind === 'image'
-                  ? '📎 mandó una foto (mirala en la bandeja)'
-                  : m.text || `(${m.contentKind})`}
+                {/* Un PDF o un audio no se abren desde una hoja que se imprime:
+                    queda el link, y la bandeja los reproduce. El texto del
+                    cliente va SIEMPRE: es lo que escribió, no una etiqueta. */}
+                {!foto && adjunto?.url ? (
+                  <a className="bubble-archivo" href={adjunto.url} target="_blank" rel="noreferrer">
+                    📎 {adjunto.filename ?? 'abrir el archivo'}
+                  </a>
+                ) : null}
+                {texto || (adjunto?.url ? '' : `(${m.contentKind})`)}
                 <div className="bubble-foot">
                   <span>{clock(m.createdAt)}</span>
                   <span>

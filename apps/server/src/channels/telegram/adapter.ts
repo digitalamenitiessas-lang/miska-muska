@@ -329,11 +329,25 @@ export class TelegramAdapter implements ChannelAdapter {
     await this.#call('sendChatAction', { chat_id: ref.externalId, action: 'typing' });
   }
 
-  async downloadMedia(mediaId: string): Promise<MediaPayload> {
-    const file = await this.#call<{ file_path: string }>('getFile', { file_id: mediaId });
+  async downloadMedia(mediaId: string, maxBytes?: number): Promise<MediaPayload> {
+    const file = await this.#call<{ file_path: string; file_size?: number }>('getFile', {
+      file_id: mediaId,
+    });
+    // Telegram dice el tamaño acá, antes de mandar un byte: es el lugar barato
+    // para frenar. Igual se vuelve a chequear con el content-length, porque
+    // file_size es opcional en la respuesta.
+    if (maxBytes && file.file_size && file.file_size > maxBytes) {
+      throw new Error(`El archivo pesa ${file.file_size} bytes y el tope es ${maxBytes}.`);
+    }
     const url = `https://api.telegram.org/file/bot${this.#token}/${file.file_path}`;
-    const res = await fetch(url);
+    // Con techo de tiempo: una descarga colgada deja el archivo en memoria y un
+    // lugar de la cola de descargas tomado hasta que alguien reinicie el bot.
+    const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
     if (!res.ok) throw new Error(`No pude descargar el archivo: ${res.status}`);
+    const declarado = Number(res.headers.get('content-length'));
+    if (maxBytes && Number.isFinite(declarado) && declarado > maxBytes) {
+      throw new Error(`El archivo pesa ${declarado} bytes y el tope es ${maxBytes}.`);
+    }
     const buffer = Buffer.from(await res.arrayBuffer());
     return {
       data: buffer,

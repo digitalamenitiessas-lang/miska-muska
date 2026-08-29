@@ -37,6 +37,17 @@ async function main(): Promise<void> {
 
   await channels.startAll((message) => pipeline.handleInbound(message));
 
+  /*
+    Los adjuntos que mandan los clientes vencen. Se limpia al arrancar y una vez
+    por día: sin esto, cada comprobante que entra se queda para siempre en una
+    base que es chica, y el problema recién se ve el día que no entra nada más.
+
+    `unref()` para que un timer de veinticuatro horas no le impida al proceso
+    terminar cuando systemd le manda la señal de apagado.
+  */
+  void pipeline.purgarAdjuntosViejos();
+  setInterval(() => void pipeline.purgarAdjuntosViejos(), 24 * 60 * 60 * 1000).unref();
+
   const health = await channels.healthAll();
   for (const entry of health) {
     bus.emit({ type: 'channel-status', channel: entry.channel, ok: entry.ok, detail: entry.detail });

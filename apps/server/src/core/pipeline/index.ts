@@ -20,7 +20,8 @@
 import type { ChannelAdapter } from '../types/channel.js';
 import type { Repositories } from '../store/repositories.js';
 import { bus, log } from '../events/bus.js';
-import type { ConversationMode } from '../types/domain.js';
+import { config } from '../../config.js';
+import type { Conversation, ConversationMode, StoredMessage } from '../types/domain.js';
 import type {
   ChannelId,
   InboundContent,
@@ -39,6 +40,61 @@ export type AdapterResolver = (channel: ChannelId) => ChannelAdapter | undefined
 
 /** Ventana de espera para juntar mensajes seguidos del mismo cliente. */
 const DEBOUNCE_MS = 1500;
+
+/*
+  Adjuntos entrantes que se bajan y se guardan.
+
+  Están los tres que el local necesita mirar: la foto del comprobante, el PDF de
+  una transferencia, y el audio de quien prefiere hablar antes que escribir. NO
+  están el video ni el sticker, y es a propósito: el sticker no aporta nada y un
+  video de 8 MB por mensaje llena la base rápido, que en esta instalación es un
+  Postgres chico y compartido. El día que haga falta, se agregan acá.
+*/
+type AdjuntoGuardable = Extract<InboundContent, { kind: 'image' | 'document' | 'audio' }>;
+
+const seGuarda = (c: InboundContent): c is AdjuntoGuardable =>
+  c.kind === 'image' || c.kind === 'document' || c.kind === 'audio';
+
+/*
+  Techo por archivo. WhatsApp acepta documentos de hasta 100 MB: sin tope, uno
+  solo entra a memoria y después a una columna de Postgres. Ocho megas cubren
+  cualquier comprobante y cualquier audio largo.
+*/
+const MAX_ADJUNTO_BYTES = 8 * 1024 * 1024;
+
+/*
+  Techo diario por charla. Un comprobante pesa menos de un mega, así que veinte
+  son un día muy cargado de una clienta muy indecisa. Pasado eso, el que manda ya
+  no está mandando comprobantes.
+*/
+const MAX_ADJUNTOS_POR_CHARLA_DIA = 20 * 1024 * 1024;
+
+/*
+  Descargas simultáneas. Cada una tiene el archivo entero en memoria mientras
+  dura, así que el peor caso de RAM es este número por el tope de arriba.
+*/
+const MAX_DESCARGAS_A_LA_VEZ = 3;
+
+/*
+  Tipos que se guardan tal cual. Cualquier otra cosa queda como binario a secas.
+
+  El tipo lo declara quien manda el mensaje, no nosotros, y estos archivos se
+  sirven desde nuestro dominio. Sin esta lista, alguien puede mandar un archivo
+  diciendo que es `text/html` o `image/svg+xml` —un SVG puede traer script— y
+  quedarse con una página ejecutable alojada en el dominio del bot. Guardarlo como
+  binario lo vuelve inofensivo: el navegador lo baja en vez de abrirlo.
+*/
+const TIPOS_CONOCIDOS = new Set([
+  'image/jpeg', 'image/png', 'image/webp', 'image/gif', 'image/heic', 'image/heif',
+  'application/pdf',
+  'audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/aac', 'audio/amr', 'audio/wav', 'audio/webm',
+]);
+
+/** El tipo declarado, si lo conocemos; si no, binario a secas. */
+const tipoSeguro = (declarado: string | undefined): string => {
+  const limpio = (declarado ?? '').split(';')[0].trim().toLowerCase();
+  return TIPOS_CONOCIDOS.has(limpio) ? limpio : 'application/octet-stream';
+};
 
 interface SendOptions {
   author: 'bot' | 'human' | 'system';
@@ -78,6 +134,8 @@ export class Pipeline {
     vuelo no le pise la decisión al operador.
   */
   #devueltaAlBot = new Map<string, number>();
+  /** Descargas de adjuntos en vuelo. Ver MAX_DESCARGAS_A_LA_VEZ. */
+  #bajando = 0;
 
   constructor(repos: Repositories, resolveAdapter: AdapterResolver) {
     this.#repos = repos;
@@ -90,6 +148,12 @@ export class Pipeline {
     if (!result) return;
 
     const { conversation, stored } = result;
+
+    /*
+      Sin await: la descarga no tiene que demorar ni la respuesta del bot ni el
+      200 que el canal está esperando.
+    */
+    void this.#guardarAdjunto(conversation, stored);
     // `payload` viene de una columna jsonb: ya es un objeto, no hay que parsearlo.
     const content = (stored.payload ?? { kind: 'text', text: '' }) as InboundContent;
     const decision = await route({ repos: this.#repos, conversation, content });
@@ -131,6 +195,131 @@ export class Pipeline {
     }
 
     this.#scheduleAgentTurn(conversation.id);
+  }
+
+  /**
+   * Baja el adjunto de un mensaje entrante y lo deja guardado con dirección propia.
+   *
+   * Va SUELTO, después de guardar el mensaje, y no adentro del ingreso. El motivo
+   * es lo que se ve: el mensaje aparece en la bandeja al instante y la foto se
+   * suma un segundo después. Metido en el ingreso, cada comprobante le sumaba la
+   * descarga entera al tiempo que tarda el bot en contestar.
+   *
+   * Que el panel se entere sale gratis: ya recarga la charla con cada evento de
+   * mensaje, así que volver a emitir el mismo mensaje corregido alcanza para que
+   * la imagen aparezca sola, sin tocar nada del lado del navegador.
+   */
+  async #guardarAdjunto(conversation: Conversation, stored: StoredMessage): Promise<void> {
+    const contenido = stored.payload as InboundContent | null;
+    if (!contenido || !seGuarda(contenido) || !contenido.mediaId) return;
+    // Ya lo bajamos antes: un reintento de webhook no vuelve a pagar la descarga.
+    if (contenido.url) return;
+
+    /*
+      Todo lo que sigue termina, sí o sí, dejando escrito cómo terminó: con la
+      dirección del archivo o con el motivo por el que no está. Que quede sin
+      ninguna de las dos cosas es peor que cualquiera de las dos, porque la
+      burbuja dice "bajando el archivo…" y no lo desdice nunca: un comprobante
+      que se perdió se ve igual que uno que está por aparecer, y el operador
+      espera algo que no va a llegar.
+    */
+    const fracaso = async (motivo: string, err?: unknown) => {
+      log('error', `Adjunto no guardado (${conversation.id}): ${motivo}`, err);
+      const marcado = await this.#repos.messages
+        .setPayload(stored.id, { ...contenido, mediaError: motivo })
+        .catch(() => null);
+      if (marcado) {
+        bus.emit({ type: 'message', conversationId: conversation.id, message: marcado });
+      }
+    };
+
+    const adapter = this.#resolve(conversation.channel);
+    if (!adapter?.downloadMedia) {
+      return fracaso(`el canal ${conversation.channel} no sabe bajar adjuntos`);
+    }
+
+    /*
+      Sin PUBLIC_URL la dirección quedaría relativa, y esto lo abre el navegador
+      del panel, que está en otro dominio. Mejor no guardar nada que guardar un
+      link roto.
+    */
+    const base = config.publicUrl.replace(/\/$/, '');
+    if (!base) return fracaso('falta PUBLIC_URL en el servidor');
+
+    /*
+      Techo diario por charla. El tope por archivo limita el tamaño de cada uno,
+      no cuántos: sin esto, cualquiera que tenga el número del local puede mandar
+      archivos hasta llenar la base. Un comprobante honesto pesa menos de un mega,
+      así que el techo solo lo toca quien está haciendo otra cosa.
+    */
+    const yaGuardado = await this.#repos.media.bytesRecientesDe(conversation.id).catch(() => 0);
+    if (yaGuardado >= MAX_ADJUNTOS_POR_CHARLA_DIA) {
+      return fracaso('esta charla ya mandó demasiados archivos hoy');
+    }
+
+    /*
+      Y un techo de descargas simultáneas. Cada una tiene el archivo entero en
+      memoria: sin esto, veinte mensajes con foto a la vez son veinte buffers.
+    */
+    if (this.#bajando >= MAX_DESCARGAS_A_LA_VEZ) {
+      return fracaso('había demasiadas descargas juntas');
+    }
+    this.#bajando += 1;
+
+    try {
+      const archivo = await adapter.downloadMedia(contenido.mediaId, MAX_ADJUNTO_BYTES);
+      if (archivo.data.length > MAX_ADJUNTO_BYTES) {
+        // El canal no declaró el tamaño y resultó ser más grande de lo que entra.
+        throw new Error(`pesa ${archivo.data.length} bytes y el tope es ${MAX_ADJUNTO_BYTES}`);
+      }
+
+      const { id } = await this.#repos.media.insert({
+        mimeType: tipoSeguro(contenido.mimeType ?? archivo.mimeType),
+        filename:
+          ('filename' in contenido ? contenido.filename : undefined) ?? archivo.filename ?? null,
+        bytes: archivo.data,
+        origin: 'cliente',
+        conversationId: conversation.id,
+      });
+
+      const corregido = await this.#repos.messages.setPayload(stored.id, {
+        ...contenido,
+        url: `${base}/media/${id}`,
+      });
+      if (corregido) {
+        bus.emit({ type: 'message', conversationId: conversation.id, message: corregido });
+      }
+      log('info', `Adjunto guardado (${contenido.kind}, ${archivo.data.length} bytes)`);
+    } catch (err) {
+      /*
+        Que no se pueda bajar el archivo no puede tumbar la conversación: el
+        mensaje ya está guardado y el bot ya va a contestar igual.
+      */
+      await fracaso('no se pudo bajar del canal', err);
+    } finally {
+      this.#bajando -= 1;
+    }
+  }
+
+  /**
+   * Borra los adjuntos de clientes que ya vencieron.
+   *
+   * Se llama al arrancar y una vez por día. Vive acá y no en un cron del sistema
+   * porque el bot ya es el único proceso que toca esta base, y un archivo de más
+   * en Postgres es el problema que primero se nota cuando la base es chica.
+   */
+  async purgarAdjuntosViejos(): Promise<void> {
+    try {
+      const borrados = await this.#repos.media.purgarAdjuntosViejos(config.mediaRetencionDias);
+      const peso = await this.#repos.media.pesoTotal();
+      log(
+        'info',
+        `Adjuntos vencidos borrados: ${borrados}. Quedan ${peso.archivos} archivos, ` +
+          `${(peso.bytes / 1024 / 1024).toFixed(1)} MB.`,
+      );
+    } catch (err) {
+      log('error', 'No pude purgar los adjuntos vencidos', err);
+    }
   }
 
   /** Coalesce: si llega otro mensaje, se reinicia el reloj. */

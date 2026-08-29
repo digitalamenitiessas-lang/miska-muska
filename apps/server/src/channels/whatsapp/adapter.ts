@@ -347,12 +347,26 @@ export class WhatsAppAdapter implements ChannelAdapter {
     // Cubierto por `markRead`; sin un message_id no hay a qué asociarlo.
   }
 
-  async downloadMedia(mediaId: string): Promise<MediaPayload> {
-    const meta = await this.#get<{ url: string; mime_type: string }>(mediaId);
+  async downloadMedia(mediaId: string, maxBytes?: number): Promise<MediaPayload> {
+    const meta = await this.#get<{ url: string; mime_type: string; file_size?: number }>(mediaId);
+    /*
+      Un documento de WhatsApp puede pesar 100 MB. La metadata trae el tamaño en
+      la misma llamada que la dirección, así que se decide antes de bajar nada.
+    */
+    if (maxBytes && meta.file_size && meta.file_size > maxBytes) {
+      throw new Error(`El archivo pesa ${meta.file_size} bytes y el tope es ${maxBytes}.`);
+    }
+    // Con techo de tiempo: una descarga colgada deja el archivo en memoria y un
+    // lugar de la cola de descargas tomado hasta que alguien reinicie el bot.
     const res = await fetch(meta.url, {
       headers: { authorization: `Bearer ${config.whatsapp.accessToken}` },
+      signal: AbortSignal.timeout(30_000),
     });
     if (!res.ok) throw new Error(`No pude descargar el archivo: ${res.status}`);
+    const declarado = Number(res.headers.get('content-length'));
+    if (maxBytes && Number.isFinite(declarado) && declarado > maxBytes) {
+      throw new Error(`El archivo pesa ${declarado} bytes y el tope es ${maxBytes}.`);
+    }
     return { data: Buffer.from(await res.arrayBuffer()), mimeType: meta.mime_type };
   }
 
