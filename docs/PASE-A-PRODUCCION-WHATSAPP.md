@@ -21,7 +21,7 @@ Versión en pantalla: https://claude.ai/code/artifact/8a93dd83-36b3-4f6d-a4a5-96
 - [ ] **El celular con el chip del número**, cargado y a mano — le van a llegar varios códigos
 - [ ] Que entre a Facebook con **su perfil de siempre**, no uno nuevo
 - [ ] El sitio web del local, **si abre bien y es HTTPS**. Si está roto, mejor no cargarlo
-- [ ] Del lado del dev: el verify token ya generado en el servidor (ver el final)
+- [ ] Del lado del dev: el verify token ya generado en el servidor (el comando está en **Los comandos**)
 
 > ⚠ **No abrir una cuenta de Facebook nueva "para el negocio".** Los portafolios creados desde perfiles recién nacidos aparecen restringidos seguido. Es folklore de agencias, no doc de Meta, pero el costo de equivocarse son días.
 >
@@ -74,14 +74,14 @@ Configuración del negocio → **"Información del negocio"** → **"Editar"**
 
 **⬛ GUARDAR** — el **identificador de la app** (arriba en el panel)
 
-### 5. La cuenta de WhatsApp real — `DEV` · 10 min
+### 5. La cuenta de WhatsApp — `DEV` · 10 min
 
 19. **"Comenzar a usar la API"** → lleva a **"Configuración de la API"**
-20. En el desplegable de cuenta de WhatsApp va a haber una **de prueba, creada sola**. Clic en **"Crear una cuenta de WhatsApp Business"** para crear **la real**
+20. En el desplegable de cuenta de WhatsApp va a haber una **de prueba, creada sola**. Clic en **"Crear una cuenta de WhatsApp Business"** para crear **la que va a tener el número del local**
 
-> ⚠ **Por qué crearla ahora y no después.** Si más adelante agregás el número real desde esta misma pantalla, Meta **genera otra WABA** y terminás con tres cuentas y ningún ID que sirva.
+> ⚠ **Crearla acá, no después.** Si más adelante agregás el número real desde esta misma pantalla, Meta **genera otra WABA** y terminás con varias cuentas y ningún ID que sirva. La de prueba se ignora: queda ahí y no molesta.
 
-**⬛ GUARDAR** — `WABA_ID_PRUEBA`, `WABA_ID_REAL` y `PHONE_NUMBER_ID_PRUEBA`
+**⬛ GUARDAR** — `WABA_ID` (el de la cuenta nueva, **no** el de la de prueba)
 
 ### 6. Usuario del sistema y token — `DUEÑA` · 20 min
 
@@ -89,12 +89,14 @@ Configuración del negocio → **"Información del negocio"** → **"Editar"**
 22. Nombre: `Bot Miska Muska`, rol **administrador**
 23. Clic sobre el nombre → **"Asignar activos"**
 24. Columna izquierda **"Apps"** → tildar la app → **"Control total"** → activar **"Administrar la app"**
-25. Columna izquierda **"Cuentas de WhatsApp"** → tildar **las dos WABAs** → **"Control total"** → activar **"Administrar cuentas de WhatsApp Business"** → **"Asignar activos"**
+25. Columna izquierda **"Cuentas de WhatsApp"** → tildar **la cuenta del paso 20** → **"Control total"** → activar **"Administrar cuentas de WhatsApp Business"** → **"Asignar activos"**
 26. **"Generar nuevo token"** → elegir la app → permisos **`whatsapp_business_messaging`** y **`whatsapp_business_management`** → expiración **"Nunca"**
 
 > ⚠ **Los DOS activos, no uno.** Con solo la app, el token manda mensajes, todo se ve verde, **y los webhooks nunca llegan**. No da ningún error. Le costó una hora al bot de Turismo.
 >
 > ⚠ **Copiar el token antes de cerrar la ventana.** No se puede volver a ver: si se cierra, hay que generar otro.
+>
+> Este token **no hay que regenerarlo cuando entre el número.** Se emite contra la app y la cuenta de WhatsApp, y el número es hijo de esa cuenta: agregarlo después no lo invalida. Lo único que cambia más adelante es el `PHONE_NUMBER_ID` del `.env`.
 
 **⬛ GUARDAR** — el **token**
 
@@ -110,22 +112,23 @@ Tiene que decir **Caduca: Nunca** y listar los dos permisos. Si dice una fecha, 
 
 ---
 
-## Parte 2 · Dejar el bot andando con el número de prueba
+## Parte 2 · Dejar todo conectado, todavía sin número
 
-Acá se prueba **todo el circuito** sin tocar el celular del local. Si algo está mal, se descubre ahora y no con el número real muerto.
+Va directo el número real, sin pasar por el de prueba. Pero **todo lo que no depende del número se deja probado antes de tocar el celular**: el webhook, las credenciales y la suscripción no necesitan que exista ningún número, y son la mayor parte de lo que puede salir mal por configuración.
 
-29. `DEV` — Cargar en `/opt/miska-muska/.env` el token, el app secret, el `PHONE_NUMBER_ID_PRUEBA` y el verify token. Reiniciar.
+29. `DEV` — Cargar en `/opt/miska-muska/.env` el **token**, el **app secret** y el **verify token**. El `PHONE_NUMBER_ID` se deja vacío por ahora. Reiniciar.
 30. `DEV` — Probar el handshake (comandos abajo): tiene que imprimir `hola`
 31. `DEV` — Webhook: menú **"Configuración"** → sección Webhooks → **"Editar"** → pegar la URL y el verify token → **"Verificar y guardar"** → **"Campos de webhooks" → "Administrar"** → tildar **`messages`**
-32. `DEV` — **Suscribir la app a la WABA de prueba** (comando abajo)
-33. `DEV` — En "Configuración de la API", cargar su celular en **"Para"** → **"Enviar mensaje"**
-34. `DEV` — **Responder** desde ese celular y mirar que entre en el panel y que el bot conteste
+32. `DEV` — **Suscribir la app a la cuenta de WhatsApp** (comando abajo) y confirmarlo con el GET
+33. `DEV` — En el panel de apps, botón **"Modo"**: que esté en **Activo**, no en Desarrollo
 
 > ⚠ **El paso 32 no lo pide la consola y no da error.** Sin él, el webhook figura verificado, el token manda mensajes, y no llega un solo mensaje entrante. Es el que más se olvida.
 >
-> Si en el paso 34 no llega nada al servidor: en el panel de apps, botón **"Modo"** → pasar de **Desarrollo** a **Activo**.
+> Con el `PHONE_NUMBER_ID` vacío, `/health` va a decir `configured:false` y el switch del panel va a estar deshabilitado. **Es lo esperado y no impide nada de esta parte**: el handshake solo mira el verify token, y el adaptador existe aunque el canal no esté completo.
 
-**Salió bien si:** le escribís al número de prueba y el bot contesta. **Recién con esto andando se toca el celular del local.**
+**Salió bien si:** el handshake devuelve `hola`, Meta aceptó la URL, y el GET de `subscribed_apps` lista la app.
+
+> **Lo que queda sin probar hasta después del punto de no retorno** es que entre un mensaje de verdad. Es el precio de ir directo al número real: si algo falla, se falla con el WhatsApp del local ya borrado. Por eso los pasos 29 a 33 se hacen **antes**, y por eso el paso 42 se corre una sola vez y bien.
 
 ---
 
@@ -158,18 +161,16 @@ WhatsApp Business → **Configuración → Cuenta → "Eliminar mi cuenta"**, co
 - **Que no desinstale la app**: eso no borra la cuenta y el número sigue ocupado.
 - **10 intentos de registro cada 72 h.** Pasado eso el número queda bloqueado **3 días**, con la cuenta ya borrada. Si el SMS no llega en 2 minutos: **verificación por voz**, no reintentar SMS.
 
-39. `DUEÑA` — `business.facebook.com` → **"Todas las herramientas" → "Administrador de WhatsApp"** → elegir la **WABA real** → **"Números de teléfono" → "Agregar número de teléfono"**
+39. `DUEÑA` — `business.facebook.com` → **"Todas las herramientas" → "Administrador de WhatsApp"** → elegir **la cuenta del paso 20**, no la de prueba → **"Números de teléfono" → "Agregar número de teléfono"**
 40. `DUEÑA` — **Nombre visible** (`Miska Muska`) y **categoría** del negocio → **"Siguiente"**
 41. `DUEÑA` — El número y la forma de verificación (SMS o llamada) → cargar los 6 dígitos que llegan
 
-**⬛ GUARDAR** — `PHONE_NUMBER_ID_REAL`
+**⬛ GUARDAR** — `PHONE_NUMBER_ID`
 
-42. `DEV` — **Registrar el número con el PIN** (comando abajo). Meta: *"solo puedes registrar un número a través de la API"*
-43. `DEV` — En el `.env`, **reemplazar los IDs de prueba por los reales**. Reiniciar
-44. `DEV` — **Suscribir la app a la WABA real** (el mismo comando del paso 32, con el otro ID)
+42. `DEV` — **Registrar el número con el PIN** (comando abajo). Meta: *"solo puedes registrar un número a través de la API"*. **Una sola vez y bien**: son 10 intentos cada 72 h
+43. `DEV` — Completar `WHATSAPP_PHONE_NUMBER_ID` en el `.env` — es el **único** valor que faltaba. Reiniciar
+44. `DEV` — `/health` tiene que devolver `configured:true, ok:true` con el nombre del local en el detalle
 45. `DEV` — Desde un celular ajeno, escribirle al número del local
-
-> ⚠ **Los IDs de prueba no sirven en producción.** Es lo que más rompe integraciones que "andaban perfecto hace cinco minutos".
 
 ---
 
@@ -178,8 +179,8 @@ WhatsApp Business → **Configuración → Cuenta → "Eliminar mi cuenta"**, co
 ```bash
 export BASE=https://vps.marcorossi.com.ar/miska-bot
 export TOKEN=EAAG...      # token del usuario del sistema
-export PHONE_ID=...       # el de prueba primero, el real después
-export WABA_ID=...        # ídem
+export PHONE_ID=...       # recién existe después del paso 41
+export WABA_ID=...        # el del paso 20
 export VERIFY=...         # el generado en el servidor
 ```
 
@@ -189,7 +190,7 @@ export VERIFY=...         # el generado en el servidor
 curl -s "$BASE/webhooks/whatsapp?hub.mode=subscribe&hub.verify_token=$VERIFY&hub.challenge=hola"
 ```
 
-**Suscribir la app a la WABA** — pasos 32 y 44:
+**Suscribir la app a la cuenta de WhatsApp** — paso 32:
 
 ```bash
 curl -X POST "https://graph.facebook.com/v21.0/$WABA_ID/subscribed_apps" \
