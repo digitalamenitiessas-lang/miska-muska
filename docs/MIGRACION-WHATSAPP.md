@@ -1,5 +1,9 @@
 # Migrar de Telegram a WhatsApp
 
+> Este documento es el **cableado técnico**: qué variables van y cómo se conecta.
+> Para el pase a producción con el número real del local —qué se da de baja, qué se pierde, quién hace
+> cada cosa y en qué orden— está [PASE-A-PRODUCCION-WHATSAPP.md](PASE-A-PRODUCCION-WHATSAPP.md).
+
 El adaptador de WhatsApp ya está escrito (`apps/server/src/channels/whatsapp/adapter.ts`).
 Migrar es configuración: no hay que escribir código.
 
