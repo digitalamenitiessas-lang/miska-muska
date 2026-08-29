@@ -267,7 +267,26 @@ export class Pipeline {
     this.#bajando += 1;
 
     try {
-      const archivo = await adapter.downloadMedia(contenido.mediaId, MAX_ADJUNTO_BYTES);
+      /*
+        Un intento más si el primero se cae.
+
+        No es prolijidad: la dirección del archivo en WhatsApp dura cinco minutos
+        y la de Telegram una hora, así que no hay una segunda oportunidad más
+        tarde. Un tropiezo de red de un segundo pierde el comprobante para
+        siempre, y el cliente ya lo mandó y no lo va a volver a mandar.
+
+        Dos intentos y basta: si el archivo es demasiado grande o el canal dice
+        que no existe, insistir no lo va a arreglar y solo demora el aviso.
+      */
+      let archivo;
+      try {
+        archivo = await adapter.downloadMedia(contenido.mediaId, MAX_ADJUNTO_BYTES);
+      } catch (primerIntento) {
+        log('warn', `Reintentando la descarga del adjunto (${conversation.id})`, primerIntento);
+        await new Promise((listo) => setTimeout(listo, 3000));
+        archivo = await adapter.downloadMedia(contenido.mediaId, MAX_ADJUNTO_BYTES);
+      }
+
       if (archivo.data.length > MAX_ADJUNTO_BYTES) {
         // El canal no declaró el tamaño y resultó ser más grande de lo que entra.
         throw new Error(`pesa ${archivo.data.length} bytes y el tope es ${MAX_ADJUNTO_BYTES}`);
