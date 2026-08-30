@@ -615,6 +615,48 @@ export class Pipeline {
     const contents: OutboundContent[] = turn.bubbles.map((text) => ({ kind: 'text', text }));
 
     /*
+      LA DIRECCIÓN NO SALE ANTES DE LA PLATA.
+
+      Con un pedido que retira un Uber del cliente y sin un peso cobrado, dar la
+      dirección es perder el pedido: el cliente manda el Uber, el chofer llega, y
+      el local le entrega a cambio de nada. Pasó en la primera tarde de uso real.
+
+      La regla está escrita en el prompt, y el prompt igual la salteó: el modelo
+      escribió la dirección a mano, sin usar el mensaje rápido. Por eso además de
+      la prosa hay esta guarda, que no depende de que el modelo se acuerde.
+
+      Reemplaza la burbuja entera y no solo la dirección: recortar la dirección
+      de una frase deja un castellano roto ("nuestra dirección es y ahí lo
+      retira"). La burbuja que iba a dar la dirección se cambia por la que
+      corresponde a esta altura de la conversación, que es pedir la plata.
+    */
+    const abiertos = await repos.orders.list({ conversationId, limit: 5 });
+    const sinCobrar = abiertos.find(
+      (o) =>
+        o.status !== 'cancelado' &&
+        o.total > 0 &&
+        o.paid <= 0 &&
+        (o.deliveryMode === 'uber-cliente' || o.deliveryMode === 'retira-local'),
+    );
+    if (sinCobrar && settings.address.trim()) {
+      const direccion = settings.address.trim().toLowerCase();
+      // La calle sola alcanza para detectarla: el modelo escribe la dirección
+      // completa o los primeros términos, no la ciudad suelta.
+      const calle = direccion.split(',')[0].trim();
+      for (const contenido of contents) {
+        if (contenido.kind !== 'text') continue;
+        if (!contenido.text.toLowerCase().includes(calle)) continue;
+        log(
+          'warn',
+          `Guarda: el bot iba a dar la dirección con el pedido ${sinCobrar.number} sin cobrar.`,
+        );
+        contenido.text =
+          `Te paso el alias y apenas me mandes el comprobante te doy la dirección, así ya ` +
+          `pedís el Uber 🫶🏻\n${settings.transferAlias} (${settings.transferHolder})`;
+      }
+    }
+
+    /*
       Las fotos van después del texto, no antes: primero se explica y después se
       muestra, que es como manda una foto una persona. El degradado por canal se
       ocupa del resto — si algún día hay un canal sin imágenes, ahí se convierte
