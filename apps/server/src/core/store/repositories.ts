@@ -907,6 +907,23 @@ export function createRepositories() {
     },
 
     /** La planilla de inscriptos de un curso, en orden de anotación. */
+    /**
+     * Inscripciones de una charla que todavía esperan la transferencia.
+     *
+     * Existe para lo mismo que la de pedidos: cuando entra una foto, saber si
+     * en esta conversación hay algo esperando un pago que alguien tiene que
+     * mirar. Sin esto, el comprobante de un curso llegaba y nadie se enteraba.
+     */
+    async pendientesDePagoEn(conversationId: string): Promise<CourseSignup[]> {
+      const rows = await q(
+        `SELECT * FROM course_signups
+         WHERE conversation_id = $1 AND status = 'pendiente'
+         ORDER BY created_at DESC`,
+        [conversationId],
+      );
+      return rows.map(toSignup);
+    },
+
     async signups(courseId: string): Promise<CourseSignup[]> {
       const rows = await q(
         'SELECT * FROM course_signups WHERE course_id = $1 ORDER BY created_at',

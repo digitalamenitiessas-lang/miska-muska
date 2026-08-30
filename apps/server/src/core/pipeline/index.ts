@@ -154,6 +154,7 @@ export class Pipeline {
       200 que el canal está esperando.
     */
     void this.#guardarAdjunto(conversation, stored);
+    void this.#avisarSiEsComprobante(conversation, stored);
     // `payload` viene de una columna jsonb: ya es un objeto, no hay que parsearlo.
     const content = (stored.payload ?? { kind: 'text', text: '' }) as InboundContent;
     const decision = await route({ repos: this.#repos, conversation, content });
@@ -195,6 +196,60 @@ export class Pipeline {
     }
 
     this.#scheduleAgentTurn(conversation.id);
+  }
+
+  /**
+   * Marca la charla cuando entra una foto y hay algo esperando que se pague.
+   *
+   * El bot no ve la imagen y no puede decir si eso es de verdad un comprobante
+   * ni si el monto está bien: eso lo mira una persona y lo confirma con el
+   * botón del panel. Pero hasta acá el aviso no existía: la foto entraba, el
+   * bot contestaba "lo estamos chequeando", y la conversación quedaba igual que
+   * cualquier otra. Si nadie la abría, el pedido se quedaba en borrador y la
+   * plata sin registrar — o peor, salía sin que nadie hubiera mirado nada.
+   *
+   * No toca el modo: el bot sigue atendiendo. Lo único que hace es prender la
+   * marca de atención, que es lo que ordena la bandeja.
+   */
+  async #avisarSiEsComprobante(
+    conversation: Conversation,
+    stored: StoredMessage,
+  ): Promise<void> {
+    const contenido = stored.payload as InboundContent | null;
+    // Un audio no es un comprobante, y un sticker menos.
+    if (!contenido || (contenido.kind !== 'image' && contenido.kind !== 'document')) return;
+
+    try {
+      /*
+        Solo se avisa si hay algo esperando plata. Una foto suelta —la torta que
+        vio en Instagram, la referencia de un color— no tiene por qué interrumpir
+        a nadie, y avisar por todas es la forma de que dejen de mirar los avisos.
+      */
+      const [pedidos, inscripciones] = await Promise.all([
+        this.#repos.orders.list({ conversationId: conversation.id, limit: 5 }),
+        this.#repos.courses.pendientesDePagoEn(conversation.id),
+      ]);
+
+      const pedidoSinCobrar = pedidos.find(
+        (p) => p.status !== 'cancelado' && p.total > 0 && p.paid < p.total,
+      );
+      const inscripcion = inscripciones[0];
+      if (!pedidoSinCobrar && !inscripcion) return;
+
+      const motivo = pedidoSinCobrar
+        ? `[comprobante] Mandó una foto y el pedido ${pedidoSinCobrar.number} está sin cobrar ` +
+          `(${pedidoSinCobrar.paid} de ${pedidoSinCobrar.total}). Miralo y confirmá el pago.`
+        : `[comprobante] Mandó una foto y la inscripción de ${inscripcion.fullName} está ` +
+          'pendiente de pago. Miralo y confirmá la inscripción.';
+
+      await this.#repos.conversations.setAttention(conversation.id, true, motivo);
+      const refrescada = await this.#repos.conversations.get(conversation.id);
+      if (refrescada) bus.emit({ type: 'conversation', conversation: refrescada });
+      log('info', `Comprobante a la vista (${conversation.id}): ${motivo}`);
+    } catch (err) {
+      // Que falle el aviso no puede tumbar el mensaje, que ya está guardado.
+      log('error', `No pude marcar el comprobante de ${conversation.id}`, err);
+    }
   }
 
   /**
