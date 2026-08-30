@@ -7,6 +7,7 @@ import {
   setToken,
   type ChannelHealth,
   type Conversation,
+  type Gasto,
   type LiveEvent,
   type Settings,
 } from './api';
@@ -58,6 +59,7 @@ export default function App() {
   const [settings, setSettings] = useState<Settings | null>(null);
   const [channels, setChannels] = useState<ChannelHealth[]>([]);
   const [connected, setConnected] = useState(false);
+  const [gasto, setGasto] = useState<Gasto | null>(null);
   const [authError, setAuthError] = useState(false);
   /** Se incrementa con cada evento del servidor: las vistas lo usan para refrescar. */
   const [tick, setTick] = useState(0);
@@ -78,10 +80,19 @@ export default function App() {
 
   const loadShell = useCallback(async () => {
     try {
-      const [convs, cfg] = await Promise.all([api.conversations(), api.settings()]);
+      const [convs, cfg, gastado] = await Promise.all([
+        api.conversations(),
+        api.settings(),
+        /*
+          El gasto no puede tumbar el panel: si esta consulta falla, la barra de
+          arriba se queda sin el número y todo lo demás sigue andando.
+        */
+        api.gasto().catch(() => null),
+      ]);
       setConversations(convs);
       setSettings(cfg.settings);
       setChannels(cfg.channels);
+      if (gastado) setGasto(gastado);
       setAuthError(false);
     } catch (err) {
       if (String(err).includes('401')) setAuthError(true);
@@ -233,6 +244,7 @@ export default function App() {
             <Pill tone="ok">todo al día</Pill>
           )}
           {settings && !settings.botEnabled ? <Pill tone="warn">bot apagado</Pill> : null}
+          {gasto ? <Gastometro gasto={gasto} onVerMas={() => setView('metricas')} /> : null}
         </header>
 
         {view === 'bandeja' ? (
@@ -272,6 +284,39 @@ export default function App() {
 }
 
 /** El panel está publicado pero se construyó sin saber dónde vive el bot. */
+/**
+ * Lo que va gastando el bot en el modelo, siempre a la vista.
+ *
+ * Vive en la barra de arriba y no en Métricas porque el número que importa no
+ * es el del cierre de mes: es el de hoy, mirado de reojo mientras se trabaja.
+ * Enterrado en una pestaña, nadie lo ve hasta que llega la factura.
+ *
+ * Se muestra el del día, con el del mes al costado en chico. Tocarlo lleva a
+ * Métricas, que es donde está el detalle por día y por conversación.
+ */
+function Gastometro({ gasto, onVerMas }: { gasto: Gasto; onVerMas: () => void }) {
+  /*
+    Cuatro decimales abajo de un centavo: una conversación cuesta fracciones de
+    centavo, y "$0.00" todo el día no dice nada. Arriba de un centavo, dos, que
+    es como se lee la plata.
+  */
+  const plata = (n: number) => (n > 0 && n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`);
+
+  return (
+    <button
+      className="gastometro"
+      onClick={onVerMas}
+      title={`Hoy ${plata(gasto.hoy)} · Este mes ${plata(gasto.mes)} · Histórico ${plata(
+        gasto.historico,
+      )}\nEn dólares, lo que cobra OpenRouter por el modelo. Tocá para ver el detalle.`}
+    >
+      <span className="gastometro-label">Modelo hoy</span>
+      <span className="gastometro-valor">{plata(gasto.hoy)}</span>
+      <span className="gastometro-mes">mes {plata(gasto.mes)}</span>
+    </button>
+  );
+}
+
 function FaltaApiUrl() {
   return (
     <div style={{ display: 'grid', placeItems: 'center', height: '100%', padding: 20 }}>

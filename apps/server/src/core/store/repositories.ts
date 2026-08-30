@@ -1126,6 +1126,39 @@ export function createRepositories() {
       }));
     },
 
+    /**
+     * Lo que va gastando el bot en el modelo: hoy, este mes, y desde siempre.
+     *
+     * Existe aparte de `summary()` porque esto se muestra en la barra de arriba
+     * del panel, o sea en TODAS las pantallas y en cada recarga: tiene que ser
+     * una sola consulta barata y no el paquete entero de métricas, que además
+     * arrastra la serie diaria y los intents.
+     *
+     * Los cortes de día y de mes van en la zona horaria del local, no en UTC:
+     * a las 22 de Tucumán ya es el día siguiente en UTC, y el gasto de la noche
+     * —que es cuando más escriben— aparecería como de mañana.
+     */
+    async gasto(): Promise<{ hoy: number; mes: number; historico: number }> {
+      const row = await one(
+        `SELECT
+           COALESCE(SUM(cost_usd) FILTER (
+             WHERE (created_at AT TIME ZONE $1)::date = (now() AT TIME ZONE $1)::date
+           ), 0) AS hoy,
+           COALESCE(SUM(cost_usd) FILTER (
+             WHERE date_trunc('month', created_at AT TIME ZONE $1)
+                 = date_trunc('month', now() AT TIME ZONE $1)
+           ), 0) AS mes,
+           COALESCE(SUM(cost_usd), 0) AS historico
+         FROM messages`,
+        [TIMEZONE],
+      );
+      return {
+        hoy: Number(row?.hoy ?? 0),
+        mes: Number(row?.mes ?? 0),
+        historico: Number(row?.historico ?? 0),
+      };
+    },
+
     async intents(days = 14): Promise<Array<{ intent: string; count: number }>> {
       const rows = await q<{ intent: string; n: string }>(
         `SELECT intent, COUNT(*) AS n FROM messages

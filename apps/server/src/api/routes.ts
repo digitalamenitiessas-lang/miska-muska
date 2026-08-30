@@ -528,6 +528,13 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
 
   // --- Métricas y ajustes -------------------------------------------------
 
+  /*
+    Lo que va gastando el bot. Va aparte de /api/metrics porque el panel lo pide
+    en cada pantalla para la barra de arriba, y el paquete de métricas trae la
+    serie de catorce días y los intents: sería traer un camión para una bolsa.
+  */
+  app.get('/api/gasto', async () => repos.metrics.gasto());
+
   app.get('/api/metrics', async (req) => {
     const query = req.query as Record<string, string | undefined>;
     const days = query.days ? Number(query.days) : 14;

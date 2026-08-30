@@ -263,6 +263,13 @@ export interface Metrics {
   quickReplies: Array<{ key: string; label: string; usageCount: number }>;
 }
 
+/** Gasto acumulado del modelo, en dólares. */
+export interface Gasto {
+  hoy: number;
+  mes: number;
+  historico: number;
+}
+
 export interface ConversationDetail {
   conversation: Conversation;
   contact: Contact | null;
@@ -421,6 +428,8 @@ export const api = {
   deleteQuickReply: (key: string) => del<{ ok: true }>(`/api/quick-replies/${key}`),
 
   metrics: (days = 14) => get<Metrics>(`/api/metrics?days=${days}`),
+  /** Lo que va gastando el bot en el modelo. Se pide en cada pantalla. */
+  gasto: () => get<Gasto>('/api/gasto'),
   settings: () => get<{ settings: Settings; channels: ChannelHealth[] }>('/api/settings'),
   saveSettings: (body: Partial<Settings>) => patch<Settings>('/api/settings', body),
 };

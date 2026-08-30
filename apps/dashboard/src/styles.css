@@ -1445,3 +1445,61 @@ table.grid tbody tr:hover {
 .link-numero:hover {
   text-decoration: underline;
 }
+
+/* ------------------------------------------------------------- gasto --- */
+
+/*
+  Lo que va gastando el bot, en la barra de arriba.
+
+  Es un dato de fondo, no una alarma: va en gris, del mismo tamaño que el resto
+  de la barra, y solo se despierta al pasarle por encima. Si gritara, en dos
+  días nadie lo miraría.
+*/
+.gastometro {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  background: none;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 4px 12px;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+}
+
+.gastometro:hover {
+  border-color: var(--line-strong);
+  background: var(--cream);
+}
+
+.gastometro:focus-visible {
+  outline: 2px solid var(--mint-deep);
+  outline-offset: 2px;
+}
+
+.gastometro-label {
+  font-family: var(--font-brand);
+  font-size: 10.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+
+.gastometro-valor {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.gastometro-mes {
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-faint);
+}
+
+/* En pantalla angosta la barra ya va justa: queda el número del día. */
+@media (max-width: 860px) {
+  .gastometro-label,
+  .gastometro-mes { display: none; }
+}
