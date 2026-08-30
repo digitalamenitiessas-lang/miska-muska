@@ -1413,17 +1413,37 @@ export async function executeTool(
       }
 
       case 'escalar_a_humano': {
+        const motivo = String(input.motivo ?? 'otro');
         ctx.effects.escalate = {
-          reason: String(input.motivo ?? 'otro'),
+          reason: motivo,
           summary: String(input.resumen ?? '').trim(),
+        };
+        /*
+          CÓMO SE LO CUENTA AL CLIENTE, según de qué se trate.
+
+          "Lo consulto con el equipo" suena a call center, y "no lo puedo autorizar
+          yo" suena directamente a máquina: son las dos frases que el local marcó.
+          En una pastelería no hay un "equipo" abstracto — hay la cocina y hay la
+          encargada, y el cliente entiende perfecto a quién se le está preguntando.
+
+          La plata la decide la encargada; lo que se puede o no se puede hacer con
+          un producto se decide en cocina. Esa es la división real del local y es
+          la que se nombra.
+        */
+        const comoLoCuenta: Record<string, string> = {
+          excepcion_pago: 'que lo estás consultando con la encargada',
+          reclamo: 'que ya se lo pasaste a la encargada y te va a contestar',
+          pedido_grande: 'que lo estás viendo con la encargada para pasarle el presupuesto',
+          pidio_humano: 'que en un rato le escribe alguien del local',
         };
         return {
           ok: true,
           data: {
             escalado: true,
             instruccion:
-              'Ya avisé al local. Cerrá el turno diciéndole con naturalidad que en un rato le ' +
-              'escribe alguien del equipo. No prometas un tiempo exacto.',
+              `Ya avisé al local. Cerrá el turno diciéndole con naturalidad ${
+                comoLoCuenta[motivo] ?? 'que en un rato le escribe alguien del local'
+              }. No digas "el equipo" ni "no lo puedo autorizar yo". No prometas un tiempo exacto.`,
           },
         };
       }

@@ -125,7 +125,7 @@ const CHATS: DemoChat[] = [
       ),
       { dir: 'in', text: 'puedo señar la mitad y el resto cuando retiro?' },
       bot(
-        'Dejame que lo consulto con el local un segundito 🙏🏻 En un rato te escribe alguien del equipo para verlo bien',
+        'Dejame que lo consulto con la encargada un segundito 🙏🏻 En un rato te escribe para verlo bien',
         'escalar_a_humano',
         { handler: 'escalate' },
       ),
