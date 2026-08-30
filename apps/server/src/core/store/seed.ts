@@ -292,28 +292,59 @@ const QUICK_REPLIES = [
 export async function seed(): Promise<void> {
   const repos = createRepositories();
 
-  const existing = new Map((await repos.products.list()).map((p) => [p.id, p]));
-  for (const [index, p] of CATALOG.entries()) {
-    const prev = existing.get(p.id);
-    const product: Omit<Product, 'updatedAt'> = {
-      id: p.id,
-      name: p.name,
-      category: p.category,
-      price: p.price,
-      // Respeta lo que el local haya marcado hoy; si es nuevo, entra disponible.
-      availableToday: prev ? prev.availableToday : true,
-      limitedEdition: p.limitedEdition ?? false,
-      pickupOnly: p.pickupOnly ?? false,
-      notes: p.notes ?? null,
-      // La foto la carga el local desde el panel: no viene en el catálogo semilla,
-      // y si ya la cargó, no se la pisamos al re-seedear.
-      imageUrl: prev?.imageUrl ?? null,
-      sortOrder: index,
-    };
-    await repos.products.upsert(product);
+  /*
+    EL CATÁLOGO ES DEL LOCAL, NO DEL CÓDIGO.
+
+    Esto sembraba los 50 productos en CADA arranque, y de paso pisaba el precio.
+    Respetaba la disponibilidad y la foto —alguien pensó en eso— pero no el
+    precio, así que cada reinicio devolvía la carta a los números escritos acá.
+
+    El reporte fue textual: "le voy cambiando 3 veces el precio a red velvet y se
+    vuelve al precio anterior". No era el panel: era este bucle, corriendo cada
+    vez que se desplegaba algo. Y en una tarde de despliegues, eso es cada diez
+    minutos.
+
+    Ahora la semilla es lo que su nombre dice: arranca una base vacía y no vuelve
+    a opinar. Con productos ya cargados no toca nada, ni precios ni nombres ni
+    orden. Es el mismo criterio que ya se usaba abajo con la campaña de ejemplo.
+
+    La contra, dicha para que nadie se sorprenda: un producto nuevo agregado a
+    CATALOG no aparece solo en una base que ya tiene catálogo. Se carga desde el
+    panel, que para eso tiene el botón. Es el precio de que el local sea dueño de
+    su carta, y es barato.
+  */
+  const catalogoActual = await repos.products.list();
+  if (catalogoActual.length === 0) {
+    for (const [index, p] of CATALOG.entries()) {
+      await repos.products.upsert({
+        id: p.id,
+        name: p.name,
+        category: p.category,
+        price: p.price,
+        availableToday: true,
+        limitedEdition: p.limitedEdition ?? false,
+        pickupOnly: p.pickupOnly ?? false,
+        notes: p.notes ?? null,
+        imageUrl: null,
+        sortOrder: index,
+      } satisfies Omit<Product, 'updatedAt'>);
+    }
+    console.log(`[seed ${nowIso()}] catálogo sembrado: ${CATALOG.length} productos.`);
   }
 
-  for (const q of QUICK_REPLIES) await repos.quickReplies.upsert(q);
+  /*
+    Los mensajes rápidos tenían el mismo problema y por la misma razón: el upsert
+    hace DO UPDATE SET label, body. El local edita esos textos desde el panel —son
+    suyos, los escribieron ellas— y cada reinicio se los devolvía a los del código.
+
+    Acá sí se agregan los que falten, porque una clave nueva en el código suele
+    venir con una función nueva del bot que la usa. Lo que nunca se hace es pisar
+    uno que ya existe.
+  */
+  const clavesExistentes = new Set((await repos.quickReplies.list()).map((q) => q.key));
+  for (const q of QUICK_REPLIES) {
+    if (!clavesExistentes.has(q.key)) await repos.quickReplies.upsert(q);
+  }
 
   // Configuración por defecto si es la primera vez.
   await repos.settings.write({});

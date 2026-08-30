@@ -143,6 +143,34 @@ export function Catalogo({ toast }: { toast: (text: string) => void }) {
     }
   };
 
+  /*
+    Borrar es distinto de apagar, y la diferencia importa: apagado el bot no lo
+    ofrece pero sigue en la carta para volver a prenderlo mañana; borrado no
+    existe más. Por eso pregunta antes, y por eso el botón está en gris y al
+    final de la fila, lejos del interruptor que se usa todos los días.
+
+    Los pedidos viejos no se tocan: guardan el nombre y el precio adentro, así que
+    una comanda de la semana pasada se sigue leyendo igual.
+  */
+  const borrar = async (product: Product) => {
+    const ok = window.confirm(
+      `¿Borrar "${product.name}" del catálogo?
+
+Si es algo que hoy no hay, mejor apagalo ` +
+        'con el interruptor: así vuelve mañana con un clic. Borrarlo no se puede deshacer.',
+    );
+    if (!ok) return;
+    const antes = products;
+    setProducts((prev) => prev.filter((x) => x.id !== product.id));
+    try {
+      await api.deleteProduct(product.id);
+      toast(`${product.name}: borrado del catálogo`);
+    } catch (err) {
+      setProducts(antes);
+      toast(`No pude borrarlo: ${String(err)}`);
+    }
+  };
+
   if (loading) return <Empty glyph="⏳">Cargando el catálogo…</Empty>;
 
   return (
@@ -229,6 +257,13 @@ export function Catalogo({ toast }: { toast: (text: string) => void }) {
                         {money(p.price)}
                       </button>
                     )}
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      title="Borrar del catálogo. Si hoy no hay, mejor apagalo."
+                      onClick={() => void borrar(p)}
+                    >
+                      ✕
+                    </button>
                   </div>
                 ))}
               </div>
