@@ -261,7 +261,7 @@ function Planilla({
                 <thead>
                   <tr>
                     <th>Nombre y apellido</th>
-                    <th>Contacto</th>
+                    <th>De dónde</th>
                     <th>Turno</th>
                     <th style={{ textAlign: 'right' }}>Abonó</th>
                     <th style={{ textAlign: 'right' }}>Saldo</th>
@@ -409,11 +409,14 @@ function AnotarAMano({
             />
           </div>
           <div className="grow">
-            <label className="label">Contacto (cel o Instagram)</label>
+            {/* De dónde salió, no un teléfono: a los del chat se lo pone el bot
+                solo, y acá lo escribe quien la anota. */}
+            <label className="label">De dónde viene</label>
             <input
               type="text"
               value={contactInfo}
               onChange={(e) => setContactInfo(e.target.value)}
+              placeholder="Instagram @… , mostrador, la llamó Vicky…"
               style={{ width: '100%' }}
             />
           </div>

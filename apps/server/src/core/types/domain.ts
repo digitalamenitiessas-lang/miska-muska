@@ -377,7 +377,11 @@ export interface CourseSignup {
   contactId: string | null;
   conversationId: string | null;
   fullName: string;
-  /** Celular o Instagram, como en la planilla: lo que la persona haya dado. */
+  /**
+   * De dónde salió la inscripción. Las del bot lo traen solo, con el canal y el
+   * número o usuario ("WhatsApp · 5493815…"); las que se anotan a mano lo
+   * escribe el equipo ("Instagram @…", "mostrador").
+   */
   contactInfo: string | null;
   total: number;
   paid: number;

@@ -92,6 +92,31 @@ const CATEGORIES: ProductCategory[] = [
   'tabletas', 'saladito', 'tortas', 'desayunos', 'cursos', 'merch',
 ];
 
+/*
+  Cómo se escribe cada canal en la planilla de inscriptos. Es la misma lista que
+  el panel usa para las etiquetas: el día que se enchufe Instagram, se agrega acá
+  y en `ui.tsx`, y la planilla ya lo dice sola.
+*/
+const CANAL_EN_LA_PLANILLA: Record<string, string> = {
+  telegram: 'Telegram',
+  whatsapp: 'WhatsApp',
+};
+
+/**
+ * De dónde viene la inscripción, para la columna de la planilla.
+ *
+ * No es algo que haya que pedirle a la persona: ya está escribiendo desde su
+ * cuenta, así que preguntarle el celular es hacerle tipear un dato que el
+ * sistema ya tiene —y que puede tipear mal—. Lo que el local necesita para
+ * volver a encontrarla es la FUENTE: hoy siempre WhatsApp, con el número
+ * adelante, y el día que entre otro canal, ese canal con su usuario.
+ */
+const origenDeLaInscripcion = (contact: Contact): string => {
+  const canal = CANAL_EN_LA_PLANILLA[contact.channel] ?? contact.channel;
+  const quien = contact.username ? `@${contact.username}` : (contact.phone ?? contact.externalId);
+  return quien ? `${canal} · ${quien}` : canal;
+};
+
 const tool = (
   name: string,
   description: string,
@@ -242,7 +267,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
   tool(
     'inscribir_a_curso',
     'Anota a una persona en un turno de un curso. Llamala cuando ya te haya dicho a qué curso ' +
-      'quiere ir, en qué turno, su nombre y apellido, y un contacto (celular o Instagram). ' +
+      'quiere ir, en qué turno, y su nombre y apellido. NO le pidas un teléfono ni un usuario ' +
+      'de Instagram: te está escribiendo desde su cuenta, y la planilla anota sola por dónde ' +
+      'llegó. Lo único que le falta preguntarle es el nombre y apellido. ' +
       'Queda anotada como PENDIENTE: el lugar se reserva recién con el pago total por ' +
       'transferencia, así que después de anotarla pasale el alias y pedile el comprobante. ' +
       'No le digas que ya está inscripta: eso lo confirma el local cuando ve la transferencia.',
@@ -253,10 +280,6 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         description: 'Id del turno elegido. Si el curso tiene un solo turno, igual mandalo.',
       },
       nombre_apellido: { type: 'string', description: 'Nombre y apellido de quien se anota.' },
-      contacto: {
-        type: 'string',
-        description: 'Celular o usuario de Instagram, como lo haya dado.',
-      },
     },
     ['curso_id', 'turno_id', 'nombre_apellido'],
   ),
@@ -1107,7 +1130,6 @@ export async function executeTool(
         const cursoId = String(input.curso_id ?? '').trim();
         const turnoId = String(input.turno_id ?? '').trim();
         const nombre = String(input.nombre_apellido ?? '').trim();
-        const contacto = typeof input.contacto === 'string' ? input.contacto.trim() : '';
 
         const curso = cursoId ? await repos.courses.get(cursoId) : null;
         if (!curso || !curso.active) {
@@ -1154,7 +1176,7 @@ export async function executeTool(
           contactId: ctx.contact.id,
           conversationId: ctx.conversation.id,
           fullName: nombre,
-          contactInfo: contacto || ctx.contact.phone,
+          contactInfo: origenDeLaInscripcion(ctx.contact),
           total: curso.price,
           paid: 0,
           status: 'pendiente',

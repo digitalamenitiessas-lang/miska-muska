@@ -480,7 +480,7 @@ export function ComandaInscripcion({
 
       <Bloque titulo="Quién">
         <Dato label="Nombre y apellido">{inscripto.fullName}</Dato>
-        <Dato label="Contacto que dejó">{inscripto.contactInfo}</Dato>
+        <Dato label="De dónde viene">{inscripto.contactInfo}</Dato>
         <Persona contacto={detalle?.contact ?? null} />
         <Dato label="Aclaraciones">{inscripto.notes}</Dato>
       </Bloque>
