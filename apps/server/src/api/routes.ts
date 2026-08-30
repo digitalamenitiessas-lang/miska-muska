@@ -9,6 +9,7 @@ import { bus } from '../core/events/bus.js';
 import { config } from '../config.js';
 import { matchQuickReplies } from '../core/pipeline/router.js';
 import { renderQuickReply } from '../core/agent/persona.js';
+import { canonizarCategoria } from '../core/policies/rules.js';
 import type { ConversationMode, OrderStatus, Product, ProductCategory } from '../core/types/domain.js';
 import type { ChannelId } from '../core/types/message.js';
 
@@ -194,10 +195,20 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
     const current = await repos.products.get(id);
     if (!current) return reply.code(404).send({ error: 'No existe' });
     const body = req.body as Partial<Product>;
+    /*
+      Si viene categoría, pasa por lo mismo que el alta: mover un producto a una
+      categoría nueva la crea, y moverlo a una que ya existe escrita distinto no
+      abre un grupo duplicado.
+    */
+    const category =
+      body.category === undefined
+        ? current.category
+        : canonizarCategoria(String(body.category), await repos.products.categories());
+    if (!category) return reply.code(400).send({ error: 'La categoría no puede quedar vacía' });
     return repos.products.upsert({
       id: current.id,
       name: body.name ?? current.name,
-      category: body.category ?? current.category,
+      category,
       price: body.price ?? current.price,
       availableToday: body.availableToday ?? current.availableToday,
       limitedEdition: body.limitedEdition ?? current.limitedEdition,
@@ -209,12 +220,25 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
     });
   });
 
-  app.post('/api/products', async (req) => {
+  /**
+   * Alta de un producto, y con ella el alta de categorías.
+   *
+   * No hay endpoint para crear una categoría sola: la categoría se crea con el
+   * primer producto que la usa. Es lo que el local hace de verdad —"esto es un
+   * pan, y pan no teníamos"— y de paso no quedan categorías vacías ocupando
+   * lugar en la pantalla de la mañana.
+   */
+  app.post('/api/products', async (req, reply) => {
     const body = req.body as Partial<Product> & {
       name: string;
       category: ProductCategory;
       price: number;
     };
+    const category = canonizarCategoria(
+      String(body.category ?? ''),
+      await repos.products.categories(),
+    );
+    if (!category) return reply.code(400).send({ error: 'Falta la categoría del producto' });
     const id =
       body.id ??
       body.name
@@ -226,7 +250,7 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
     return repos.products.upsert({
       id,
       name: body.name,
-      category: body.category,
+      category,
       price: body.price,
       availableToday: body.availableToday ?? true,
       limitedEdition: body.limitedEdition ?? false,

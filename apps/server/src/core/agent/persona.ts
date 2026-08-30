@@ -24,7 +24,7 @@ import type {
   Product,
   QuickReply,
 } from '../types/domain.js';
-import { POLICY_PROSE, operationalFacts } from '../policies/rules.js';
+import { claveDeCategoria, POLICY_PROSE, operationalFacts } from '../policies/rules.js';
 import { localToday } from '../store/db.js';
 import { normalizeWriting } from '../policies/writing.js';
 
@@ -485,8 +485,16 @@ export function renderQuickReply(
   settings: BotSettings,
   products: Product[],
 ): string {
+  /*
+    Por clave y no por igualdad de texto: las categorías son texto libre desde que
+    el panel las puede crear, así que la de las cookies puede terminar escrita
+    "Cookies". Estos placeholders nombran categorías a mano, y si no coincidieran
+    saldrían vacíos sin que nadie se entere.
+  */
   const available = (category: string) =>
-    products.filter((p) => p.availableToday && p.category === category);
+    products.filter(
+      (p) => p.availableToday && claveDeCategoria(p.category) === claveDeCategoria(category),
+    );
 
   const cookiesHoy = available('cookies')
     .filter((p) => !p.limitedEdition)
@@ -503,7 +511,9 @@ export function renderQuickReply(
     prompt le prohíbe al modelo decir un precio de memoria; esto lo hacía en su
     lugar. Si no hay ninguna mini en el catálogo, el renglón no se rinde.
   */
-  const precioMiniTorta = products.find((p) => p.category === 'mini-tortas')?.price ?? null;
+  const precioMiniTorta =
+    products.find((p) => claveDeCategoria(p.category) === claveDeCategoria('mini-tortas'))?.price ??
+    null;
 
   /*
     Solo entran los valores que tienen contenido. Un valor en blanco NO se

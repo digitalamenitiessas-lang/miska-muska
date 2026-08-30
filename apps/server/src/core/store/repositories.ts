@@ -560,6 +560,19 @@ export function createRepositories() {
       return rows.map(toProduct);
     },
 
+    /**
+     * Las categorías que hoy existen, tal cual están escritas.
+     *
+     * No hay tabla de categorías: una categoría existe porque hay un producto
+     * en ella, y deja de existir cuando se va el último. Eso evita el problema
+     * de las categorías huérfanas, y hace que esta consulta sea la única fuente
+     * de verdad sobre cuáles hay.
+     */
+    async categories(): Promise<string[]> {
+      const rows = await q('SELECT DISTINCT category FROM products ORDER BY category');
+      return rows.map((r) => String(r.category));
+    },
+
     async search(query: string, onlyAvailable = true): Promise<Product[]> {
       const rows = await q(
         `SELECT * FROM products

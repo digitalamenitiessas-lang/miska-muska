@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { api, type Product } from '../api';
-import { CATEGORY_LABEL, Empty, Pill, Switch, money } from '../ui';
+import { CATEGORY_LABEL, claveCategoria, Empty, Pill, Switch, money } from '../ui';
 
-/** Las mismas que acepta el servidor, en el orden en que las piensa el local. */
+/**
+ * Las que trae el catálogo de fábrica, en el orden en que las piensa el local.
+ *
+ * No son las únicas: el local crea las que necesite al cargar un producto. Estas
+ * están escritas para que aparezcan en la lista incluso el día que no haya
+ * ningún producto cargado en ellas.
+ */
 const CATEGORIAS = [
   'cursos', 'cookies', 'muffins', 'mini-tortas', 'cuadrados', 'alfajores',
   'tabletas', 'saladito', 'tortas', 'desayunos', 'merch',
 ];
+
+/** Valor del renglón "categoría nueva" del selector. No es una categoría. */
+const NUEVA = '__nueva__';
 
 /**
  * Esta pantalla es la más usada del día: a la mañana el local marca qué salió del
@@ -46,6 +55,21 @@ export function Catalogo({ toast }: { toast: (text: string) => void }) {
 
   const availableCount = products.filter((p) => p.availableToday).length;
 
+  /*
+    Las categorías que se pueden elegir al cargar algo: las de fábrica más las que
+    el local haya creado. Salen del propio catálogo, así que una categoría nueva
+    aparece en la lista sola en cuanto tiene un producto adentro, sin pedirle nada
+    más al servidor.
+  */
+  const categorias = useMemo(() => {
+    const porClave = new Map(CATEGORIAS.map((c) => [claveCategoria(c), c]));
+    for (const p of products) {
+      const clave = claveCategoria(p.category);
+      if (!porClave.has(clave)) porClave.set(clave, p.category);
+    }
+    return [...porClave.values()];
+  }, [products]);
+
   const toggle = async (product: Product, available: boolean) => {
     setProducts((prev) =>
       prev.map((p) => (p.id === product.id ? { ...p, availableToday: available } : p)),
@@ -75,9 +99,19 @@ export function Catalogo({ toast }: { toast: (text: string) => void }) {
   const crear = async (body: Partial<Product>) => {
     try {
       const nuevo = await api.createProduct(body);
+      /*
+        La categoría que devuelve el servidor es la definitiva: si lo que se
+        escribió era una que ya existía con otra ortografía, vuelve la que existe.
+        Por eso el aviso se decide con la respuesta y no con lo que se tipeó.
+      */
+      const esNueva = !categorias.some((c) => claveCategoria(c) === claveCategoria(nuevo.category));
       setProducts((prev) => [...prev, nuevo]);
       setCreando(false);
-      toast(`${nuevo.name} cargado. Ahora podés ponerle la foto.`);
+      toast(
+        esNueva
+          ? `${nuevo.name} cargado, y con él la categoría ${CATEGORY_LABEL[nuevo.category] ?? nuevo.category}. Ahora podés ponerle la foto.`
+          : `${nuevo.name} cargado. Ahora podés ponerle la foto.`,
+      );
       // Se abre la foto en el mismo movimiento: es el paso que sigue siempre.
       setEditandoFoto(nuevo.id);
     } catch (err) {
@@ -213,7 +247,11 @@ export function Catalogo({ toast }: { toast: (text: string) => void }) {
       ) : null}
 
       {creando ? (
-        <NuevoDialogo onCerrar={() => setCreando(false)} onCrear={(body) => void crear(body)} />
+        <NuevoDialogo
+          categorias={categorias}
+          onCerrar={() => setCreando(false)}
+          onCrear={(body) => void crear(body)}
+        />
       ) : null}
 
       <p className="small muted" style={{ marginTop: 14 }}>
@@ -376,20 +414,45 @@ function FotoDialogo({
  * Faltaba del todo: el panel dejaba marcar disponibilidad y editar precios, pero
  * no había forma de cargar algo nuevo. Un curso presencial —que cambia cada
  * semana— no se podía dar de alta sin tocar la base a mano.
+ *
+ * Y las categorías se crean acá, en el mismo formulario, porque así es como
+ * aparecen de verdad: el local no se sienta a diseñar categorías, se encuentra
+ * con que lo que va a cargar no entra en ninguna. Antes la lista era fija y eso
+ * significaba esperar un despliegue para vender un pan.
  */
 function NuevoDialogo({
+  categorias,
   onCerrar,
   onCrear,
 }: {
+  categorias: string[];
   onCerrar: () => void;
   onCrear: (body: Partial<Product>) => void;
 }) {
   const [name, setName] = useState('');
-  const [category, setCategory] = useState('cursos');
+  const [category, setCategory] = useState(categorias[0] ?? 'cursos');
+  /** Nombre de la categoría que se está creando, si se eligió crear una. */
+  const [nueva, setNueva] = useState('');
   const [price, setPrice] = useState('');
   const [notes, setNotes] = useState('');
   const precio = Number(price);
-  const listo = name.trim().length > 1 && Number.isFinite(precio) && precio > 0;
+
+  const creandoCategoria = category === NUEVA;
+  const categoriaFinal = creandoCategoria ? nueva.replace(/\s+/g, ' ').trim() : category;
+  /*
+    Si lo escrito es una categoría que ya existe con otra ortografía, el servidor
+    lo va a mandar ahí adentro. Se avisa antes de guardar: la sorpresa sería
+    apretar Crear y ver el producto aparecer en un grupo que no es el que se
+    estaba creando.
+  */
+  const yaExiste = creandoCategoria
+    ? categorias.find((c) => claveCategoria(c) === claveCategoria(categoriaFinal))
+    : undefined;
+  const listo =
+    name.trim().length > 1 &&
+    categoriaFinal.length > 1 &&
+    Number.isFinite(precio) &&
+    precio > 0;
 
   return (
     <div className="foto-fondo" onClick={onCerrar}>
@@ -415,11 +478,12 @@ function NuevoDialogo({
                 onChange={(e) => setCategory(e.target.value)}
                 style={{ width: '100%' }}
               >
-                {CATEGORIAS.map((c) => (
+                {categorias.map((c) => (
                   <option key={c} value={c}>
                     {CATEGORY_LABEL[c] ?? c}
                   </option>
                 ))}
+                <option value={NUEVA}>+ Categoría nueva…</option>
               </select>
             </div>
             <div>
@@ -433,6 +497,27 @@ function NuevoDialogo({
               />
             </div>
           </div>
+
+          {creandoCategoria ? (
+            <div style={{ marginTop: 10 }}>
+              <label className="label">Nombre de la categoría nueva</label>
+              <input
+                type="text"
+                autoFocus
+                maxLength={40}
+                value={nueva}
+                onChange={(e) => setNueva(e.target.value)}
+                placeholder="Panes"
+                style={{ width: '100%' }}
+              />
+              <p className="small muted">
+                {yaExiste
+                  ? `Eso ya es «${CATEGORY_LABEL[yaExiste] ?? yaExiste}»: el producto va a entrar ahí.`
+                  : 'Se escribe como querés verla en el panel. Se crea junto con este producto, y ' +
+                    'el bot ya la usa para agrupar cuando le preguntan qué hay.'}
+              </p>
+            </div>
+          ) : null}
 
           <label className="label" style={{ marginTop: 10 }}>
             Nota para el bot (opcional)
@@ -456,7 +541,7 @@ function NuevoDialogo({
               onClick={() =>
                 onCrear({
                   name: name.trim(),
-                  category,
+                  category: categoriaFinal,
                   price: precio,
                   notes: notes.trim() || null,
                 })

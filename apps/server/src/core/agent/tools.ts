@@ -16,9 +16,9 @@ import type {
   Order,
   PendingReview,
   Product,
-  ProductCategory,
 } from '../types/domain.js';
 import {
+  claveDeCategoria,
   itemsQueTocanLaConsulta,
   normalizarNombre,
   notaDeUsoMensajeRapido,
@@ -87,11 +87,6 @@ const FOTO_VALIDA = /^https:\/\/\S+$/i;
 /** Cuánto tiempo el pedido de esta charla sigue siendo "el pedido de esta charla". */
 const PEDIDO_ABIERTO_MS = 24 * 60 * 60 * 1000;
 
-const CATEGORIES: ProductCategory[] = [
-  'cookies', 'muffins', 'mini-tortas', 'cuadrados', 'alfajores',
-  'tabletas', 'saladito', 'tortas', 'desayunos', 'cursos', 'merch',
-];
-
 /*
   Cómo se escribe cada canal en la planilla de inscriptos. Es la misma lista que
   el panel usa para las etiquetas: el día que se enchufe Instagram, se agrega acá
@@ -141,7 +136,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         type: 'string',
         description: 'Texto libre a buscar en el nombre del producto, ej. "kinder", "brownie".',
       },
-      categoria: { type: 'string', enum: CATEGORIES, description: 'Filtra por categoría.' },
+      categoria: {
+        type: 'string',
+        description:
+          'Filtra por categoría, escrita como figura en DISPONIBLE HOY (ej. "cookies", ' +
+          '"mini-tortas"). Si no estás seguro de que la categoría exista, no la mandes y ' +
+          'buscá por nombre con `consulta`.',
+      },
       incluir_no_disponibles: {
         type: 'boolean',
         description: 'true para ver también lo agotado (útil para saber si existe pero se acabó).',
@@ -153,7 +154,14 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     'disponibilidad_hoy',
     'Lista todo lo que está disponible hoy, agrupado por categoría, con precios. ' +
       'Usala cuando pregunten "qué cookies hay", "qué minis tenés", "qué hay hoy".',
-    { categoria: { type: 'string', enum: CATEGORIES, description: 'Opcional: una sola categoría.' } },
+    {
+      categoria: {
+        type: 'string',
+        description:
+          'Opcional: una sola categoría, escrita como figura en DISPONIBLE HOY. Sin esto, ' +
+          'devuelve todas.',
+      },
+    },
   ),
 
   tool(
@@ -430,6 +438,37 @@ const orderView = (o: Order) => ({
 const pendienteDe = (c: Conversation): PendingReview | null =>
   c.pendingReview && !c.pendingReview.resueltoEn ? c.pendingReview : null;
 
+/**
+ * La categoría del catálogo que el modelo quiso nombrar.
+ *
+ * Las categorías dejaron de ser una lista cerrada (el panel crea las que
+ * necesite), así que el esquema de la herramienta ya no puede enumerarlas y el
+ * filtro lo tiene que resolver esto. Se resuelve flojo —sin mayúsculas, sin
+ * acentos, sin guiones— porque el modelo lee "Mini tortas" en el prompt y bien
+ * puede mandar eso donde la base dice 'mini-tortas'.
+ *
+ * Si no resuelve, devuelve las que hay en vez de filtrar por una que no existe:
+ * un filtro que no existe da cero resultados, y cero resultados se le cuenta al
+ * cliente como "no tenemos", que es mentira.
+ */
+async function resolverCategoria(
+  escrita: string,
+  repos: Repositories,
+): Promise<{ category: string } | { categorias: string[] }> {
+  const existentes = await repos.products.categories();
+  const clave = claveDeCategoria(escrita);
+  const encontrada = existentes.find((c) => claveDeCategoria(c) === clave);
+  return encontrada ? { category: encontrada } : { categorias: existentes };
+}
+
+const noExisteLaCategoria = (escrita: string, categorias: string[]): ToolResult => ({
+  ok: false,
+  error:
+    `No hay ninguna categoría "${escrita}" en el catálogo. Las que hay son: ` +
+    `${categorias.join(', ')}. Si buscabas un producto puntual, usá \`buscar_catalogo\` ` +
+    'con `consulta` y su nombre.',
+});
+
 export async function executeTool(
   name: string,
   input: Record<string, unknown>,
@@ -441,8 +480,14 @@ export async function executeTool(
     switch (name) {
       case 'buscar_catalogo': {
         const consulta = typeof input.consulta === 'string' ? input.consulta : '';
-        const categoria = input.categoria as ProductCategory | undefined;
+        const pedida = typeof input.categoria === 'string' ? input.categoria.trim() : '';
         const onlyAvailable = input.incluir_no_disponibles !== true;
+        let categoria: string | undefined;
+        if (pedida) {
+          const resuelta = await resolverCategoria(pedida, repos);
+          if (!('category' in resuelta)) return noExisteLaCategoria(pedida, resuelta.categorias);
+          categoria = resuelta.category;
+        }
         let found: Product[];
         if (consulta) found = await repos.products.search(consulta, onlyAvailable);
         else found = await repos.products.list({ category: categoria, onlyAvailable });
@@ -451,7 +496,13 @@ export async function executeTool(
       }
 
       case 'disponibilidad_hoy': {
-        const categoria = input.categoria as ProductCategory | undefined;
+        const pedida = typeof input.categoria === 'string' ? input.categoria.trim() : '';
+        let categoria: string | undefined;
+        if (pedida) {
+          const resuelta = await resolverCategoria(pedida, repos);
+          if (!('category' in resuelta)) return noExisteLaCategoria(pedida, resuelta.categorias);
+          categoria = resuelta.category;
+        }
         const products = await repos.products.list({ category: categoria, onlyAvailable: true });
         const grouped: Record<string, Array<{ nombre: string; precio: number; id: string }>> = {};
         for (const p of products) {

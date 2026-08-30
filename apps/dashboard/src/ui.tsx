@@ -117,6 +117,25 @@ export const CHANNEL_LABEL: Record<string, string> = {
   whatsapp: 'WhatsApp',
 };
 
+/**
+ * Con qué comparar dos categorías para saber si son la misma.
+ *
+ * Las que vienen de fábrica están escritas como slug ('mini-tortas') y las que
+ * carga el local están escritas como se leen ("Mini tortas"). Sirve para no
+ * ofrecerle crear una categoría que ya existe con otra ortografía: el servidor
+ * las une igual, pero el panel tiene que poder decirlo ANTES de guardar.
+ *
+ * Es el gemelo de `claveDeCategoria` del servidor, y tiene que dar lo mismo.
+ */
+export const claveCategoria = (value: string): string =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+/** Cómo se muestra una categoría. Las que crea el local ya vienen legibles. */
 export const CATEGORY_LABEL: Record<string, string> = {
   cookies: 'Cookies',
   muffins: 'Muffins',

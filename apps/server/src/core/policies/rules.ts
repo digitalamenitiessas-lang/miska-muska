@@ -13,7 +13,7 @@
  */
 
 import { localHour, localToday } from '../store/db.js';
-import type { BotSettings, Order, Product, ProductCategory } from '../types/domain.js';
+import type { BotSettings, CategoriaDeFabrica, Order, Product } from '../types/domain.js';
 
 export const POLICY_PROSE = `
 REGLAS DURAS (no se negocian, ni aunque el cliente insista)
@@ -263,6 +263,64 @@ export function normalizarNombre(value: string): string {
     .trim();
 }
 
+// ---------------------------------------------------------------------------
+// Categorías del catálogo
+// ---------------------------------------------------------------------------
+
+/**
+ * Las categorías con las que arrancó el catálogo, en tiempo de ejecución.
+ *
+ * Gemelo de `CategoriaDeFabrica` en `types/domain.ts`: si se agrega una allá, va
+ * también acá. No son las únicas posibles —el panel crea las que necesite— pero
+ * sí las que el código nombra por su nombre, así que una escrita a mano
+ * ("Desayunos", "Mini Tortas") tiene que caer sobre la de fábrica y no al lado.
+ */
+export const CATEGORIAS_DE_FABRICA: CategoriaDeFabrica[] = [
+  'cookies', 'muffins', 'mini-tortas', 'cuadrados', 'alfajores',
+  'tabletas', 'saladito', 'tortas', 'desayunos', 'cursos', 'merch',
+];
+
+/** Largo máximo de una categoría: es el título de una tarjeta, no una descripción. */
+const CATEGORIA_MAX = 40;
+
+/**
+ * Deja una categoría escrita como se va a guardar: un solo espacio entre
+ * palabras, sin espacios ni saltos de línea de sobra, y recortada.
+ *
+ * Devuelve '' si no quedó nada. Eso es un error del que la pidió, no una
+ * categoría vacía para guardar.
+ */
+export function normalizarCategoria(value: string): string {
+  return value.replace(/\s+/gu, ' ').trim().slice(0, CATEGORIA_MAX).trim();
+}
+
+/**
+ * Con qué comparar dos categorías para saber si son la misma.
+ *
+ * Las de fábrica están escritas como slug ('mini-tortas') y las que carga el
+ * local están escritas como se leen ("Mini tortas"). Para el negocio son la
+ * misma cosa, así que se comparan sin mayúsculas, sin acentos y sin guiones.
+ */
+export const claveDeCategoria = (value: string): string => normalizarNombre(value);
+
+/**
+ * La categoría con la que finalmente se guarda un producto.
+ *
+ * Si lo que se escribió es una categoría que ya existe —escrita distinto—,
+ * devuelve la que ya existe: sin esto, "Cookies" cargada a mano abría un grupo
+ * nuevo al lado de 'cookies', con la mitad de los productos en cada uno. Si no
+ * coincide con ninguna, devuelve lo escrito, y esa ES la categoría nueva.
+ *
+ * Devuelve '' si no había nada que guardar.
+ */
+export function canonizarCategoria(escrita: string, existentes: string[]): string {
+  const limpia = normalizarCategoria(escrita);
+  if (!limpia) return '';
+  const clave = claveDeCategoria(limpia);
+  const conocidas = [...CATEGORIAS_DE_FABRICA, ...existentes];
+  return conocidas.find((c) => claveDeCategoria(c) === clave) ?? limpia;
+}
+
 /*
   Categorías que van SIEMPRE con nuestro cadete. El envío de un desayuno es parte
   del regalo: llegamos nosotros, avisamos y lo entregamos. Un Uber lo rompe (el
@@ -270,8 +328,14 @@ export function normalizarNombre(value: string): string {
   quién hablar). Los cuatro boxes de regalo están en la categoría 'desayunos' del
   catálogo, así que la categoría alcanza. El box de cookies NO está acá: es
   categoría 'cookies' y sale en Uber sin problema, como siempre.
+
+  Se compara por clave y no por igualdad de texto porque las categorías son texto
+  libre: un "Desayunos" cargado desde el panel tiene que quedar igual de
+  bloqueado para el Uber que el 'desayunos' original. `canonizarCategoria` ya
+  hace que eso no pase al cargar, pero esta regla cuesta un regalo si falla, así
+  que no depende de que la otra haya funcionado.
 */
-const ENVIO_PROPIO_SIEMPRE: ProductCategory[] = ['desayunos'];
+const ENVIO_PROPIO_SIEMPRE = new Set(['desayunos'].map(claveDeCategoria));
 
 /*
   Red de contención para los ítems que llegan sin categoría, que después de la
@@ -337,7 +401,7 @@ function itemsDeEnvioPropio(
   return draft.items.filter((item) => {
     const product = item.productId ? productsById.get(item.productId) : undefined;
     return product
-      ? ENVIO_PROPIO_SIEMPRE.includes(product.category)
+      ? ENVIO_PROPIO_SIEMPRE.has(claveDeCategoria(product.category))
       : NOMBRA_ENVIO_PROPIO.test(normalizarNombre(item.description));
   });
 }

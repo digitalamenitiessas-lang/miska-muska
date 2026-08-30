@@ -118,7 +118,15 @@ export interface StoredMessage {
 // Catálogo
 // ---------------------------------------------------------------------------
 
-export type ProductCategory =
+/**
+ * Las categorías con las que arrancó el catálogo. Siguen escritas una por una
+ * porque hay código que las nombra: la regla de envío propio mira 'desayunos', y
+ * las variables de los mensajes rápidos miran 'cookies' y 'mini-tortas'.
+ *
+ * El gemelo en tiempo de ejecución está en `policies/rules.ts`
+ * (`CATEGORIAS_DE_FABRICA`): esto es un tipo y no existe después de compilar.
+ */
+export type CategoriaDeFabrica =
   | 'cookies'
   | 'muffins'
   | 'mini-tortas'
@@ -130,6 +138,20 @@ export type ProductCategory =
   | 'desayunos'
   | 'cursos'
   | 'merch';
+
+/**
+ * Categoría del catálogo. Texto libre, NO una lista cerrada.
+ *
+ * Era cerrada, y eso significaba que una categoría nueva —"panes", "tartas
+ * saladas", lo que el local decida empezar a vender— pedía tocar el código y
+ * volver a desplegar. Ahora se crea desde el panel, al cargar el primer producto
+ * que la usa: la columna en la base siempre fue `text`, así que lo único que
+ * sobraba era el candado.
+ *
+ * `(string & {})` y no `string` pelado para no perder el autocompletado ni el
+ * chequeo de tipeo sobre las de fábrica.
+ */
+export type ProductCategory = CategoriaDeFabrica | (string & {});
 
 export interface Product {
   id: string;

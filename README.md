@@ -213,7 +213,7 @@ en cada turno.
 | --- | --- |
 | **Bandeja** | Conversaciones en vivo. Tomar el chat (el bot calla), responder a mano, ver por cada mensaje qué herramienta usó, cuánto tardó, qué modelo respondió y cuánto costó. |
 | **Pedidos** | Los que tomó el bot y los cargados a mano. Un botón marca "llegó el comprobante" y confirma. |
-| **Catálogo** | Lo más usado del día: marcar qué salió del horno. Lo que se apaga acá deja de existir para el bot. |
+| **Catálogo** | Lo más usado del día: marcar qué salió del horno. Lo que se apaga acá deja de existir para el bot. También se carga un producto nuevo, y con él una categoría nueva si hace falta: la lista de categorías no está en el código. |
 | **Campañas** | El control de stock que el local hacía en planilla para el Día de la Madre: producidas / comprometidas / disponibles. |
 | **Rápidos** | Editar los mensajes tipo y decidir cuáles se auto-responden sin pasar por el modelo. |
 | **Métricas** | Conversaciones, cuántas resolvió el bot sin ayuda, demora, gasto en dólares, y qué le preguntan. |
