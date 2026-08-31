@@ -345,9 +345,43 @@ export function buildDailyContext(input: DailyContextInput): string {
   );
   parts.push(`DISPONIBLE HOY (no ofrezcas nada que no esté acá):\n${catalogLines.join('\n')}`);
 
-  const unavailable = products.filter((p) => !p.availableToday).map((p) => p.name);
+  /*
+    Lo que hoy no hay va AGRUPADO POR CATEGORÍA Y CON PRECIO, igual que lo que
+    sí hay. Antes era una lista plana de nombres sueltos, y eso rompía de dos
+    formas que se vieron el primer día en producción:
+
+    Las cinco tortas estaban apagadas y una clienta pidió una torta. En la lista
+    plana, las únicas dos que dicen la palabra "torta" son "Torta red velvet" y
+    "Torta chocoreo" — las otras tres se llaman "Tarta de frutilla", "Frutimiska
+    chocolate" y "Frutimiska vainilla". El bot no tenía forma de saber que esas
+    también eran tortas, así que contestaba "las tortas (red velvet y chocoreo)
+    no las tenemos" a todo el mundo. No estaba obsesionado con dos productos:
+    eran los únicos dos que podía reconocer.
+
+    Y sin el precio no podía contestar "cuál torta sale $50.000", porque de lo
+    apagado solo tenía el nombre. Que hoy no haya no quiere decir que no exista:
+    el cliente igual pregunta cuánto sale y para cuándo puede haber.
+  */
+  const unavailable = products.filter((p) => !p.availableToday);
   if (unavailable.length) {
-    parts.push(`HOY NO HAY: ${unavailable.join(', ')}.`);
+    const porCategoria = new Map<string, Product[]>();
+    for (const p of unavailable) {
+      const list = porCategoria.get(p.category) ?? [];
+      list.push(p);
+      porCategoria.set(p.category, list);
+    }
+    const lineas = [...porCategoria.entries()].map(
+      ([categoria, list]) =>
+        `  ${categoria}: ${list
+          .map((p) => `${p.name} $${p.price.toLocaleString('es-AR')}`)
+          .join(' · ')}`,
+    );
+    parts.push(
+      'HOY NO HAY (existen y tienen precio, pero hoy están agotados: podés decir cuánto ' +
+        `salen y ofrecer consultarlos para otro día, pero NO los cargues en un pedido de hoy):\n${lineas.join(
+          '\n',
+        )}`,
+    );
   }
 
   const limited = available.filter((p) => p.limitedEdition);
