@@ -29,6 +29,18 @@ export const config = {
     Tres meses cubren cualquier reclamo por un pedido y dejan la base chica.
   */
   mediaRetencionDias: Number(env('MEDIA_RETENCION_DIAS', '90')) || 90,
+  /*
+    Claves de los avisos al celular (VAPID). Sin ellas el bot anda igual: lo
+    único que no hay son notificaciones. Se generan una sola vez y NO se rotan
+    por gusto — cambiarlas invalida todas las suscripciones y cada dispositivo
+    tiene que volver a activarlas a mano.
+  */
+  push: {
+    publicKey: env('VAPID_PUBLIC_KEY', ''),
+    privateKey: env('VAPID_PRIVATE_KEY', ''),
+    /* Meta pide un mailto de contacto para poder avisar si algo va mal. */
+    subject: env('VAPID_SUBJECT', 'mailto:hola@miskamuska.com.ar'),
+  },
 
   database: {
     /**

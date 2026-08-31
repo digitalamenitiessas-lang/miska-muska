@@ -559,6 +559,40 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
   */
   app.get('/api/gasto', async () => repos.metrics.gasto());
 
+  // --- Avisos al celular ---------------------------------------------------
+
+  /*
+    La clave pública VAPID. Es pública de verdad —va en el JavaScript del panel—
+    y sirve para que el navegador arme la suscripción contra este servidor y no
+    contra otro. Si viene vacía, el panel esconde el botón en vez de ofrecer algo
+    que no va a funcionar.
+  */
+  app.get('/api/push/clave', async () => ({ clave: config.push.publicKey }));
+
+  app.post('/api/push/suscribir', async (req, reply) => {
+    const { endpoint, keys, etiqueta } = req.body as {
+      endpoint?: string;
+      keys?: { p256dh?: string; auth?: string };
+      etiqueta?: string;
+    };
+    if (!endpoint || !keys?.p256dh || !keys?.auth) {
+      return reply.code(400).send({ error: 'Suscripción incompleta' });
+    }
+    await repos.push.guardar({
+      endpoint,
+      p256dh: keys.p256dh,
+      auth: keys.auth,
+      etiqueta: (etiqueta ?? '').slice(0, 60) || null,
+    });
+    return { ok: true };
+  });
+
+  app.delete('/api/push/suscribir', async (req) => {
+    const { endpoint } = req.body as { endpoint?: string };
+    if (endpoint) await repos.push.borrar(endpoint);
+    return { ok: true };
+  });
+
   app.get('/api/metrics', async (req) => {
     const query = req.query as Record<string, string | undefined>;
     const days = query.days ? Number(query.days) : 14;

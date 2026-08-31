@@ -1008,6 +1008,55 @@ export function createRepositories() {
     Los ids viejos siguen funcionando: acá no se valida el formato, se busca por
     clave primaria.
   */
+  /*
+    Los dispositivos que quieren recibir un aviso cuando una charla necesita a
+    una persona. Es la tabla más chica del sistema —dos o tres filas— y se lee
+    entera en cada aviso: no necesita índices ni paginado.
+  */
+  const push = {
+    async guardar(s: {
+      endpoint: string;
+      p256dh: string;
+      auth: string;
+      etiqueta: string | null;
+    }): Promise<void> {
+      /*
+        Si el mismo teléfono vuelve a activar los avisos, el navegador devuelve
+        el mismo endpoint: se actualizan las claves en vez de duplicar la fila.
+        Las claves SÍ pueden cambiar aunque el endpoint sea el mismo.
+      */
+      await exec(
+        `INSERT INTO push_subscriptions (endpoint, p256dh, auth, etiqueta)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (endpoint) DO UPDATE
+           SET p256dh = EXCLUDED.p256dh, auth = EXCLUDED.auth, etiqueta = EXCLUDED.etiqueta`,
+        [s.endpoint, s.p256dh, s.auth, s.etiqueta],
+      );
+    },
+
+    async list(): Promise<
+      Array<{ endpoint: string; p256dh: string; auth: string; etiqueta: string | null }>
+    > {
+      const rows = await q('SELECT endpoint, p256dh, auth, etiqueta FROM push_subscriptions');
+      return rows.map((r) => ({
+        endpoint: String(r.endpoint),
+        p256dh: String(r.p256dh),
+        auth: String(r.auth),
+        etiqueta: str(r.etiqueta),
+      }));
+    },
+
+    async borrar(endpoint: string): Promise<void> {
+      await exec('DELETE FROM push_subscriptions WHERE endpoint = $1', [endpoint]);
+    },
+
+    async marcarOk(endpoint: string): Promise<void> {
+      await exec('UPDATE push_subscriptions SET last_ok_at = now() WHERE endpoint = $1', [
+        endpoint,
+      ]);
+    },
+  };
+
   const media = {
     async insert(file: {
       mimeType: string;
@@ -1230,7 +1279,7 @@ export function createRepositories() {
   };
 
   return {
-    contacts, conversations, messages, products, orders, campaigns, courses, quickReplies,
+    contacts, conversations, messages, products, orders, campaigns, courses, quickReplies, push,
     media, settings, metrics,
   };
 }

@@ -436,6 +436,20 @@ export const api = {
   metrics: (days = 14) => get<Metrics>(`/api/metrics?days=${days}`),
   /** Lo que va gastando el bot en el modelo. Se pide en cada pantalla. */
   gasto: () => get<Gasto>('/api/gasto'),
+
+  /** Avisos al celular. La clave es pública: viaja en el JS del panel. */
+  claveDeAvisos: () => get<{ clave: string }>('/api/push/clave'),
+  suscribirAvisos: (body: {
+    endpoint: string;
+    keys: { p256dh: string; auth: string };
+    etiqueta: string;
+  }) => post<{ ok: true }>('/api/push/suscribir', body),
+  desuscribirAvisos: (endpoint: string) =>
+    request<{ ok: true }>('/api/push/suscribir', {
+      method: 'DELETE',
+      body: JSON.stringify({ endpoint }),
+      headers: { 'content-type': 'application/json' },
+    }),
   settings: () => get<{ settings: Settings; channels: ChannelHealth[] }>('/api/settings'),
   saveSettings: (body: Partial<Settings>) => patch<Settings>('/api/settings', body),
 };

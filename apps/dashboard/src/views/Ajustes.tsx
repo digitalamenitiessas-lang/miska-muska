@@ -1,3 +1,4 @@
+import { apagarAvisos, encenderAvisos, estadoDeAvisos, type EstadoAvisos } from '../avisos';
 import { useEffect, useState } from 'react';
 import { api, type ChannelHealth, type ChannelId, type Settings } from '../api';
 import { CHANNEL_LABEL, Empty, Pill, Switch } from '../ui';
@@ -69,6 +70,8 @@ export function Ajustes({
 
   return (
     <div className="col" style={{ gap: 16, maxWidth: 940 }}>
+      <Avisos />
+
       <section className="card">
         <div className="card-pad">
           <h3 className="card-title">Canales</h3>
@@ -271,5 +274,110 @@ function Field({
       <label className="label">{label}</label>
       <input type="text" value={value} onChange={(e) => onChange(e.target.value)} />
     </div>
+  );
+}
+
+/**
+ * Los avisos al celular, para este dispositivo.
+ *
+ * Dice "en este dispositivo" en todos lados a propósito: la suscripción es del
+ * teléfono, no de la cuenta. Si lo activa una y la otra espera que le llegue a
+ * su celular, no le va a llegar nunca — y esa confusión, con un aviso que puede
+ * ser un reclamo, sale cara.
+ *
+ * El botón no aparece de arranque ni al entrar al panel: el permiso se pide una
+ * sola vez por dispositivo y un "no" queda para siempre. Se aprieta cuando
+ * alguien decide que lo quiere.
+ */
+function Avisos() {
+  const [estado, setEstado] = useState<EstadoAvisos | null>(null);
+  const [ocupado, setOcupado] = useState(false);
+
+  useEffect(() => {
+    void estadoDeAvisos().then(setEstado);
+  }, []);
+
+  const cambiar = async () => {
+    setOcupado(true);
+    try {
+      setEstado(estado === 'encendidos' ? await apagarAvisos() : await encenderAvisos());
+    } catch {
+      setEstado('apagados');
+    } finally {
+      setOcupado(false);
+    }
+  };
+
+  if (!estado) return null;
+
+  const TEXTOS: Record<EstadoAvisos, { estado: string; detalle: string }> = {
+    encendidos: {
+      estado: 'Activados en este dispositivo',
+      detalle:
+        'Te llega un aviso cuando una charla necesita a una persona: un reclamo, un ' +
+        'comprobante para mirar, o algo que el bot no puede resolver solo.',
+    },
+    apagados: {
+      estado: 'Apagados en este dispositivo',
+      detalle:
+        'Activalos y te avisamos al celular cuando una charla necesite a una persona, sin ' +
+        'que tengas que estar mirando el panel.',
+    },
+    bloqueados: {
+      estado: 'Bloqueados por el navegador',
+      detalle:
+        'Alguien dijo que no cuando el navegador preguntó, y desde acá no se puede volver a ' +
+        'pedir. Se destraba en la configuración del navegador, en los permisos de este sitio.',
+    },
+    'falta-instalar': {
+      estado: 'Falta agregarla a la pantalla de inicio',
+      detalle:
+        'En iPhone las notificaciones solo funcionan con la app instalada. Tocá el botón de ' +
+        'compartir de Safari, elegí "Agregar a inicio", y después abrila desde ahí y volvé acá.',
+    },
+    'sin-claves': {
+      estado: 'Falta configurarlos en el servidor',
+      detalle: 'El servidor todavía no tiene las claves de notificaciones.',
+    },
+    'no-soportado': {
+      estado: 'Este navegador no los soporta',
+      detalle: 'Probá desde Chrome en Android, o desde la computadora.',
+    },
+  };
+
+  const { estado: titulo, detalle } = TEXTOS[estado];
+  const sePuede = estado === 'apagados' || estado === 'encendidos';
+
+  return (
+    <section className="card">
+      <div className="card-pad">
+        <h3 className="card-title">Avisos al celular</h3>
+        <div className="row wrap" style={{ gap: 10 }}>
+          <i
+            className={`dot ${
+              estado === 'encendidos' ? 'dot-ok' : estado === 'bloqueados' ? 'dot-bad' : 'dot-off'
+            }`}
+          />
+          <strong className="small">{titulo}</strong>
+          <span className="grow" />
+          {sePuede ? (
+            <button
+              className={`btn btn-sm ${estado === 'encendidos' ? 'btn-ghost' : 'btn-primary'}`}
+              disabled={ocupado}
+              onClick={() => void cambiar()}
+            >
+              {ocupado
+                ? 'Un segundo…'
+                : estado === 'encendidos'
+                  ? 'Apagar en este dispositivo'
+                  : 'Activar en este dispositivo'}
+            </button>
+          ) : null}
+        </div>
+        <p className="small muted" style={{ marginTop: 8, marginBottom: 0 }}>
+          {detalle}
+        </p>
+      </div>
+    </section>
   );
 }

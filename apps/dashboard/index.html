@@ -11,7 +11,12 @@
       rel="stylesheet"
     />
     <link rel="icon" type="image/png" href="/logo.png" />
-    <link rel="apple-touch-icon" href="/logo.png" />
+    <!-- En iPhone este es el ícono de la pantalla de inicio, y tiene que ser
+         cuadrado: el logo original es 840x800 y sale aplastado. -->
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Miska Muska" />
     <meta name="theme-color" content="#ffe2f4" />
   </head>
   <body>

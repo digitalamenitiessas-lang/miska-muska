@@ -351,6 +351,31 @@ CREATE INDEX IF NOT EXISTS idx_media_origen_fecha ON media (origin, created_at);
 CREATE INDEX IF NOT EXISTS idx_media_charla_fecha ON media (conversation_id, created_at);
 `,
   },
+  {
+    id: 8,
+    name: 'avisos-al-celular',
+    sql: `
+-- Los celulares que pidieron recibir un aviso cuando una charla necesita a una
+-- persona. Una fila por DISPOSITIVO y no por usuario: la misma chica atendiendo
+-- desde el celular y desde la compu del mostrador son dos suscripciones, y cada
+-- una se muere por su cuenta cuando desinstalan la app o revocan el permiso.
+--
+-- El endpoint es la dirección que da el navegador, única por dispositivo y por
+-- navegador, así que es la clave natural. Si alguien vuelve a activar los avisos
+-- en el mismo teléfono, el navegador devuelve el mismo endpoint y la fila se
+-- actualiza en vez de duplicarse.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  endpoint    text PRIMARY KEY,
+  p256dh      text NOT NULL,
+  auth        text NOT NULL,
+  -- Para distinguir un dispositivo de otro cuando haya que desactivar uno.
+  etiqueta    text,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  -- Última vez que el servicio de push aceptó un aviso para este dispositivo.
+  last_ok_at  timestamptz
+);
+`,
+  },
 ];
 
 /**

@@ -5,6 +5,7 @@ import { closeDb, migrate, openDb } from './core/store/db.js';
 import { createRepositories } from './core/store/repositories.js';
 import { seed } from './core/store/seed.js';
 import { Pipeline } from './core/pipeline/index.js';
+import { iniciarAvisos } from './core/notify/push.js';
 import { bus, log } from './core/events/bus.js';
 import { ChannelRegistry } from './channels/registry.js';
 import { buildServer } from './api/server.js';
@@ -36,6 +37,12 @@ async function main(): Promise<void> {
   await app.listen({ port: config.port, host: config.host });
 
   await channels.startAll((message) => pipeline.handleInbound(message));
+
+  /*
+    Los avisos al celular. Se enganchan al bus, así que basta con arrancarlos una
+    vez: no hay que tocarlos desde ningún otro lado.
+  */
+  await iniciarAvisos(repos);
 
   /*
     Los adjuntos que mandan los clientes vencen. Se limpia al arrancar y una vez
