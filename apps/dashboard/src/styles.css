@@ -1316,6 +1316,55 @@ table.grid tbody tr:hover {
   overflow-y: auto;
 }
 
+/* --- Cargar un pedido a mano ------------------------------------------- */
+
+/* Más ancho que el de la foto: acá hay renglones de producto, y con 460 px el
+   nombre, la cantidad y el precio no entran en la misma línea. */
+.pedido-dialogo {
+  width: 100%;
+  max-width: 620px;
+  max-height: 90dvh;
+  overflow-y: auto;
+}
+
+.aviso-duplicado {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--rose-wash);
+  border: 1px solid var(--rose);
+}
+
+.linea-pedido {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+
+/* El select del catálogo no puede empujar al resto fuera de la fila: los
+   nombres de producto son largos y sin tope se come el ancho entero. */
+.linea-pedido select {
+  max-width: 150px;
+  flex: 0 1 auto;
+}
+
+.linea-pedido input {
+  min-width: 0;
+}
+
+.pedido-dialogo .label {
+  display: block;
+}
+
+.pedido-dialogo .label input,
+.pedido-dialogo .label select,
+.pedido-dialogo .label textarea {
+  width: 100%;
+  margin-top: 3px;
+}
+
 /* Alto fijo para que el diálogo no salte cuando la imagen carga. */
 .foto-preview {
   margin-top: 10px;

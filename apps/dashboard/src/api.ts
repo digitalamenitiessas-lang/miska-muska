@@ -421,6 +421,14 @@ export const api = {
   orders: (params: Record<string, string> = {}) =>
     get<Order[]>(`/api/orders?${new URLSearchParams(params)}`),
   updateOrder: (id: string, body: Partial<Order>) => patch<Order>(`/api/orders/${id}`, body),
+  /**
+   * Cargar un pedido a mano, desde la charla.
+   *
+   * La ruta existía en el servidor desde el principio y el panel no la llamaba
+   * nunca: se podía editar un pedido que ya existía, pero no crear uno. Por eso
+   * las ventas que cerraba una persona en el chat no entraban a ningún lado.
+   */
+  crearPedido: (body: Partial<Order>) => post<Order>('/api/orders', body),
 
   campaigns: () => get<Campaign[]>('/api/campaigns'),
   setCampaignActive: (id: string, active: boolean) =>

@@ -235,13 +235,44 @@ export class Pipeline {
         (p) => p.status !== 'cancelado' && p.total > 0 && p.paid < p.total,
       );
       const inscripcion = inscripciones[0];
-      if (!pedidoSinCobrar && !inscripcion) return;
+
+      /*
+        El tercer caso, y es el que faltaba: llegó una foto, se había pasado el
+        alias, y NO hay ningún pedido ni inscripción a la que colgarla.
+
+        Era el agujero exacto: el aviso estaba apagado justo en las charlas
+        rotas. Si la venta la cerró una persona en el chat, o si el bot dijo
+        "anotado" sin llamar a la herramienta, no hay fila esperando plata — y
+        entonces el comprobante entraba en silencio y la venta no aparecía en
+        ningún lado. Se descubrieron a mano, revisando: en diez días había diez
+        ventas cobradas y varias ya entregadas sin registrar.
+
+        Por qué el alias y no un precio: se midió contra las diez ventas reales
+        y las seis fotos que no eran comprobantes. El alias acertó las nueve que
+        podía acertar y no se encendió ni una vez de más. El precio también
+        acertaba nueve, pero se prendía con dos fotos que no eran comprobantes
+        —el bot pasa listas de precios todo el tiempo—, y un aviso que se
+        enciende de gusto es un aviso que dejan de mirar.
+
+        La que no alcanza a agarrar es la venta que se tomó fuera de esta
+        charla: si el alias nunca se dijo acá, no hay señal. Para esa está el
+        botón de cargar el pedido a mano.
+      */
+      let ventaSinFila = false;
+      if (!pedidoSinCobrar && !inscripcion) {
+        ventaSinFila = await this.#pasamosElAlias(conversation.id, stored.id);
+        if (!ventaSinFila) return;
+      }
 
       const motivo = pedidoSinCobrar
         ? `[comprobante] Mandó una foto y el pedido ${pedidoSinCobrar.number} está sin cobrar ` +
           `(${pedidoSinCobrar.paid} de ${pedidoSinCobrar.total}). Miralo y confirmá el pago.`
-        : `[comprobante] Mandó una foto y la inscripción de ${inscripcion.fullName} está ` +
-          'pendiente de pago. Miralo y confirmá la inscripción.';
+        : inscripcion
+          ? `[comprobante] Mandó una foto y la inscripción de ${inscripcion.fullName} está ` +
+            'pendiente de pago. Miralo y confirmá la inscripción.'
+          : '[comprobante] Mandó una foto después de que le pasamos el alias, y esta charla NO ' +
+            'tiene ningún pedido cargado. Revisala: si la venta se cerró, cargala con el botón ' +
+            'de la ficha, que si no queda cobrada y sin registrar en ningún lado.';
 
       await this.#repos.conversations.setAttention(conversation.id, true, motivo);
       const refrescada = await this.#repos.conversations.get(conversation.id);
@@ -251,6 +282,40 @@ export class Pipeline {
       // Que falle el aviso no puede tumbar el mensaje, que ya está guardado.
       log('error', `No pude marcar el comprobante de ${conversation.id}`, err);
     }
+  }
+
+  /**
+   * ¿Le pasamos el alias a esta persona antes de que mandara esto?
+   *
+   * Es la señal de "acá se estaba por cobrar". Mira los salientes, sean del bot
+   * o de una persona del local —las ventas que cierra el equipo a mano son
+   * justamente la mitad de los casos que se perdían—, y solo los anteriores al
+   * mensaje que llegó, para que el propio "gracias, lo chequeamos" no cuente.
+   *
+   * Los dos alias, el de pedidos y el de cursos. Con un piso de cuatro letras
+   * para no buscar una cadena tan corta que aparezca sola en cualquier texto.
+   *
+   * Treinta mensajes de memoria, y no es una corazonada: se midió contra las
+   * dieciséis charlas reales. Con 20 se pierden dos ventas; con 30 se pierde
+   * una sola, y estirarlo a 40, 60 o 100 no recupera ninguna más. Es la rodilla
+   * de la curva. La que no se agarra con ninguna ventana es la venta que se
+   * tomó fuera de esta charla —ahí el alias no se dijo nunca acá—, y para esa
+   * está el botón de cargar el pedido a mano.
+   */
+  async #pasamosElAlias(conversationId: string, hastaMensajeId: string): Promise<boolean> {
+    const settings = await this.#repos.settings.read();
+    const alias = [settings.transferAlias, settings.transferAliasCursos]
+      .map((a) => a?.trim().toLowerCase())
+      .filter((a): a is string => Boolean(a) && a!.length >= 4);
+    if (!alias.length) return false;
+
+    const previos = await this.#repos.messages.history(conversationId, 30);
+    const corte = previos.findIndex((m) => m.id === hastaMensajeId);
+    const anteriores = corte >= 0 ? previos.slice(0, corte) : previos;
+
+    return anteriores.some(
+      (m) => m.direction === 'out' && alias.some((a) => m.text.toLowerCase().includes(a)),
+    );
   }
 
   /**

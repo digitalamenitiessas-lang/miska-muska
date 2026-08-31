@@ -5,7 +5,10 @@ import {
   type Conversation,
   type ConversationDetail,
   type LiveEvent,
+  type Contact,
   type Message,
+  type Order,
+  type Product,
   ultimaActividad,
 } from '../api';
 import { CHANNEL_LABEL, Empty, ORDER_STATUS_LABEL, ORDER_STATUS_TONE, Pill, clock, money, timeAgo } from '../ui';
@@ -1018,6 +1021,8 @@ function Rail({
   const { contact, orders, conversation } = detail;
   /* La comanda del pedido que se está mirando, abierta desde la ficha. */
   const [comanda, setComanda] = useState<string | null>(null);
+  /* El formulario de cargar un pedido a mano, cuando la venta la cerro una persona. */
+  const [cargando, setCargando] = useState(false);
   const [notes, setNotes] = useState(contact?.notes ?? '');
   const [dirty, setDirty] = useState(false);
 
@@ -1114,11 +1119,302 @@ function Rail({
             </div>
           ))
         )}
+
+        {/*
+          La salida para las ventas que cierra una persona. La mitad de los
+          pedidos que se perdían son estos: el bot escala o el equipo escribe en
+          el chat, y desde ahí el bot ya no puede cargar nada — pero el panel
+          tampoco podía, así que la venta no tenía forma de entrar.
+        */}
+        <button
+          className="btn btn-sm btn-primary"
+          style={{ marginTop: 4 }}
+          onClick={() => setCargando(true)}
+        >
+          + Cargar pedido a mano
+        </button>
       </div>
+
+      {cargando ? (
+        <CargarPedido
+          conversation={conversation}
+          contact={contact}
+          yaHay={orders}
+          onCerrar={() => setCargando(false)}
+          onCargado={() => {
+            setCargando(false);
+            onSaved();
+            toast('Pedido cargado');
+          }}
+          toast={toast}
+        />
+      ) : null}
 
       {abierto ? (
         <ComandaPedido pedido={abierto} onCerrar={() => setComanda(null)} toast={toast} />
       ) : null}
     </>
+  );
+}
+
+/** Una línea del pedido que se está cargando a mano. */
+interface LineaNueva {
+  productId: string | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+/**
+ * Cargar un pedido a mano desde la charla.
+ *
+ * Deliberadamente NO valida como `crear_pedido`. Esa validación es todo-o-nada
+ * y está pensada para frenar al bot, que puede inventar; acá del otro lado hay
+ * una persona que tiene la conversación a la vista y sabe lo que vendió. Si le
+ * pidiéramos la hora de retiro para algo que se entregó hace diez minutos, no
+ * lo cargaría nadie y volveríamos al problema.
+ *
+ * Lo único que se exige es un nombre y una línea con precio: sin eso no es un
+ * pedido, es una nota.
+ */
+function CargarPedido({
+  conversation,
+  contact,
+  yaHay,
+  onCerrar,
+  onCargado,
+  toast,
+}: {
+  conversation: Conversation;
+  contact: Contact | null;
+  yaHay: Order[];
+  onCerrar: () => void;
+  onCargado: () => void;
+  toast: (text: string) => void;
+}) {
+  const [nombre, setNombre] = useState(contact?.fullName || contact?.displayName || '');
+  const [telefono, setTelefono] = useState(contact?.phone ?? '');
+  const [lineas, setLineas] = useState<LineaNueva[]>([
+    { productId: null, description: '', quantity: 1, unitPrice: 0 },
+  ]);
+  const [modo, setModo] = useState<Order['deliveryMode']>('retira-local');
+  const [dia, setDia] = useState(new Date().toISOString().slice(0, 10));
+  const [hora, setHora] = useState('');
+  const [direccion, setDireccion] = useState('');
+  const [notas, setNotas] = useState('');
+  const [cobrado, setCobrado] = useState(true);
+  const [productos, setProductos] = useState<Product[]>([]);
+  const [guardando, setGuardando] = useState(false);
+
+  useEffect(() => {
+    api
+      .products()
+      .then(setProductos)
+      .catch(() => undefined);
+  }, []);
+
+  const total = lineas.reduce((suma, l) => suma + l.quantity * l.unitPrice, 0);
+  const listo = nombre.trim().length >= 3 && total > 0;
+
+  const cambiar = (i: number, patch: Partial<LineaNueva>) =>
+    setLineas((prev) => prev.map((l, n) => (n === i ? { ...l, ...patch } : l)));
+
+  /** Elegir del catálogo llena descripción y precio; después se pueden editar. */
+  const elegirProducto = (i: number, id: string) => {
+    const p = productos.find((x) => x.id === id);
+    if (!p) {
+      cambiar(i, { productId: null });
+      return;
+    }
+    cambiar(i, { productId: p.id, description: p.name, unitPrice: p.price });
+  };
+
+  const guardar = async () => {
+    if (!listo || guardando) return;
+    setGuardando(true);
+    try {
+      await api.crearPedido({
+        conversationId: conversation.id,
+        contactId: conversation.contactId,
+        customerName: nombre.trim(),
+        customerPhone: telefono.trim() || null,
+        items: lineas
+          .filter((l) => l.description.trim() && l.unitPrice > 0)
+          .map((l) => ({ ...l, description: l.description.trim() })),
+        total,
+        paid: cobrado ? total : 0,
+        // Cobrado = confirmado. Es lo que significa en el mostrador: la plata
+        // está y el pedido va a producción.
+        status: cobrado ? 'confirmado' : 'borrador',
+        deliveryMode: modo,
+        deliveryDate: dia || null,
+        deliveryTime: hora.trim() || null,
+        address: modo === 'cadete-miska' ? direccion.trim() || null : null,
+        notes: notas.trim() || null,
+      });
+      onCargado();
+    } catch (err) {
+      toast(`No pude cargar el pedido: ${String(err)}`);
+    } finally {
+      setGuardando(false);
+    }
+  };
+
+  return (
+    <div className="foto-fondo" onClick={onCerrar}>
+      <div className="pedido-dialogo card card-pad" onClick={(e) => e.stopPropagation()}>
+        <div className="row">
+          <h3 className="grow" style={{ margin: 0 }}>
+            Cargar pedido a mano
+          </h3>
+          <button className="btn btn-sm btn-ghost" onClick={onCerrar}>
+            ✕
+          </button>
+        </div>
+
+        {/* El aviso que evita el duplicado: la venta puede haberla cargado el
+            bot y estar acá arriba sin que nadie la haya mirado. */}
+        {yaHay.length ? (
+          <div className="aviso-duplicado small">
+            ⚠ Esta charla ya tiene {yaHay.length === 1 ? 'un pedido' : `${yaHay.length} pedidos`}:{' '}
+            {yaHay.map((o) => `#${o.number} (${money(o.total)})`).join(', ')}. Fijate que no sea
+            el mismo antes de cargar otro.
+          </div>
+        ) : null}
+
+        <div className="grid-2" style={{ gap: 10, marginTop: 10 }}>
+          <label className="label">
+            Nombre y apellido
+            <input value={nombre} onChange={(e) => setNombre(e.target.value)} />
+          </label>
+          <label className="label">
+            Teléfono
+            <input value={telefono} onChange={(e) => setTelefono(e.target.value)} />
+          </label>
+        </div>
+
+        <h4 style={{ margin: '14px 0 6px' }}>Qué lleva</h4>
+        {lineas.map((l, i) => (
+          <div key={i} className="linea-pedido">
+            <select
+              value={l.productId ?? ''}
+              onChange={(e) => elegirProducto(i, e.target.value)}
+              title="Elegí del catálogo, o dejá 'otro' y escribilo a mano"
+            >
+              <option value="">otro…</option>
+              {productos.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} — ${p.price.toLocaleString('es-AR')}
+                </option>
+              ))}
+            </select>
+            <input
+              className="grow"
+              placeholder="Qué es"
+              value={l.description}
+              onChange={(e) => cambiar(i, { description: e.target.value, productId: null })}
+            />
+            <input
+              type="number"
+              min={1}
+              title="Cantidad"
+              value={l.quantity}
+              onChange={(e) => cambiar(i, { quantity: Math.max(1, Number(e.target.value)) })}
+              style={{ width: 62 }}
+            />
+            <input
+              type="number"
+              min={0}
+              title="Precio por unidad"
+              value={l.unitPrice || ''}
+              placeholder="$"
+              onChange={(e) => cambiar(i, { unitPrice: Math.max(0, Number(e.target.value)) })}
+              style={{ width: 96 }}
+            />
+            {lineas.length > 1 ? (
+              <button
+                className="btn btn-sm btn-ghost"
+                aria-label="Sacar esta línea"
+                onClick={() => setLineas((prev) => prev.filter((_, n) => n !== i))}
+              >
+                ✕
+              </button>
+            ) : null}
+          </div>
+        ))}
+        <button
+          className="btn btn-sm btn-ghost"
+          onClick={() =>
+            setLineas((prev) => [
+              ...prev,
+              { productId: null, description: '', quantity: 1, unitPrice: 0 },
+            ])
+          }
+        >
+          + otra cosa
+        </button>
+
+        <div className="row" style={{ marginTop: 12, gap: 10 }}>
+          <strong className="grow">Total: {money(total)}</strong>
+          <label className="row small" style={{ gap: 6 }}>
+            <input
+              type="checkbox"
+              checked={cobrado}
+              onChange={(e) => setCobrado(e.target.checked)}
+            />
+            ya está pago
+          </label>
+        </div>
+
+        <div className="grid-2" style={{ gap: 10, marginTop: 12 }}>
+          <label className="label">
+            Cómo lo recibe
+            <select value={modo} onChange={(e) => setModo(e.target.value as Order['deliveryMode'])}>
+              <option value="retira-local">Retira en el local</option>
+              <option value="uber-cliente">Lo retira un Uber o cadete suyo</option>
+              <option value="cadete-miska">Se lo llevamos nosotros</option>
+            </select>
+          </label>
+          <div className="row" style={{ gap: 8 }}>
+            <label className="label grow">
+              Día
+              <input type="date" value={dia} onChange={(e) => setDia(e.target.value)} />
+            </label>
+            <label className="label" style={{ width: 96 }}>
+              Hora
+              <input
+                placeholder="19:30"
+                value={hora}
+                onChange={(e) => setHora(e.target.value)}
+              />
+            </label>
+          </div>
+        </div>
+
+        {modo === 'cadete-miska' ? (
+          <label className="label" style={{ marginTop: 10 }}>
+            Dirección con alguna referencia
+            <input value={direccion} onChange={(e) => setDireccion(e.target.value)} />
+          </label>
+        ) : null}
+
+        <label className="label" style={{ marginTop: 10 }}>
+          Notas para cocina
+          <textarea rows={2} value={notas} onChange={(e) => setNotas(e.target.value)} />
+        </label>
+
+        <div className="row" style={{ marginTop: 14 }}>
+          <span className="small muted grow">
+            Queda cargado como hecho por una persona, así que el bot no lo toca.
+          </span>
+          <button className="btn btn-ghost" onClick={onCerrar}>
+            Cancelar
+          </button>
+          <button className="btn btn-primary" disabled={!listo || guardando} onClick={() => void guardar()}>
+            {guardando ? 'Cargando…' : 'Cargar pedido'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
