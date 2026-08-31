@@ -29,6 +29,7 @@ import type {
   OutboundContent,
 } from '../types/message.js';
 import { isOutsideBusinessHours } from '../policies/rules.js';
+import { agotadosConPrecio, preciosQueNoCoinciden } from '../policies/precios.js';
 import { renderQuickReply } from '../agent/persona.js';
 import { runTurn } from '../agent/brain.js';
 import type { ToolContext } from '../agent/tools.js';
@@ -653,6 +654,29 @@ export class Pipeline {
         contenido.text =
           `Te paso el alias y apenas me mandes el comprobante te doy la dirección, así ya ` +
           `pedís el Uber 🫶🏻\n${settings.transferAlias} (${settings.transferHolder})`;
+      }
+    }
+
+    /*
+      El termómetro de precios. SOLO ANOTA, no toca el mensaje: ver el porqué en
+      core/policies/precios.ts. Si esto queda callado unas semanas, la guarda que
+      reescribe no hace falta; si se enciende, se escribe con casos reales.
+    */
+    for (const contenido of contents) {
+      if (contenido.kind !== 'text') continue;
+      for (const mal of preciosQueNoCoinciden(contenido.text, products)) {
+        log(
+          'warn',
+          `PRECIO QUE NO COINCIDE (${conversationId}): dijo ${mal.dijo} de ${mal.producto}, ` +
+            `el catálogo dice ${mal.catalogo}.`,
+        );
+      }
+      const agotados = agotadosConPrecio(contenido.text, products);
+      if (agotados.length) {
+        log(
+          'warn',
+          `OFRECIÓ ALGO APAGADO (${conversationId}): ${agotados.join(', ')}.`,
+        );
       }
     }
 
