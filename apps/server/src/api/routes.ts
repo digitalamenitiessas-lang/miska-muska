@@ -689,6 +689,9 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
 
   app.patch('/api/settings', async (req) => {
     const settings = await repos.settings.write(req.body as never);
+    // Si alguien acaba de tocar credenciales, la salud guardada quedó vieja:
+    // la próxima consulta vuelve a preguntar de verdad.
+    channels.olvidarSalud();
     bus.emit({ type: 'log', level: 'info', message: 'Ajustes actualizados desde el panel' });
     return settings;
   });

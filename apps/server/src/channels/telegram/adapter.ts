@@ -368,12 +368,19 @@ export class TelegramAdapter implements ChannelAdapter {
 
   // --- transporte ---------------------------------------------------------
 
+  /*
+    `signal` sigue siendo opcional porque el long polling manda el suyo, que
+    dura lo que dura la espera larga. Lo que cambia es el respaldo: sin nada,
+    el default de undici son 300 segundos, y `health()` llama sin señal desde
+    una ruta del panel. Un Telegram colgado dejaba la carga del panel esperando
+    cinco minutos.
+  */
   async #call<T>(method: string, params: Record<string, unknown> = {}, signal?: AbortSignal): Promise<T> {
     const res = await fetch(`https://api.telegram.org/bot${this.#token}/${method}`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify(params),
-      signal,
+      signal: signal ?? AbortSignal.timeout(15_000),
     });
     const json = (await res.json()) as { ok: boolean; result?: T; description?: string };
     if (!json.ok) throw new Error(`Telegram ${method}: ${json.description ?? res.status}`);

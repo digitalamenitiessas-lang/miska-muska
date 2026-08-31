@@ -43,6 +43,22 @@ const CAPABILITIES: ChannelCapabilities = {
 /** Meta: "más de 24 h desde la última respuesta del cliente". */
 const OUTSIDE_WINDOW_CODES = new Set([131047, 131026]);
 
+/**
+ * Cuánto esperamos a que Graph conteste antes de darlo por perdido.
+ *
+ * Node no pone ninguno: el default de undici son 300 segundos. Y estos `fetch`
+ * no se esperan en cualquier lado — el de enviar corre DENTRO del turno, con
+ * la conversación tomada en el mutex del pipeline. Con tres burbujas y un
+ * Graph colgado, esa charla queda trabada un cuarto de hora, y el debounce de
+ * los mensajes que van llegando la reprograma sin poder entrar nunca.
+ *
+ * Quince segundos es holgado para una API que normalmente contesta en menos de
+ * uno. Que falle rápido es mejor: el error se ve en el panel y alguien puede
+ * escribir a mano, que es exactamente lo que no se puede hacer mientras el
+ * mutex está tomado.
+ */
+const TIMEOUT_MS = 15_000;
+
 interface WaContact {
   wa_id: string;
   profile?: { name?: string };
@@ -399,6 +415,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
           'content-type': 'application/json',
         },
         body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(TIMEOUT_MS),
       });
       const json = (await res.json()) as {
         messages?: Array<{ id: string }>;
@@ -421,6 +438,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
   async #get<T>(path: string): Promise<T> {
     const res = await fetch(`${this.#base()}/${path}`, {
       headers: { authorization: `Bearer ${config.whatsapp.accessToken}` },
+      signal: AbortSignal.timeout(TIMEOUT_MS),
     });
     const json = (await res.json()) as T & { error?: { message: string } };
     if (!res.ok || json.error) throw new Error(json.error?.message ?? `HTTP ${res.status}`);

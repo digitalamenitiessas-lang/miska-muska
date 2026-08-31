@@ -5,6 +5,7 @@ import {
   apiBaseFaltante,
   getToken,
   setToken,
+  ultimaActividad,
   type ChannelHealth,
   type Conversation,
   type Gasto,
@@ -52,6 +53,9 @@ const TITLES: Record<View, string> = {
   metricas: 'Métricas',
   ajustes: 'Ajustes del bot',
 };
+
+const ordenarPorActividad = (lista: Conversation[]): Conversation[] =>
+  [...lista].sort((a, b) => ultimaActividad(b) - ultimaActividad(a));
 
 export default function App() {
   const [view, setView] = useState<View>('bandeja');
@@ -114,9 +118,12 @@ export default function App() {
     if (authError) return;
     const close = openStream((event) => {
       setLastEvent(event);
+      // Cualquier evento que llegue es prueba de que el stream está vivo, no
+      // solo el `hello`: si el punto se apagó por un corte y volvió sin que
+      // llegara un `hello` nuevo, esto lo vuelve a prender.
+      setConnected(true);
       switch (event.type) {
         case 'hello':
-          setConnected(true);
           // (Re)conexión: puede que se hayan cargado pedidos mientras no estábamos.
           setOrderTick((t) => t + 1);
           break;
@@ -128,7 +135,21 @@ export default function App() {
           const existing = convRef.current.find((c) => c.id === incoming.id);
           const merged: Conversation = { ...incoming, contact: existing?.contact };
           const rest = convRef.current.filter((c) => c.id !== incoming.id);
-          setConversations([merged, ...rest]);
+          /*
+            Se inserta POR ACTIVIDAD, no arriba de todo.
+
+            Esta línea decía `[merged, ...rest]`, y con eso el panel deshacía en
+            el navegador el mismo orden que el servidor ya calcula bien. El
+            evento `conversation` no lo emite solo un mensaje nuevo: también
+            marcar como leída, tomar la charla, devolverla, abrir o contestar
+            una consulta. O sea que abrir una conversación vieja la mandaba al
+            tope, delante de una que había escrito recién.
+
+            Es exactamente lo que reportó el local —"un mensaje de hace una hora
+            y media se puso arriba"— y por qué el arreglo del ORDER BY en SQL no
+            se veía: el cliente lo desordenaba de nuevo al llegar.
+          */
+          setConversations(ordenarPorActividad([merged, ...rest]));
           // Un contacto nuevo llega sin ficha: se pide la lista completa una vez.
           if (!existing) void loadShell();
           break;
@@ -144,7 +165,7 @@ export default function App() {
           break;
       }
       setTick((t) => t + 1);
-    });
+    }, setConnected);
     return close;
   }, [authError, loadShell]);
 
@@ -262,7 +283,7 @@ export default function App() {
             {view === 'cursos' ? <Cursos toast={toast.show} /> : null}
             {view === 'campanas' ? <Campanas toast={toast.show} /> : null}
             {view === 'rapidos' ? <Rapidos toast={toast.show} /> : null}
-            {view === 'metricas' ? <Metricas tick={tick} /> : null}
+            {view === 'metricas' ? <Metricas /> : null}
             {view === 'ajustes' ? (
               <Ajustes
                 settings={settings}

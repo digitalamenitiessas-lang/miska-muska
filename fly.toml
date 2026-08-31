@@ -1,5 +1,11 @@
 # Fly.io — bot de Miska Muska.
 #
+# NO ESTÁ EN USO. El bot corre en un VPS con systemd: ver deploy/README.md.
+# Este archivo quedó de cuando se evaluó Fly y sirve si algún día hay que
+# mudarse. No leas de acá ni la memoria, ni la región, ni las variables: nada
+# de eso describe el servidor que está andando. (Una auditoría ya se equivocó
+# entera por confiar en este archivo.)
+#
 # La región del bot tiene que seguir a la de tu proyecto de Supabase, que quedó
 # en us-west-2 (Oregon). `sea` (Seattle) es la más cercana en Fly.
 #

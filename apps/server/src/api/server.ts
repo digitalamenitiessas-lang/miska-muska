@@ -9,7 +9,7 @@
 
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { config, originAllowed } from '../config.js';
-import { bus, log } from '../core/events/bus.js';
+import { bus, log, type AppEvent } from '../core/events/bus.js';
 import type { Repositories } from '../core/store/repositories.js';
 import type { Pipeline } from '../core/pipeline/index.js';
 import type { ChannelRegistry } from '../channels/registry.js';
@@ -194,10 +194,32 @@ export async function buildServer(deps: ApiDeps): Promise<FastifyInstance> {
       reply.raw.write(`data: ${JSON.stringify(data)}\n\n`);
     };
 
-    write({ type: 'hello', at: new Date().toISOString() });
-    for (const event of bus.recent().slice(-40)) write(event);
+    /*
+      Los `log` NO viajan al navegador.
 
-    const unsubscribe = bus.subscribe(write);
+      Cada línea de consola del servidor emite un evento al bus, y el bus
+      entero salía por acá. El panel no los muestra en ningún lado —el switch
+      de eventos ni siquiera tiene una rama para ellos—, así que era tráfico
+      que solo servía para una cosa: hacer subir el contador de "algo cambió" y
+      disparar recargas. Más de la mitad del stream, y en las ráfagas mucho
+      más, era eso.
+
+      De paso deja de mandarle a cada navegador con el token los nombres, los
+      teléfonos y los pedidos que aparecen en los logs, que no tenían por qué
+      salir del servidor.
+
+      Y de paso arregla el replay: los últimos 40 eventos podían ser 40 logs, y
+      entonces reconectar no traía ninguna novedad real y sí una tormenta.
+    */
+    const alPanel = (event: AppEvent) => {
+      if (event.type === 'log') return;
+      write(event);
+    };
+
+    write({ type: 'hello', at: new Date().toISOString() });
+    for (const event of bus.recent().slice(-40)) alPanel(event);
+
+    const unsubscribe = bus.subscribe(alPanel);
     // Ping para que proxies y navegadores no cierren la conexión por inactividad.
     const ping = setInterval(() => {
       if (!reply.raw.writableEnded) reply.raw.write(': ping\n\n');

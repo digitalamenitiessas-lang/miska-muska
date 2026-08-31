@@ -106,6 +106,16 @@ cron que necesitaba SQLite.
 
 ## 2. El bot
 
+> **Hoy corre en un VPS con systemd, no en Fly.** `deploy/README.md` tiene lo que
+> está andando de verdad: `/opt/miska-muska` en `2.25.185.242`, servicio
+> `miska-bot`, Node 22 propio, detrás del Caddy que ya estaba. Lo de acá abajo
+> son las tres alternativas que se evaluaron, y quedan porque sirven si algún día
+> hay que mudarse.
+>
+> El `fly.toml` del repo es de esa evaluación y **no se usa**. Vale la aclaración
+> porque ya hizo daño: una auditoría entera razonó sobre los 512 MB y la región
+> de Fly, y recomendó tocar cosas que en este servidor no existen.
+
 ### Fly.io
 
 `fly.toml` ya está en el repo, con Seattle (junto a tu base) y una sola máquina.

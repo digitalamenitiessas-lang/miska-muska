@@ -26,7 +26,23 @@ const MAGNITUDE = '#009e94';
 
 const INK = { primary: '#3f3f3f', secondary: '#8b8b8b', grid: '#efe4e6' };
 
-export function Metricas({ tick }: { tick: number }) {
+/**
+ * Cada cuánto se refresca sola la pantalla de métricas.
+ *
+ * Antes se refrescaba con el contador general de eventos del panel, o sea con
+ * CUALQUIER cosa que pasara: un mensaje, el "escribiendo…" prendiéndose y
+ * apagándose, cada línea de log del servidor. Un turno del bot son una docena
+ * de eventos, y cada uno pedía /api/metrics entero — que por dentro recorre la
+ * tabla de mensajes cinco veces sin filtro de fecha.
+ *
+ * Con una sola pestaña de Métricas abierta en la compu del mostrador, eso eran
+ * cientos de consultas por minuto contra las cinco conexiones que comparte con
+ * el bot que está contestando. Y para nada: nadie necesita que un gráfico de
+ * catorce días se redibuje diez veces por segundo.
+ */
+const REFRESCO_MS = 30_000;
+
+export function Metricas() {
   const [data, setData] = useState<Metrics | null>(null);
   const [days, setDays] = useState(14);
   const [showTable, setShowTable] = useState(false);
@@ -43,7 +59,9 @@ export function Metricas({ tick }: { tick: number }) {
 
   useEffect(() => {
     void load();
-  }, [load, tick]);
+    const timer = window.setInterval(() => void load(), REFRESCO_MS);
+    return () => window.clearInterval(timer);
+  }, [load]);
 
   if (error) return <Empty glyph="📈">No pude cargar las métricas: {error}</Empty>;
   if (!data) return <Empty glyph="⏳">Cargando métricas…</Empty>;

@@ -51,6 +51,24 @@ export interface Conversation {
   contact?: Contact | null;
 }
 
+/**
+ * Cuándo pasó algo de verdad en una charla, en milisegundos.
+ *
+ * Gemelo del `GREATEST(COALESCE(...))` con el que el servidor ordena la
+ * bandeja, y vive acá —al lado del tipo— para que las dos puntas usen el mismo
+ * criterio. `updatedAt` no sirve: lo bumpean cosas que no son un mensaje
+ * (marcar como leída, tomar la charla, cerrar una consulta), y por eso una
+ * charla vieja saltaba al tope apenas alguien la abría, y la hora de la lista
+ * decía "hace 1 min" de una conversación donde nadie había escrito.
+ */
+export function ultimaActividad(c: Conversation): number {
+  const t = (v: string | null | undefined) => (v ? Date.parse(v) : Number.NaN);
+  const candidatos = [t(c.lastInboundAt), t(c.lastOutboundAt), t(c.createdAt)].filter((n) =>
+    Number.isFinite(n),
+  );
+  return candidatos.length ? Math.max(...candidatos) : 0;
+}
+
 export interface Message {
   id: string;
   conversationId: string;
@@ -485,7 +503,17 @@ export type LiveEvent =
  * viaja en el query string. Eso queda en los logs de acceso del proxy: no
  * loguees query strings, o poné el panel detrás de la autenticación del proxy.
  */
-export function openStream(onEvent: (event: LiveEvent) => void): () => void {
+export function openStream(
+  onEvent: (event: LiveEvent) => void,
+  /**
+   * Se avisa cuando la conexión se cae y cuando vuelve.
+   *
+   * Sin esto, el puntito de "en vivo" se prendía con el primer `hello` y no se
+   * apagaba nunca: el panel decía conectado con el servidor caído, que en un
+   * día cargado es una clienta esperando y nadie enterado.
+   */
+  onStatus?: (conectado: boolean) => void,
+): () => void {
   // Sin saber a dónde apuntar, el EventSource pediría /api/stream al propio
   // hosting del panel, recibiría un index.html, fallaría, y reintentaría cada
   // 3 s para siempre. Un bucle de reconexión que no puede funcionar.
@@ -506,6 +534,7 @@ export function openStream(onEvent: (event: LiveEvent) => void): () => void {
     };
     es.onerror = () => {
       es.close();
+      onStatus?.(false);
       // EventSource reconecta solo, pero si el servidor se reinicia conviene
       // recrearlo para volver a recibir el backlog reciente.
       retry = window.setTimeout(() => {
@@ -520,5 +549,8 @@ export function openStream(onEvent: (event: LiveEvent) => void): () => void {
     if (retry) window.clearTimeout(retry);
     source?.close();
     source = null;
+    // El cierre lo pide quien nos llamó (desmontaje, o el token que cambió):
+    // no es una caída, pero tampoco seguimos conectados.
+    onStatus?.(false);
   };
 }

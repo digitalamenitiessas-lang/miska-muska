@@ -163,7 +163,9 @@ function Charla({ mensajes }: { mensajes: Message[] }) {
                   sale && m.author !== 'bot' ? ` by-${m.author}` : ''
                 }`}
               >
-                {foto ? <img className="bubble-foto" src={foto} alt={m.text} /> : null}
+                {foto ? (
+                  <img className="bubble-foto" src={foto} alt={m.text} loading="lazy" decoding="async" />
+                ) : null}
                 {/* Un PDF o un audio no se abren desde una hoja que se imprime:
                     queda el link, y la bandeja los reproduce. El texto del
                     cliente va SIEMPRE: es lo que escribió, no una etiqueta. */}

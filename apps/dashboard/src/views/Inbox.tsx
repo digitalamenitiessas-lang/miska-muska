@@ -6,6 +6,7 @@ import {
   type ConversationDetail,
   type LiveEvent,
   type Message,
+  ultimaActividad,
 } from '../api';
 import { CHANNEL_LABEL, Empty, ORDER_STATUS_LABEL, ORDER_STATUS_TONE, Pill, clock, money, timeAgo } from '../ui';
 import { ComandaPedido } from './Comanda';
@@ -60,7 +61,7 @@ export function Inbox({
   const [panelMovil, setPanelMovil] = useState<'lista' | 'chat'>('lista');
   /** La ficha del cliente, que de 1180 px para abajo es un panel deslizante. */
   const [fichaAbierta, setFichaAbierta] = useState(false);
-  const [detail, setDetail] = useState<ConversationDetail | null>(null);
+  const [detalleCargado, setDetail] = useState<ConversationDetail | null>(null);
   const [draft, setDraft] = useState('');
   /** Lo que el equipo le contesta al bot sobre una modificación pedida. */
   const [respuesta, setRespuesta] = useState('');
@@ -70,6 +71,8 @@ export function Inbox({
   const [typing, setTyping] = useState(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
   const composeRef = useRef<HTMLTextAreaElement | null>(null);
+  /** Si quien mira está siguiendo el final de la charla o se fue a leer más arriba. */
+  const pegadoAlFinal = useRef(true);
   /*
     El cajón de respuestas. Se pide una sola vez y recién cuando alguien lo
     abre: son los textos del equipo y todas las fotos que hay cargadas, y no
@@ -138,10 +141,49 @@ export function Inbox({
     setSelected(visible.find((c) => c.needsAttention)?.id ?? visible[0].id);
   }, [visible, selected]);
 
+  /*
+    Lo que se muestra es el detalle SI Y SOLO SI es el de la charla elegida.
+
+    La guarda de `loadDetail` evita que una respuesta atrasada pise a la buena,
+    pero queda el hueco más común, que no es una carrera: los 400-600 ms entre
+    el clic y la respuesta, en los que `detalleCargado` todavía es el de la
+    charla anterior. En ese rato la pantalla mostraba la conversación de otra
+    persona debajo de la cabecera nueva. Pasa en TODA apertura, no solo cuando
+    algo sale mal.
+
+    Derivado y no un estado más: un `setDetail(null)` al cambiar tendría el
+    mismo efecto pero se puede olvidar en el próximo camino que cambie la
+    selección. Esto no se puede desincronizar.
+  */
+  const detail = detalleCargado?.conversation.id === selected ? detalleCargado : null;
+
+  /*
+    Cuál es la charla elegida AHORA, para la respuesta que está por llegar.
+
+    `loadDetail` no puede leer `selected` del closure —se recrearía en cada
+    cambio y volvería a disparar todos los efectos que dependen de ella—, así
+    que la respuesta se compara contra este ref.
+  */
+  const seleccionadaRef = useRef<string | null>(null);
+  seleccionadaRef.current = selected;
+
   const loadDetail = useCallback(
     async (id: string, markRead = false) => {
       try {
         const data = await api.conversation(id);
+        /*
+          La guarda que evita escribirle a la persona equivocada.
+
+          Entre el clic y la respuesta hay medio segundo de red. Si en ese rato
+          se cambió de charla —a mano, o porque llegó un mensaje de otra— la
+          respuesta vieja pisaba el detalle y quedaba en pantalla el CUERPO de
+          una conversación con la cabecera y el botón de enviar de otra: el
+          envío se calcula sobre `selected`, no sobre lo que se está leyendo.
+
+          Es el único problema de esta lista que no se arregla apretando F5,
+          porque para cuando te das cuenta el mensaje ya salió.
+        */
+        if (seleccionadaRef.current !== id) return;
         setDetail(data);
         if (markRead && data.conversation.unreadCount > 0) {
           await api.markRead(id);
@@ -169,6 +211,17 @@ export function Inbox({
     setFichaAbierta(false);
     // Si no, la respuesta escrita para una consulta aparece cargada en la siguiente.
     setRespuesta('');
+    /*
+      El borrador tampoco viaja de una charla a otra. Es la misma familia de
+      error que la guarda de arriba: media frase escrita para una clienta,
+      cargada y lista para enviar en la conversación de otra.
+    */
+    setDraft('');
+    // El cartel de "el bot está escribiendo" es de la charla que dejamos: sin
+    // esto quedaba pegado abajo de una conversación donde no pasaba nada.
+    setTyping(false);
+    // Y volvemos a seguir el final: la charla nueva se abre abajo de todo.
+    pegadoAlFinal.current = true;
   }, [selected]);
 
   useEffect(() => {
@@ -200,11 +253,50 @@ export function Inbox({
     // `tick` fuerza la reevaluación aunque el objeto del evento sea idéntico.
   }, [tick, lastEvent, selected, loadDetail]);
 
-  // Autoscroll al final cuando llegan mensajes.
+  /*
+    Autoscroll al final cuando llegan mensajes, PERO solo si ya estabas abajo.
+
+    Antes bajaba siempre, y además se disparaba con `typing`: cada vez que el
+    bot empezaba o dejaba de escribir, a quien estaba leyendo más arriba —
+    buscando qué le habían pedido, o releyendo un comprobante— la pantalla se
+    le iba al fondo. En una charla tranquila molesta; en una ráfaga es
+    imposible leer nada.
+  */
+  /*
+    Se dispara con el ID del último mensaje, NO con cuántos hay.
+
+    El servidor devuelve como mucho 200 (`history(id, 200)`), así que en una
+    charla de una clienta de años la cuenta se clava en 200 para siempre: entra
+    uno nuevo, sale el más viejo, y `length` no cambia. Con la longitud como
+    disparador, el efecto dejaba de correr justo en las conversaciones más
+    largas, y el hueco al fondo iba creciendo una burbuja por mensaje sin
+    corregirse nunca. El id del último cambia siempre.
+  */
+  const ultimoMensaje = detail?.messages.at(-1)?.id;
   useEffect(() => {
     const el = bodyRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
-  }, [detail?.messages.length, typing]);
+    if (el && pegadoAlFinal.current) el.scrollTop = el.scrollHeight;
+  }, [ultimoMensaje, selected]);
+
+  /** Se recalcula al scrollear: 120 px de tolerancia para no exigir el fondo exacto. */
+  const alScrollear = () => {
+    const el = bodyRef.current;
+    if (el) pegadoAlFinal.current = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+  };
+
+  /*
+    Lo que sale de ESTE panel siempre se muestra.
+
+    "Seguir el final solo si ya estabas abajo" vale para lo que llega de
+    afuera. Para lo que manda uno mismo es al revés: el cuadro de escribir está
+    siempre a la vista aunque la charla esté scrolleada arriba, así que se
+    puede releer un comprobante, bajar el cursor al textarea y mandar sin
+    volver a scrollear. Si ahí no bajamos, el borrador se vacía y no aparece
+    ninguna burbuja: se lee como que el envío falló, y se manda de nuevo.
+  */
+  const seguirElFinal = () => {
+    pegadoAlFinal.current = true;
+  };
 
   const send = async () => {
     const text = draft.trim();
@@ -213,6 +305,7 @@ export function Inbox({
     try {
       await api.sendMessage(selected, text);
       setDraft('');
+      seguirElFinal();
       await loadDetail(selected);
     } catch (err) {
       toast(`No se pudo enviar: ${String(err)}`);
@@ -229,6 +322,7 @@ export function Inbox({
       // "otro la contestó primero": sin este catch el panel muestra un error crudo.
       await api.answerReview(selected, respuesta.trim());
       setRespuesta('');
+      seguirElFinal();
       await loadDetail(selected);
       onConversationsChanged();
       toast('El bot ya puede seguir con el pedido');
@@ -303,6 +397,7 @@ export function Inbox({
     try {
       await api.sendPhoto(selected, url, draft.trim() || undefined);
       setDraft('');
+      seguirElFinal();
       await loadDetail(selected);
     } catch (err) {
       toast(`No se pudo mandar ${label}: ${String(err)}`);
@@ -313,6 +408,7 @@ export function Inbox({
     if (!selected) return;
     try {
       await api.sendQuickReply(selected, key);
+      seguirElFinal();
       await loadDetail(selected);
       toast('Mensaje rápido enviado');
     } catch (err) {
@@ -393,7 +489,11 @@ export function Inbox({
                 <span className="conv-name">
                   {c.contact?.fullName || c.contact?.displayName || c.externalId}
                 </span>
-                <span className="conv-time">{timeAgo(c.updatedAt)}</span>
+                {/* La hora de la ÚLTIMA ACTIVIDAD, no la de la última vez que se
+                    tocó la fila: `updatedAt` lo bumpean marcar como leída, tomar
+                    la charla y cerrar una consulta, así que decía "hace 1 min"
+                    de una charla donde nadie había escrito nada. */}
+                <span className="conv-time">{timeAgo(new Date(ultimaActividad(c)).toISOString())}</span>
               </div>
               <div className="conv-preview">{c.lastMessagePreview ?? '—'}</div>
               <div className="conv-meta">
@@ -423,7 +523,9 @@ export function Inbox({
                 ← Volver
               </button>
             </div>
-            <Empty glyph="🍰">Elegí una conversación de la lista.</Empty>
+            <Empty glyph={selected ? '⏳' : '🍰'}>
+              {selected ? 'Abriendo la charla…' : 'Elegí una conversación de la lista.'}
+            </Empty>
           </>
         ) : (
           <>
@@ -533,7 +635,7 @@ export function Inbox({
               </div>
             ) : null}
 
-            <div className="chat-body" ref={bodyRef}>
+            <div className="chat-body" ref={bodyRef} onScroll={alScrollear}>
               {detail.messages.map((m) => (
                 <Bubble key={m.id} message={m} />
               ))}
@@ -815,10 +917,19 @@ function Adjunto({ message }: { message: Message }) {
     // El link abre la foto entera: un CBU no se lee en una miniatura de 260 px.
     return (
       <a href={url} target="_blank" rel="noreferrer" title="Abrir la foto en grande">
+        {/*
+          `lazy`: cada foto sale de la base por una de las cinco conexiones que
+          comparte con el bot. Sin esto, abrir una charla con seis comprobantes
+          disparaba las seis descargas de golpe, en paralelo con las consultas
+          del propio detalle, y se trababa todo —la bandeja y el bot que estaba
+          contestándole a otra persona— hasta que terminaban de bajar.
+        */}
         <img
           className={`bubble-foto${message.direction === 'in' ? ' bubble-foto-entera' : ''}`}
           src={url}
           alt={message.text}
+          loading="lazy"
+          decoding="async"
         />
       </a>
     );
