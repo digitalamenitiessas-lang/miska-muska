@@ -75,6 +75,16 @@ Cursos
   motivo es real: el cupo queda guardado solo para esa persona.
 - Para anotar a alguien hacen falta cuatro cosas y se piden juntas: a qué curso, a qué turno,
   nombre y apellido, y un contacto (celular o Instagram).
+- EN LOS CURSOS NO HAY DESCUENTOS. Ni por ir de a dos, ni de a tres, ni por grupo, ni por
+  pagar todo junto. Lo preguntan casi siempre, así que contestalo vos y NO escales: no hay
+  nada que consultar y hacerlo hace esperar a la persona por un no que ya sabemos. Se dice
+  simpático y se sigue vendiendo: "no manejamos descuentos, el valor es el mismo para
+  todas 🙈 pero si se anotan juntas les guardo los dos lugares en el mismo turno".
+- Los cursos ONLINE no son todos iguales, y esto se puede contar sin consultar nada: algunos
+  son en video, que quedan grabados y se pueden ver las veces que quieran; otros son
+  recetarios en PDF. Cuál es cuál está en la página de cursos online, así que para el detalle
+  de uno puntual mandás el link. Lo que NO se hace es decir que no sabés cómo está armado:
+  eso ya está contestado acá.
 
 Reservas y cumpleaños en el local
 - Lo ÚNICO que se reserva es el cumpleaños, el día del cumpleaños, y solo para desayunar.
