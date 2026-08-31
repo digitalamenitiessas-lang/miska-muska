@@ -554,15 +554,37 @@ table.grid tbody tr:hover {
   min-height: 0;
 }
 
+/*
+  El buscador y los filtros se quedan arriba mientras la lista scrollea. Van en
+  un mismo contenedor pegajoso y no pegajosos por separado: apilar dos `sticky`
+  obliga a saber de memoria el alto del de arriba para darle el `top` al de
+  abajo, y con dos filas de filtros en pantalla angosta ese número cambia.
+*/
+.inbox-cabecera {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--paper);
+  border-bottom: 1px solid var(--line);
+}
+
+.inbox-buscador {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 10px 12px 0;
+}
+
+.inbox-buscador input {
+  font-size: 12.5px;
+  padding: 6px 10px;
+}
+
 .inbox-filters {
   display: flex;
   gap: 5px;
-  padding: 10px 12px;
-  border-bottom: 1px solid var(--line);
-  position: sticky;
-  top: 0;
+  padding: 8px 12px 10px;
   background: var(--paper);
-  z-index: 2;
   flex-wrap: wrap;
 }
 
@@ -763,6 +785,118 @@ table.grid tbody tr:hover {
   gap: 6px;
   flex-wrap: wrap;
   margin-bottom: 8px;
+}
+
+/* --- El cajón de respuestas -------------------------------------------- */
+
+.cajon {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--paper);
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.cajon-barra {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+.cajon-barra input {
+  font-size: 12.5px;
+  padding: 5px 9px;
+}
+
+/* Alto acotado: el cajón se abre encima del chat, y sin tope una lista de
+   treinta mensajes rápidos tapaba la conversación entera. */
+.cajon-lista,
+.cajon-fotos {
+  max-height: 240px;
+  overflow-y: auto;
+  padding: 8px;
+}
+
+.cajon-lista {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.cajon-texto {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  text-align: left;
+  border: 1px solid transparent;
+  background: none;
+  border-radius: 8px;
+  padding: 6px 8px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.cajon-texto:hover {
+  background: var(--mint-wash);
+  border-color: var(--line);
+}
+
+/* Dos renglones de vista previa y basta: alcanza para reconocer el mensaje sin
+   que cada fila ocupe media pantalla. */
+.cajon-texto span {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: pre-wrap;
+}
+
+.cajon-fotos {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+}
+
+.cajon-foto {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  align-items: center;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: none;
+  padding: 5px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.cajon-foto img {
+  width: 100%;
+  aspect-ratio: 1;
+  object-fit: cover;
+  border-radius: 5px;
+}
+
+.cajon-foto span {
+  text-align: center;
+  line-height: 1.2;
+}
+
+.cajon-vacio {
+  padding: 14px 12px;
+}
+
+.btn-cajon {
+  font-size: 17px;
+  line-height: 1;
+  padding: 9px 11px;
+}
+
+.btn-cajon[aria-pressed='true'] {
+  background: var(--mint-deep);
 }
 
 .rail {

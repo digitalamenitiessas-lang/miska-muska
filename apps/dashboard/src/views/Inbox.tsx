@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   api,
+  type CajonDeRespuestas,
   type Conversation,
   type ConversationDetail,
   type LiveEvent,
@@ -36,6 +37,19 @@ export function Inbox({
   const [filter, setFilter] = useState<Filter>('todas');
   const [selected, setSelected] = useState<string | null>(null);
   /*
+    El buscador. Lo que se tipea y lo que contestó el servidor, por separado:
+    mientras se escribe siguen viéndose los resultados anteriores, que es lo que
+    hace que no parpadee la lista en cada tecla.
+
+    La búsqueda va al servidor y no se filtra acá con lo que ya está cargado,
+    porque la bandeja trae las últimas cien charlas y la que buscás es
+    justamente la que no está a la vista. Y busca también adentro de los
+    mensajes: el equipo se acuerda de "la que pidió la Kinder", no del apellido.
+  */
+  const [busqueda, setBusqueda] = useState('');
+  const [resultados, setResultados] = useState<Conversation[] | null>(null);
+  const [buscando, setBuscando] = useState(false);
+  /*
     Qué panel se ve cuando la pantalla da para uno solo (≤860 px). En escritorio
     los tres conviven y el CSS ignora este valor.
 
@@ -55,9 +69,51 @@ export function Inbox({
   const [sending, setSending] = useState(false);
   const [typing, setTyping] = useState(false);
   const bodyRef = useRef<HTMLDivElement | null>(null);
+  const composeRef = useRef<HTMLTextAreaElement | null>(null);
+  /*
+    El cajón de respuestas. Se pide una sola vez y recién cuando alguien lo
+    abre: son los textos del equipo y todas las fotos que hay cargadas, y no
+    tiene sentido traerlo en cada chat que se mira sin usarlo.
+  */
+  const [cajonAbierto, setCajonAbierto] = useState(false);
+  const [cajon, setCajon] = useState<CajonDeRespuestas | null>(null);
+
+  /*
+    300 ms de espera antes de preguntar. Sin eso, "guadalupe" son nueve
+    búsquedas y cada una es un scan de la tabla de mensajes contra un pool de
+    cinco conexiones. El `cancelado` es para que una respuesta lenta de hace dos
+    teclas no pise a la que corresponde a lo que hay escrito ahora.
+  */
+  useEffect(() => {
+    const texto = busqueda.trim();
+    if (texto.length < 2) {
+      setResultados(null);
+      setBuscando(false);
+      return;
+    }
+    let cancelado = false;
+    setBuscando(true);
+    const timer = window.setTimeout(() => {
+      api
+        .conversations({ q: texto, limit: '60' })
+        .then((lista) => {
+          if (!cancelado) setResultados(lista);
+        })
+        .catch(() => {
+          if (!cancelado) setResultados([]);
+        })
+        .finally(() => {
+          if (!cancelado) setBuscando(false);
+        });
+    }, 300);
+    return () => {
+      cancelado = true;
+      window.clearTimeout(timer);
+    };
+  }, [busqueda]);
 
   const visible = useMemo(() => {
-    const list = conversations.filter((c) => {
+    const list = (resultados ?? conversations).filter((c) => {
       switch (filter) {
         case 'sin-leer':
           return c.unreadCount > 0;
@@ -74,7 +130,7 @@ export function Inbox({
       }
     });
     return list;
-  }, [conversations, filter]);
+  }, [conversations, resultados, filter]);
 
   // Selección inicial: la primera que necesite atención, o la más reciente.
   useEffect(() => {
@@ -213,6 +269,46 @@ export function Inbox({
     }
   };
 
+  useEffect(() => {
+    if (!cajonAbierto || cajon) return;
+    api
+      .cajonDeRespuestas()
+      .then(setCajon)
+      .catch(() => toast('No pude traer las respuestas rápidas'));
+  }, [cajonAbierto, cajon, toast]);
+
+  // Se cierra al cambiar de chat: dejarlo abierto tapa el principio de la charla
+  // que se acaba de abrir.
+  useEffect(() => setCajonAbierto(false), [selected]);
+
+  /**
+   * Un texto del equipo va al cuadro de escribir, NO al cliente.
+   *
+   * Es la diferencia con los sugeridos de arriba, que envían de una. El local
+   * pidió poder editar antes de mandar, y tiene razón: el mismo texto sirve
+   * para diez charlas justamente porque cada una le saca o le agrega un
+   * renglón.
+   */
+  const ponerTexto = (texto: string) => {
+    setDraft((actual) => (actual.trim() ? `${actual.trimEnd()}\n${texto}` : texto));
+    setCajonAbierto(false);
+    // En el siguiente frame: el textarea todavía no se re-renderizó con el texto.
+    window.setTimeout(() => composeRef.current?.focus(), 0);
+  };
+
+  /** Una foto sí sale derecho: no hay nada que editarle. */
+  const mandarFoto = async (url: string, label: string) => {
+    if (!selected) return;
+    setCajonAbierto(false);
+    try {
+      await api.sendPhoto(selected, url, draft.trim() || undefined);
+      setDraft('');
+      await loadDetail(selected);
+    } catch (err) {
+      toast(`No se pudo mandar ${label}: ${String(err)}`);
+    }
+  };
+
   const useSuggestion = async (key: string) => {
     if (!selected) return;
     try {
@@ -227,6 +323,32 @@ export function Inbox({
   return (
     <div className="inbox" data-panel={panelMovil}>
       <div className="inbox-list">
+        {/* Buscador y filtros van juntos en una cabecera pegada arriba: si el
+            buscador se fuera scrolleando, buscar entre cien charlas obligaría a
+            volver al principio de la lista para escribir. */}
+        <div className="inbox-cabecera">
+        <div className="inbox-buscador">
+          <input
+            className="grow"
+            type="search"
+            value={busqueda}
+            placeholder="Buscar por nombre, teléfono o algo que se dijo…"
+            onChange={(e) => setBusqueda(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setBusqueda('');
+            }}
+          />
+          {busqueda ? (
+            <button
+              className="btn btn-sm btn-ghost"
+              aria-label="Limpiar la búsqueda"
+              onClick={() => setBusqueda('')}
+            >
+              ✕
+            </button>
+          ) : null}
+        </div>
+
         <div className="inbox-filters">
           {FILTERS.map((f) => (
             <button
@@ -239,12 +361,25 @@ export function Inbox({
             </button>
           ))}
         </div>
+        </div>
+
+        {resultados ? (
+          <div className="small muted" style={{ padding: '8px 12px 2px' }}>
+            {buscando
+              ? 'Buscando…'
+              : `${visible.length} ${visible.length === 1 ? 'charla' : 'charlas'} con "${busqueda.trim()}"`}
+          </div>
+        ) : null}
 
         {visible.length === 0 ? (
-          <Empty glyph="💬">
-            {conversations.length === 0
-              ? 'Todavía no llegó ningún mensaje. Escribile al bot desde Telegram para probar.'
-              : 'No hay conversaciones con este filtro.'}
+          <Empty glyph={resultados ? '🔍' : '💬'}>
+            {resultados
+              ? buscando
+                ? 'Buscando…'
+                : 'Ninguna charla con eso. Probá con el nombre, el número o una palabra que se haya dicho adentro.'
+              : conversations.length === 0
+                ? 'Todavía no llegó ningún mensaje. Escribile al bot desde Telegram para probar.'
+                : 'No hay conversaciones con este filtro.'}
           </Empty>
         ) : (
           visible.map((c) => (
@@ -424,8 +559,26 @@ export function Inbox({
                 </div>
               ) : null}
 
+              {cajonAbierto ? (
+                <Cajon
+                  cajon={cajon}
+                  onTexto={ponerTexto}
+                  onFoto={(url, label) => void mandarFoto(url, label)}
+                  onCerrar={() => setCajonAbierto(false)}
+                />
+              ) : null}
+
               <div className="compose-row">
+                <button
+                  className="btn btn-ghost btn-cajon"
+                  aria-pressed={cajonAbierto}
+                  title="Textos y fotos guardadas"
+                  onClick={() => setCajonAbierto((v) => !v)}
+                >
+                  ⚡
+                </button>
                 <textarea
+                  ref={composeRef}
                   className="grow"
                   placeholder={
                     detail.conversation.mode === 'human'
@@ -475,6 +628,117 @@ export function Inbox({
   );
 }
 
+/**
+ * El cajón de respuestas: lo que una persona puede mandar con un clic cuando
+ * toma la charla.
+ *
+ * Dos cosas y no una, porque el equipo contesta con las dos: textos pulidos por
+ * años de atención, y fotos. El texto va al cuadro de escribir para poder
+ * editarlo; la foto sale derecho, que no hay nada que editarle.
+ *
+ * El buscador mira también adentro del texto y no solo el título: nadie se
+ * acuerda de que el mensaje se llama "uber", se acuerda de que en algún lado
+ * dice "ponele PIN al viaje".
+ */
+function Cajon({
+  cajon,
+  onTexto,
+  onFoto,
+  onCerrar,
+}: {
+  cajon: CajonDeRespuestas | null;
+  onTexto: (texto: string) => void;
+  onFoto: (url: string, label: string) => void;
+  onCerrar: () => void;
+}) {
+  const [solapa, setSolapa] = useState<'textos' | 'fotos'>('textos');
+  const [filtro, setFiltro] = useState('');
+  const buscar = filtro.trim().toLowerCase();
+
+  const textos = (cajon?.textos ?? []).filter(
+    (t) =>
+      !buscar ||
+      t.label.toLowerCase().includes(buscar) ||
+      t.key.toLowerCase().includes(buscar) ||
+      t.preview.toLowerCase().includes(buscar),
+  );
+  const fotos = (cajon?.fotos ?? []).filter(
+    (f) =>
+      !buscar || f.label.toLowerCase().includes(buscar) || f.grupo.toLowerCase().includes(buscar),
+  );
+
+  return (
+    <div className="cajon">
+      <div className="cajon-barra">
+        <button
+          className="chip"
+          aria-pressed={solapa === 'textos'}
+          onClick={() => setSolapa('textos')}
+        >
+          Textos
+        </button>
+        <button
+          className="chip"
+          aria-pressed={solapa === 'fotos'}
+          onClick={() => setSolapa('fotos')}
+        >
+          Fotos
+        </button>
+        <input
+          className="grow"
+          autoFocus
+          value={filtro}
+          placeholder="Buscar…"
+          onChange={(e) => setFiltro(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') onCerrar();
+          }}
+        />
+        <button className="btn btn-sm btn-ghost" onClick={onCerrar} aria-label="Cerrar">
+          ✕
+        </button>
+      </div>
+
+      {!cajon ? (
+        <div className="small muted cajon-vacio">Trayendo las respuestas…</div>
+      ) : solapa === 'textos' ? (
+        textos.length ? (
+          <div className="cajon-lista">
+            {textos.map((t) => (
+              <button key={t.key} className="cajon-texto" onClick={() => onTexto(t.preview)}>
+                <strong>{t.label}</strong>
+                <span className="small muted">{t.preview}</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <div className="small muted cajon-vacio">
+            Ningún texto con eso. Los mensajes se cargan y se editan en Rápidos.
+          </div>
+        )
+      ) : fotos.length ? (
+        <div className="cajon-fotos">
+          {fotos.map((f) => (
+            <button
+              key={f.id}
+              className="cajon-foto"
+              title={`${f.label} — se manda al toque`}
+              onClick={() => onFoto(f.url, f.label)}
+            >
+              <img src={f.url} alt={f.label} loading="lazy" decoding="async" />
+              <span className="small">{f.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="small muted cajon-vacio">
+          Ninguna foto con eso. Las fotos salen del Catálogo, de los Cursos y de la carta.
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Los tipos de mensaje que traen un archivo colgado. */
 const TRAE_ARCHIVO = ['image', 'document', 'audio'];
 
@@ -493,6 +757,36 @@ const TRAE_ARCHIVO = ['image', 'document', 'audio'];
  */
 function Adjunto({ message }: { message: Message }) {
   const kind = message.contentKind;
+
+  /*
+    Una ubicación compartida. No es un archivo: WhatsApp manda coordenadas, y
+    hasta acá el panel las mostraba como "[ubicación -26.83,-65.20]", que para
+    quien tiene que llevar un pedido no dice absolutamente nada.
+
+    El link no se abre solo ni se pide ningún mapa desde el panel: es un enlace
+    que el operador aprieta si lo necesita. La dirección de una clienta no sale
+    de acá hasta que alguien decide abrirla.
+  */
+  if (kind === 'location') {
+    const p = message.payload as
+      | { latitude?: number; longitude?: number; name?: string; address?: string }
+      | null;
+    if (typeof p?.latitude !== 'number' || typeof p?.longitude !== 'number') return null;
+    const coords = `${p.latitude},${p.longitude}`;
+    return (
+      <a
+        className="bubble-archivo"
+        href={`https://www.google.com/maps?q=${coords}`}
+        target="_blank"
+        rel="noreferrer"
+        title="Abrir la ubicación en el mapa"
+      >
+        📍 {p.name || p.address || 'Ubicación compartida'}
+        <span className="small muted"> · {coords}</span>
+      </a>
+    );
+  }
+
   if (!TRAE_ARCHIVO.includes(kind)) return null;
 
   const payload = message.payload as
@@ -550,7 +844,7 @@ function Adjunto({ message }: { message: Message }) {
  * entero: el nombre del PDF puede ser lo único que le quede al operador.
  */
 export const sinEtiquetaDeAdjunto = (text: string) =>
-  text.replace(/^\[(imagen|archivo[^\]]*|audio|mensaje de voz)\]\s*/i, '');
+  text.replace(/^\[(imagen|archivo[^\]]*|audio|mensaje de voz|ubicación[^\]]*)\]\s*/i, '');
 
 function Bubble({ message }: { message: Message }) {
   const out = message.direction === 'out';
@@ -561,8 +855,10 @@ function Bubble({ message }: { message: Message }) {
     el ternario del texto tomaba SIEMPRE la primera rama y le recortaba la
     etiqueta a todos los mensajes.
   */
-  const payload = message.payload as { url?: string } | null;
-  const archivoALaVista = TRAE_ARCHIVO.includes(message.contentKind) && Boolean(payload?.url);
+  const payload = message.payload as { url?: string; latitude?: number } | null;
+  const archivoALaVista =
+    (TRAE_ARCHIVO.includes(message.contentKind) && Boolean(payload?.url)) ||
+    (message.contentKind === 'location' && typeof payload?.latitude === 'number');
 
   return (
     <div className={`bubble ${out ? 'bubble-out' : 'bubble-in'}${authorClass}`}>

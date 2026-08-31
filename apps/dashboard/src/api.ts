@@ -208,6 +208,12 @@ export interface QuickReply {
   preview?: string;
 }
 
+/** Lo que se ve en el cajón de respuestas del chat, cuando una persona toma la charla. */
+export interface CajonDeRespuestas {
+  textos: Array<{ key: string; label: string; preview: string }>;
+  fotos: Array<{ id: string; label: string; url: string; grupo: string }>;
+}
+
 export interface Settings {
   botEnabled: boolean;
   activeChannels: ChannelId[];
@@ -382,6 +388,8 @@ export const api = {
     post<{ ok: true }>(`/api/conversations/${id}/messages`, { text }),
   sendQuickReply: (id: string, quickReplyKey: string) =>
     post<{ ok: true }>(`/api/conversations/${id}/messages`, { quickReplyKey }),
+  sendPhoto: (id: string, imageUrl: string, text?: string) =>
+    post<{ ok: true }>(`/api/conversations/${id}/messages`, { imageUrl, text }),
   updateContact: (id: string, patchBody: Partial<Contact>) =>
     patch<{ ok: true; contact: Contact }>(`/api/contacts/${id}`, patchBody),
 
@@ -435,6 +443,8 @@ export const api = {
   deleteSignup: (id: string) => del<{ ok: true }>(`/api/courses/signups/${id}`),
 
   quickReplies: () => get<QuickReply[]>('/api/quick-replies'),
+  /** Todo lo que el operador puede mandar con un clic: textos y fotos, en una consulta. */
+  cajonDeRespuestas: () => get<CajonDeRespuestas>('/api/respuestas-rapidas'),
   saveQuickReply: (body: Partial<QuickReply>) => post<QuickReply>('/api/quick-replies', body),
   deleteQuickReply: (key: string) => del<{ ok: true }>(`/api/quick-replies/${key}`),
 

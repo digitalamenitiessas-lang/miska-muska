@@ -25,6 +25,11 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
       channel: query.channel as ChannelId | undefined,
       needsAttention: query.needsAttention === '1',
       limit: query.limit ? Number(query.limit) : 100,
+      /*
+        Dos letras de piso. Con una sola, "a" trae la bandeja entera y le hace
+        pagar a la base un scan de `messages` para no filtrar nada.
+      */
+      q: (query.q ?? '').trim().length >= 2 ? query.q : undefined,
     });
     /*
       Los contactos van en UNA consulta y no en una por conversación. Con cien
@@ -161,10 +166,20 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
   /** Mensaje escrito por una persona del local. */
   app.post('/api/conversations/:id/messages', async (req, reply) => {
     const { id } = req.params as { id: string };
-    const { text, quickReplyKey } = req.body as { text?: string; quickReplyKey?: string };
+    const { text, quickReplyKey, imageUrl } = req.body as {
+      text?: string;
+      quickReplyKey?: string;
+      imageUrl?: string;
+    };
     if (quickReplyKey) {
       const ok = await pipeline.sendQuickReply(id, quickReplyKey);
       return ok ? { ok: true } : reply.code(404).send({ error: 'Mensaje rápido inexistente' });
+    }
+    if (imageUrl) {
+      const ok = await pipeline.sendPhotoAsOperator(id, imageUrl, text);
+      return ok
+        ? { ok: true }
+        : reply.code(400).send({ error: 'La foto tiene que ser una URL https pública' });
     }
     if (!text?.trim()) return reply.code(400).send({ error: 'Texto vacío' });
     await pipeline.sendAsOperator(id, text.trim());
@@ -535,6 +550,57 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
       /** Cómo queda el texto con los datos de hoy ya interpolados. */
       preview: renderQuickReply(qr.body, settings, products),
     }));
+  });
+
+  /*
+    Todo lo que el operador puede mandar con un clic, en UNA sola consulta: los
+    textos del equipo con los datos de hoy ya puestos, y las fotos que existen.
+
+    Va aparte de `/api/quick-replies` por dos motivos. Uno, las fotos: la mitad
+    de lo que el local contesta es una imagen —la carta, el flyer del curso, la
+    mini torta— y hasta acá quien tomaba la charla solo podía escribir, así que
+    abría WhatsApp en el celular y la conversación quedaba partida en dos
+    lugares. Y dos, la alternativa era pedirle al panel tres endpoints más, uno
+    de ellos `/api/settings`, que en cada llamada le pega a Meta y a Telegram
+    para saber si están vivos. Abrir un cajón de respuestas no tiene por qué
+    despertar a Meta.
+  */
+  app.get('/api/respuestas-rapidas', async () => {
+    const [settings, products, textos, cursos] = await Promise.all([
+      repos.settings.read(),
+      repos.products.list(),
+      repos.quickReplies.list(),
+      repos.courses.list(),
+    ]);
+
+    const fotos: Array<{ id: string; label: string; url: string; grupo: string }> = [];
+    if (settings.cartaUrl) {
+      fotos.push({ id: 'carta', label: 'La carta', url: settings.cartaUrl, grupo: 'Carta' });
+    }
+    for (const { course } of cursos) {
+      if (course.imageUrl) {
+        fotos.push({
+          id: `curso:${course.id}`,
+          label: course.name,
+          url: course.imageUrl,
+          grupo: 'Cursos',
+        });
+      }
+    }
+    for (const p of products) {
+      if (p.imageUrl) {
+        fotos.push({ id: p.id, label: p.name, url: p.imageUrl, grupo: p.category });
+      }
+    }
+
+    return {
+      textos: textos.map((qr) => ({
+        key: qr.key,
+        label: qr.label,
+        preview: renderQuickReply(qr.body, settings, products),
+      })),
+      fotos,
+    };
   });
 
   app.post('/api/quick-replies', async (req) => {

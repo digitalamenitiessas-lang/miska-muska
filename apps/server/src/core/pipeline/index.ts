@@ -824,6 +824,33 @@ export class Pipeline {
     });
   }
 
+  /**
+   * API pública para que un operador mande una foto desde el panel.
+   *
+   * Existe porque la mitad de las respuestas del local son una imagen: la
+   * carta, el flyer del curso, la foto de la mini torta. Hasta acá el operador
+   * que tomaba la charla solo podía escribir, así que abría WhatsApp en el
+   * celular para mandar una foto y a partir de ahí la conversación quedaba
+   * partida en dos lugares.
+   *
+   * Solo HTTPS, por lo mismo que el `mandar_foto` del bot: Meta descarga la
+   * imagen desde afuera y con cualquier otra cosa falla sin decir nada.
+   */
+  async sendPhotoAsOperator(
+    conversationId: string,
+    url: string,
+    caption?: string,
+  ): Promise<boolean> {
+    if (!/^https:\/\/\S+$/i.test(url)) return false;
+    await this.#marcarContestadoPorPersona(conversationId);
+    await this.#send(conversationId, [{ kind: 'image', url, caption: caption?.trim() || undefined }], {
+      author: 'human',
+      handler: 'operator',
+      humanize: false,
+    });
+    return true;
+  }
+
   /** API pública para reenviar un mensaje rápido desde el panel. */
   async sendQuickReply(conversationId: string, key: string): Promise<boolean> {
     const qr = await this.#repos.quickReplies.get(key);

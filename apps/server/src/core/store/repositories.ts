@@ -347,19 +347,63 @@ export function createRepositories() {
         channel?: ChannelId;
         needsAttention?: boolean;
         limit?: number;
+        /** Buscador: nombre, teléfono, o una palabra dicha adentro de la charla. */
+        q?: string;
       } = {},
     ): Promise<Conversation[]> {
       const where: string[] = [];
       const args: unknown[] = [];
       if (opts.mode) {
         args.push(opts.mode);
-        where.push(`mode = $${args.length}`);
+        where.push(`c.mode = $${args.length}`);
       }
       if (opts.channel) {
         args.push(opts.channel);
-        where.push(`channel = $${args.length}`);
+        where.push(`c.channel = $${args.length}`);
       }
-      if (opts.needsAttention) where.push('needs_attention');
+      if (opts.needsAttention) where.push('c.needs_attention');
+
+      /*
+        El buscador. Tres formas de encontrar la misma charla, porque el equipo
+        la busca de las tres: por el nombre, por el número, o por algo que se
+        dijo adentro ("la que pidió la torta Kinder").
+
+        El teléfono va aparte y por dígitos: nadie lo escribe como está
+        guardado. Alguien tipea "381 415-4991" y en la base dice
+        "5493814154991". Se le sacan los separadores a los dos lados y recién
+        ahí se comparan, con tres dígitos como piso para que "38" no traiga
+        media agenda.
+
+        El texto de los mensajes va en un EXISTS y no en un JOIN: con JOIN, una
+        charla donde la palabra aparece diez veces salía diez veces en la
+        bandeja. Es un ILIKE sin índice, o sea un scan de `messages`, y eso
+        está bien PORQUE SOLO CORRE CUANDO ALGUIEN ESCRIBE EN EL BUSCADOR: la
+        bandeja normal no pasa por acá. Si algún día duele, lo que va es un
+        índice trigram, no sacar la búsqueda.
+      */
+      const texto = opts.q?.trim() ?? '';
+      if (texto) {
+        args.push(`%${texto}%`);
+        const patron = `$${args.length}`;
+        const partes = [
+          `ct.full_name ILIKE ${patron}`,
+          `ct.display_name ILIKE ${patron}`,
+          `ct.username ILIKE ${patron}`,
+          `c.last_message_preview ILIKE ${patron}`,
+          `EXISTS (SELECT 1 FROM messages m WHERE m.conversation_id = c.id AND m.text ILIKE ${patron})`,
+        ];
+        const digitos = texto.replace(/\D/g, '');
+        if (digitos.length >= 3) {
+          args.push(`%${digitos}%`);
+          const soloNumeros = `$${args.length}`;
+          partes.push(
+            `regexp_replace(COALESCE(ct.phone, ''), '\\D', '', 'g') LIKE ${soloNumeros}`,
+            `regexp_replace(c.external_id, '\\D', '', 'g') LIKE ${soloNumeros}`,
+          );
+        }
+        where.push(`(${partes.join(' OR ')})`);
+      }
+
       args.push(opts.limit ?? 100);
       /*
         La bandeja se ordena por la ÚLTIMA ACTIVIDAD DE LA CHARLA, no por cuándo
@@ -377,10 +421,12 @@ export function createRepositories() {
         una charla sin saliente todavía se iría al fondo.
       */
       const rows = await q(
-        `SELECT * FROM conversations ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
+        `SELECT c.* FROM conversations c
+         LEFT JOIN contacts ct ON ct.id = c.contact_id
+         ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
          ORDER BY GREATEST(
-           COALESCE(last_inbound_at, created_at),
-           COALESCE(last_outbound_at, created_at)
+           COALESCE(c.last_inbound_at, c.created_at),
+           COALESCE(c.last_outbound_at, c.created_at)
          ) DESC
          LIMIT $${args.length}`,
         args,
