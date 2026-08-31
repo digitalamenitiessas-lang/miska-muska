@@ -42,6 +42,34 @@ const COPA: Array<[RegExp, string]> = [
   [/\bme copa\b/gi, 'me gusta'],
 ];
 
+/*
+  Vocabulario de adentro que se le escapa al cliente.
+
+  El caso real: preguntaron "venden salsa?" y el bot contestó "No tenemos salsa
+  en el catálogo, así que no la vendemos". Fuera de que suena seco, le mostró al
+  cliente cómo funcionamos por dentro: él no sabe que existe un catálogo, y no
+  tiene por qué enterarse.
+
+  Se BORRA la muletilla y no se reescribe la frase. "no tenemos salsa en el
+  catálogo" queda "no tenemos salsa", que sigue siendo castellano y sigue
+  diciendo lo mismo. El tono lo arregla el prompt; esto solo saca la palabra que
+  nunca tendría que haber salido.
+*/
+const JERGA_INTERNA: Array<[RegExp, string]> = [
+  [/s+en (?:el|nuestro|mi) cat[áa]logo/gi, ''],
+  [/s+en (?:el|nuestro|mi) sistema/gi, ''],
+  [/s+en (?:la|nuestra|mi) base(?: de datos)?/gi, ''],
+  [/no (?:lo |la |los |las )?tengo cargad[oa]s?/gi, 'no tenemos'],
+];
+
+/*
+  "no figura" y "no me aparece" quedaron AFUERA a propósito, y vale la pena que
+  esté escrito para que nadie los agregue de nuevo con buena intención: cambiarlos
+  por "no tenemos" da vuelta el orden de la frase. "Esa torta no figura" salía
+  como "Esa torta no tenemos", que es castellano roto — y un mensaje mal escrito
+  es peor que uno con una palabra de más. De esos dos se ocupa el prompt.
+*/
+
 export interface WritingResult {
   text: string;
   /** Qué hubo que corregir. Vacío significa que el prompt cumplió solo. */
@@ -80,6 +108,14 @@ export function normalizeWriting(text: string): WritingResult {
     if (traducido !== out) {
       fixes.push('la palabra copa');
       out = traducido;
+    }
+  }
+
+  for (const [re, to] of JERGA_INTERNA) {
+    const limpio = out.replace(re, to);
+    if (limpio !== out) {
+      fixes.push('vocabulario interno');
+      out = limpio;
     }
   }
 
