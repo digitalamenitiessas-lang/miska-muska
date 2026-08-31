@@ -383,7 +383,9 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     'escalar_a_humano',
     'Pasa la conversación a una persona del local y silencia al bot. Usala para excepciones de ' +
       'pago o precio, reclamos, pedidos corporativos, cuando pidan hablar con alguien, o cuando ' +
-      'no sepas algo y no esté en las herramientas. Si lo que piden es CAMBIAR algo de un ' +
+      'no sepas algo y no esté en las herramientas: un relleno, un alérgeno, las porciones ' +
+      'de una torta, qué trae un box adentro. Eso va con motivo no_se, y no se contesta de ' +
+      'memoria ni se esquiva cambiando de tema. Si lo que piden es CAMBIAR algo de un ' +
       'producto, no uses esta: usá `consultar_modificacion`, que además deja el pedido en pausa. ' +
       'Después de llamarla, avisale al cliente con naturalidad que ya le escribe alguien del local.',
     {
