@@ -308,12 +308,19 @@ function Field({
 }
 
 /**
- * Los avisos al celular, para este dispositivo.
+ * Los avisos del sistema, para este dispositivo.
+ *
+ * Se llamaba "avisos al celular" y andaba igual en la computadora desde el
+ * primer día: es el mismo Web Push, y en Chrome, Edge y Firefox de escritorio
+ * funciona sin instalar nada. Pero el título decía celular, así que en el local
+ * nadie lo probó en la compu del mostrador y lo pidieron como si faltara. Un
+ * cartel que miente sobre lo que hay abajo esconde la función igual que si no
+ * existiera.
  *
  * Dice "en este dispositivo" en todos lados a propósito: la suscripción es del
- * teléfono, no de la cuenta. Si lo activa una y la otra espera que le llegue a
- * su celular, no le va a llegar nunca — y esa confusión, con un aviso que puede
- * ser un reclamo, sale cara.
+ * teléfono o de la computadora, no de la cuenta. Si lo activa una y la otra
+ * espera que le llegue a su celular, no le va a llegar nunca — y esa confusión,
+ * con un aviso que puede ser un reclamo, sale cara.
  *
  * El botón no aparece de arranque ni al entrar al panel: el permiso se pide una
  * sola vez por dispositivo y un "no" queda para siempre. Se aprieta cuando
@@ -344,14 +351,16 @@ function Avisos() {
     encendidos: {
       estado: 'Activados en este dispositivo',
       detalle:
-        'Te llega un aviso cuando una charla necesita a una persona: un reclamo, un ' +
-        'comprobante para mirar, o algo que el bot no puede resolver solo.',
+        'Te llega un aviso con sonido cuando una charla necesita a una persona: un ' +
+        'reclamo, un comprobante para mirar, o algo que el bot no puede resolver solo. ' +
+        'Llega aunque tengas el panel cerrado.',
     },
     apagados: {
       estado: 'Apagados en este dispositivo',
       detalle:
-        'Activalos y te avisamos al celular cuando una charla necesite a una persona, sin ' +
-        'que tengas que estar mirando el panel.',
+        'Andan igual en la computadora que en el celular, y en la compu no hace falta ' +
+        'instalar nada. Activalos y te avisamos cuando una charla necesite a una ' +
+        'persona, aunque tengas el panel cerrado.',
     },
     bloqueados: {
       estado: 'Bloqueados por el navegador',
@@ -371,7 +380,7 @@ function Avisos() {
     },
     'no-soportado': {
       estado: 'Este navegador no los soporta',
-      detalle: 'Probá desde Chrome en Android, o desde la computadora.',
+      detalle: 'Probá desde Chrome o Edge, en la computadora o en Android.',
     },
   };
 
@@ -381,7 +390,7 @@ function Avisos() {
   return (
     <section className="card">
       <div className="card-pad">
-        <h3 className="card-title">Avisos al celular</h3>
+        <h3 className="card-title">Avisos del sistema (celular o computadora)</h3>
         <div className="row wrap" style={{ gap: 10 }}>
           <i
             className={`dot ${

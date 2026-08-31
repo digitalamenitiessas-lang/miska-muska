@@ -13,6 +13,7 @@ import {
   type Settings,
 } from './api';
 import { Pill, Switch, useToast } from './ui';
+import { ponerSonido, sonarAviso, sonidoEncendido } from './sonido';
 import { Inbox } from './views/Inbox';
 import { Pedidos } from './views/Pedidos';
 import { Catalogo } from './views/Catalogo';
@@ -80,6 +81,8 @@ export default function App() {
   */
   const [orderTick, setOrderTick] = useState(0);
   const [lastEvent, setLastEvent] = useState<LiveEvent | null>(null);
+  /** Si esta computadora hace ruido cuando una charla necesita a una persona. */
+  const [sonando, setSonando] = useState(sonidoEncendido);
   const toast = useToast();
 
   const loadShell = useCallback(async () => {
@@ -173,6 +176,35 @@ export default function App() {
     () => conversations.filter((c) => c.needsAttention).length,
     [conversations],
   );
+
+  /*
+    El sonidito, y el número en la solapa del navegador.
+
+    Se dispara por FLANCO DE SUBIDA y por conversación, no por el total: si una
+    charla se resuelve y otra se prende en el mismo evento, el total no se mueve
+    y sin embargo hay alguien nuevo esperando. Es el mismo criterio con el que
+    el servidor decide mandar el aviso al celular.
+
+    El Set arranca sembrado y en silencio: al abrir el panel a la mañana hay
+    charlas de ayer marcadas, y sonar cinco veces de entrada es la forma de que
+    alguien apague el sonido el primer día.
+  */
+  const marcadas = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    const ahora = new Set(conversations.filter((c) => c.needsAttention).map((c) => c.id));
+    const previas = marcadas.current;
+    marcadas.current = ahora;
+    if (!previas) return;
+    if ([...ahora].some((id) => !previas.has(id))) sonarAviso();
+  }, [conversations]);
+
+  /*
+    La solapa del navegador es media notificación gratis: el panel suele quedar
+    en una pestaña de atrás, y así el número se ve sin cambiar de ventana.
+  */
+  useEffect(() => {
+    document.title = attention > 0 ? `(${attention}) Miska Muska` : 'Miska Muska · Panel del bot';
+  }, [attention]);
   const unread = useMemo(
     () => conversations.reduce((sum, c) => sum + (c.unreadCount > 0 ? 1 : 0), 0),
     [conversations],
@@ -251,6 +283,28 @@ export default function App() {
               <i className={`dot ${connected ? 'dot-ok' : 'dot-off'}`} />
               <span className="muted">{connected ? 'en vivo' : 'sin stream'}</span>
             </div>
+            {/* El sonido se apaga acá y no en Ajustes: quien lo quiere callar
+                lo quiere callar AHORA, no después de buscar dónde. */}
+            <button
+              className="btn-sonido"
+              title={
+                sonando
+                  ? 'Suena un aviso cuando una charla necesita a una persona. Tocá para silenciarlo.'
+                  : 'El sonido está silenciado en esta computadora. Tocá para volver a escucharlo.'
+              }
+              aria-pressed={sonando}
+              onClick={() => {
+                const proximo = !sonando;
+                ponerSonido(proximo);
+                setSonando(proximo);
+                // Al prenderlo suena una vez: es la única forma de saber que
+                // anda, y de paso despierta el audio del navegador.
+                if (proximo) sonarAviso();
+              }}
+            >
+              <span>{sonando ? '🔔' : '🔕'}</span>
+              <span className="muted">{sonando ? 'con sonido' : 'silenciado'}</span>
+            </button>
           </div>
         </div>
       </aside>
