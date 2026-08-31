@@ -1503,3 +1503,30 @@ table.grid tbody tr:hover {
   .gastometro-label,
   .gastometro-mes { display: none; }
 }
+
+/* -------------------------------------------------------------- carta --- */
+
+/* La miniatura de la carta. Alta y angosta, como el flyer real. */
+.carta-mini {
+  display: block;
+  width: 62px;
+  height: 96px;
+  object-fit: cover;
+  object-position: top;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+}
+
+/*
+  El aviso de que la carta quedó vieja. Va en rojo y no en gris: es plata mal
+  cotizada a un cliente que ya vio la foto, no una sugerencia de mantenimiento.
+*/
+.carta-vieja {
+  margin: 12px 0 0;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  background: var(--rose-wash);
+  border-left: 3px solid var(--danger);
+  color: var(--danger);
+  font-size: 12.5px;
+}

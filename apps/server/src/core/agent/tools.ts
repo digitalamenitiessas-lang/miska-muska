@@ -311,6 +311,14 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           'Id del curso cuyo flyer querés mandar (lo devuelve buscar_cursos). Mandá este o ' +
           'producto_id, no los dos.',
       },
+      carta: {
+        type: 'boolean',
+        description:
+          'Poné true para mandar LA CARTA de pastelería entera, la imagen con todos los ' +
+          'precios. Es lo que hay que mandar cuando piden "la carta", "la lista", "los ' +
+          'precios" o "qué tenés" sin nombrar una categoría. Va sola: sin producto_id ni ' +
+          'curso_id.',
+      },
       texto: {
         type: 'string',
         description:
@@ -1261,8 +1269,47 @@ export async function executeTool(
       case 'mandar_foto': {
         const productoId = String(input.producto_id ?? '').trim();
         const cursoId = String(input.curso_id ?? '').trim();
+
+        /*
+          La carta entera. Es una imagen sola, cargada desde el panel, y no un
+          producto: por eso sale por acá arriba y no pasa por el catálogo.
+
+          Se manda tal cual está. Si los precios de la foto no coinciden con los
+          del catálogo, eso no se arregla ni se avisa desde acá — se arregla
+          subiendo la carta de nuevo, y el panel se encarga de avisar que quedó
+          vieja. Un bot que le pide disculpas a la clienta por su propia carta es
+          peor que una carta desactualizada.
+        */
+        if (input.carta === true) {
+          if (!settings.cartaUrl || !FOTO_VALIDA.test(settings.cartaUrl)) {
+            return {
+              ok: false,
+              error:
+                'Todavía no hay una carta cargada en el panel. No la inventes ni pegues un ' +
+                'link: pasale los precios de la categoría que le interese, con buscar_catalogo.',
+            };
+          }
+          ctx.effects.photos = ctx.effects.photos ?? [];
+          ctx.effects.photos.push({
+            url: settings.cartaUrl,
+            caption: typeof input.texto === 'string' ? input.texto.trim() || undefined : undefined,
+          });
+          return {
+            ok: true,
+            data: {
+              mandada: 'la carta de pastelería',
+              instruccion:
+                'Ya va la carta. Acompañala con una línea corta y cerrá invitando a encargar. ' +
+                'No repitas los precios en texto: están en la imagen.',
+            },
+          };
+        }
+
         if (!productoId && !cursoId) {
-          return { ok: false, error: 'Decime qué foto mandar: producto_id o curso_id.' };
+          return {
+            ok: false,
+            error: 'Decime qué foto mandar: producto_id, curso_id, o carta en true.',
+          };
         }
 
         const item = cursoId

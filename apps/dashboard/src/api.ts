@@ -88,6 +88,8 @@ export interface Product {
   /** Foto del producto, como URL pública HTTPS. El bot la manda como imagen. */
   imageUrl: string | null;
   sortOrder: number;
+  /** Cuando se toco por ultima vez. Sirve para saber si la carta quedo vieja. */
+  updatedAt: string;
 }
 
 export interface OrderItem {
@@ -224,6 +226,10 @@ export interface Settings {
   webUrl: string;
   coursesUrl: string;
   breakfastsUrl: string;
+  /** La carta de pastelería como imagen, que el bot manda cuando la piden. */
+  cartaUrl: string;
+  /** Cuándo se subió, para avisar si quedó vieja frente a los precios. */
+  cartaSubidaEn: string;
 }
 
 export interface ChannelHealth {

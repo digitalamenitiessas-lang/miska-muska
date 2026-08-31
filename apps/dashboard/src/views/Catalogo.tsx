@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, type Product } from '../api';
+import { api, type Product, type Settings } from '../api';
 import { CATEGORY_LABEL, claveCategoria, Empty, Pill, Switch, money } from '../ui';
 
 /**
@@ -187,6 +187,8 @@ Si es algo que hoy no hay, mejor apagalo ` +
         </span>
       </div>
 
+      <LaCarta products={products} toast={toast} />
+
       <div className="grid-2">
         {grouped.map(([category, items]) => {
           const on = items.filter((p) => p.availableToday).length;
@@ -326,6 +328,113 @@ Si es algo que hoy no hay, mejor apagalo ` +
  * También se puede pegar una dirección a mano, para las fotos que ya están en la
  * tienda o en Instagram y no hace falta duplicar.
  */
+/**
+ * La carta de pastelería, la imagen que el bot manda cuando se la piden.
+ *
+ * Vive en Catálogo y no en Ajustes porque es parte de la carta, no de la
+ * configuración del bot: quien cambia un precio es quien tiene que acordarse de
+ * volver a subirla, y conviene que las dos cosas estén en la misma pantalla.
+ *
+ * El aviso de "quedó vieja" es el motivo real de que esto sea una sección y no
+ * un campo suelto. La foto es una SEGUNDA lista de precios que no se actualiza
+ * sola, y el cliente le cree a la foto porque es lo que vio. Comparando la fecha
+ * de la carta contra la del último precio tocado, el panel puede decir en voz
+ * alta lo que si no se descubre por un reclamo.
+ */
+function LaCarta({ products, toast }: { products: Product[]; toast: (t: string) => void }) {
+  const [settings, setSettings] = useState<Settings | null>(null);
+  const [subiendo, setSubiendo] = useState(false);
+  const archivoRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    void api
+      .settings()
+      .then((r) => setSettings(r.settings))
+      .catch(() => undefined);
+  }, []);
+
+  const subir = async (file: File) => {
+    setSubiendo(true);
+    try {
+      const { url } = await api.uploadMedia(file);
+      const next = await api.saveSettings({ cartaUrl: url, cartaSubidaEn: new Date().toISOString() });
+      setSettings(next);
+      toast('Carta actualizada. El bot ya manda esta.');
+    } catch (err) {
+      toast(`No pude subir la carta: ${String(err)}`);
+    } finally {
+      setSubiendo(false);
+      if (archivoRef.current) archivoRef.current.value = '';
+    }
+  };
+
+  if (!settings) return null;
+
+  /*
+    El producto tocado más recientemente. Si alguien cambió un precio después de
+    subir la carta, la foto miente y hay que rehacerla.
+  */
+  const ultimoCambio = products.reduce<string>(
+    (max, p) => (p.updatedAt > max ? p.updatedAt : max),
+    '',
+  );
+  const quedoVieja =
+    Boolean(settings.cartaUrl) &&
+    Boolean(settings.cartaSubidaEn) &&
+    ultimoCambio > settings.cartaSubidaEn;
+
+  return (
+    <section className="card" style={{ marginBottom: 14 }}>
+      <div className="card-pad">
+        <div className="row wrap" style={{ gap: 10, alignItems: 'flex-start' }}>
+          {settings.cartaUrl ? (
+            <a href={settings.cartaUrl} target="_blank" rel="noreferrer" title="Ver la carta entera">
+              <img className="carta-mini" src={settings.cartaUrl} alt="La carta" />
+            </a>
+          ) : null}
+          <div className="grow" style={{ minWidth: 0 }}>
+            <h3 className="card-title" style={{ margin: 0 }}>
+              La carta que manda el bot
+            </h3>
+            <p className="small muted" style={{ margin: '4px 0 0' }}>
+              {settings.cartaUrl
+                ? `Cargada el ${new Date(settings.cartaSubidaEn).toLocaleDateString('es-AR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                  })}. Es la imagen que manda cuando piden "la carta" o "los precios".`
+                : 'Todavía no hay ninguna. Subila y el bot la manda cuando le pidan la carta.'}
+            </p>
+          </div>
+          <input
+            ref={archivoRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void subir(f);
+            }}
+          />
+          <button
+            className="btn btn-sm btn-primary"
+            disabled={subiendo}
+            onClick={() => archivoRef.current?.click()}
+          >
+            {subiendo ? 'Subiendo…' : settings.cartaUrl ? 'Cambiar la carta' : 'Subir la carta'}
+          </button>
+        </div>
+
+        {quedoVieja ? (
+          <p className="carta-vieja">
+            ⚠ Tocaste precios después de subir esta carta. La foto que ve el cliente ya no
+            coincide con lo que cobra el bot — y el cliente le cree a la foto. Subila de nuevo.
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}
+
 function FotoDialogo({
   producto,
   onCerrar,

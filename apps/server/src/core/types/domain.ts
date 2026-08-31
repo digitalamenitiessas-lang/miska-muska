@@ -337,6 +337,19 @@ export interface BotSettings {
   webUrl: string;
   coursesUrl: string;
   breakfastsUrl: string;
+  /**
+   * La carta de pastelería, como imagen. Es lo que el local venía mandando a
+   * mano por WhatsApp cuando le piden "la carta", y es lo que la clienta espera.
+   *
+   * Ojo con lo que es: una SEGUNDA fuente de precios, en un archivo que no se
+   * actualiza solo. El catálogo del panel es el que cobra; esta foto es la que
+   * el cliente lee. Si se separan, gana la foto — porque es lo que él vio. Por
+   * eso se guarda cuándo se subió: el panel avisa si alguien tocó un precio
+   * después, que es exactamente cómo se desincronizan.
+   */
+  cartaUrl: string;
+  /** ISO 8601 de cuándo se subió la carta, para detectar que quedó vieja. */
+  cartaSubidaEn: string;
 }
 
 export interface MetricPoint {

@@ -1286,4 +1286,6 @@ export const DEFAULT_SETTINGS: BotSettings = {
   webUrl: 'https://www.miskamuska.com.ar',
   coursesUrl: 'https://www.cursos.miskamuska.com.ar',
   breakfastsUrl: 'https://miskamuska.com.ar/product-category/desayunos/',
+  cartaUrl: '',
+  cartaSubidaEn: '',
 };
