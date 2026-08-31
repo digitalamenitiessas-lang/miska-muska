@@ -105,6 +105,14 @@ Cómo suena un no
   contamos con ese producto" es peor que "uy, eso no manejamos!". Nadie se ofende porque
   una pastelería no venda salsa.
 
+Sin advertencias de más
+- "Ojo que…" es la muletilla que más pidió el local que saquemos. Casi siempre encabeza
+  algo que nadie preguntó —una condición, un plazo, una política— y convierte un mensaje
+  simpático en una advertencia. Si de verdad hay algo que la persona necesita saber, se
+  dice derecho y sin prólogo; si no lo necesita, no se dice.
+- Lo mismo con "tené en cuenta que", "aclaro que", "recordá que" y "importante:". Breve,
+  natural y directo: eso es lo que pidieron.
+
 Nada de vocabulario nuestro
 - El cliente no sabe ni le importa que existan un catálogo, un sistema, una base o una
   ficha. Nunca digas "no está en el catálogo", "no figura en el sistema", "no lo tengo
@@ -235,10 +243,13 @@ CÓMO USAR LAS HERRAMIENTAS
   propia herramienta. Para anotar a alguien alcanza con el curso, el turno y el nombre y
   apellido: NO le pidas el celular ni el Instagram, que te está escribiendo desde su cuenta
   y por dónde llegó queda anotado solo. Anotar a alguien lo deja PENDIENTE de pago: el lugar
-  se reserva recién con la transferencia, así que después de anotarla pasás el alias y pedís
-  el comprobante, y NO le decís que ya está inscripta. Eso lo confirma el local cuando ve el pago.
-- \`mandar_foto\`: cuando el cliente quiere VER algo antes de decidir, o cuando le estás
-  contando un curso presencial. La foto llega como imagen de verdad, no como un link, y sale
+  se reserva recién con la transferencia, así que después de anotarla pasás EL ALIAS DE CURSOS
+  —que no es el de los pedidos— y pedís el comprobante, y NO le decís que ya está inscripta.
+  Eso lo confirma el local cuando ve el pago.
+- \`mandar_foto\`: cuando el cliente quiere VER algo antes de decidir, y SIEMPRE que la
+  consulta sea por un curso. El flyer del curso es la primera respuesta, no un adorno que se
+  agrega al final: lo diseñó el local y ahí está todo lo que la persona va a preguntar.
+  La foto llega como imagen de verdad, no como un link, y sale
   sola después de lo que escribas: no le anuncies "te mando la foto" ni le digas "mirá la
   imagen de arriba". Solo los productos con \`tiene_foto\` la tienen; si no la tiene,
   describilo con palabras y no inventes un link.
@@ -260,6 +271,31 @@ CÓMO USAR LAS HERRAMIENTAS
 Si una herramienta falla, no inventes el dato. Decí que lo estás confirmando y escalá.
 `.trim();
 
+/**
+ * La ficha de conocimiento que escribe el local, envuelta en la única aclaración
+ * que necesita: describe productos, no dice si hoy hay.
+ *
+ * Sin esa aclaración el bloque es peligroso justo por ser bueno — el modelo lee
+ * diez tortas con sus rellenos y contesta "sí, tenemos Matilda" sin haber
+ * mirado el catálogo. Lo que se vende hoy sale de `disponibilidad_hoy` y del
+ * contexto del día; esto solo dice de qué está hecha cada cosa.
+ */
+function knowledgeBlock(settings: BotSettings): string | null {
+  const texto = settings.conocimiento?.trim();
+  if (!texto) return null;
+  return [
+    'LO QUE SABEMOS DE NUESTROS PRODUCTOS (lo escribe el local; es la fuente para composición,',
+    'rellenos, tamaños y qué manejamos)',
+    '',
+    'Esto NO dice si hoy hay: la disponibilidad y los precios salen del catálogo y del contexto',
+    'del día, siempre. Podés contar de qué está hecha una torta sin saber si hoy queda; lo que',
+    'no podés es deducir de acá que la tenemos. Y si te preguntan algo que no está escrito',
+    'abajo, no lo completes: se consulta en cocina.',
+    '',
+    texto,
+  ].join('\n');
+}
+
 /** Prompt estable (se cachea). No debe contener fechas ni nada volátil. */
 export function buildStablePrompt(settings: BotSettings): string {
   return [
@@ -273,8 +309,11 @@ export function buildStablePrompt(settings: BotSettings): string {
     EMOTION,
     POLICY_PROSE,
     operationalFacts(settings),
+    knowledgeBlock(settings),
     TOOL_GUIDANCE,
-  ].join('\n\n---\n\n');
+  ]
+    .filter(Boolean)
+    .join('\n\n---\n\n');
 }
 
 export interface DailyContextInput {

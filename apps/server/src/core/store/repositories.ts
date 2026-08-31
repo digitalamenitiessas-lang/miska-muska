@@ -1369,9 +1369,46 @@ export const DEFAULT_SETTINGS: BotSettings = {
   address: 'Marcos Paz 473, San Miguel de Tucumán',
   transferAlias: 'MISKATUC',
   transferHolder: 'MISKA MUSKA SAS (Mercado Pago)',
+  transferAliasCursos: 'miskamuskacursos',
+  transferHolderCursos: 'Marcela Urrea Bianchini',
   webUrl: 'https://www.miskamuska.com.ar',
   coursesUrl: 'https://www.cursos.miskamuska.com.ar',
   breakfastsUrl: 'https://miskamuska.com.ar/product-category/desayunos/',
   cartaUrl: '',
   cartaSubidaEn: '',
+  /*
+    El arranque de la ficha de conocimiento: lo que el local pasó por escrito.
+    A partir de acá lo edita el equipo desde Ajustes y este valor no vuelve a
+    aparecer nunca —el guardado gana—, así que no hay que mantenerlo al día.
+
+    Sin precios a propósito: los precios están en el catálogo, que es lo que
+    cobra. Acá va de qué está hecha cada cosa, que es lo que el catálogo no
+    guarda y lo que el cliente pregunta.
+  */
+  conocimiento: `
+Tortas — de qué está hecha cada una. Esto describe el producto; NO dice si hoy hay.
+- Matilda: bizcochuelo húmedo de chocolate, rellena y cubierta con crema Bariloche. 10 o 20 porciones.
+- 3 Leches: bizcochuelo de vainilla humedecido en tres leches, dulce de leche y crema chantilly, cubierta con crema. 10 o 20 porciones.
+- Franui: bizcochuelo de chocolate, dulce de leche y crema de frambuesas. Decorada con crema, drip de chocolate con leche y Franui. 10 o 20 porciones.
+- María Luisa: capas crocantes, dulce de leche y nueces, cubierta con merengue italiano. 20 porciones.
+- Kinder: bizcochuelo de chocolate, crema Bariloche y crema de Nutella, decorada con Kinder Bueno. 10 o 20 porciones.
+- Brownie: brownie con dulce de leche y crema chantilly, con opción de reducción de frutos rojos u Oreo. 10 o 20 porciones.
+- Red Velvet: bizcochuelo red velvet, relleno y cubierto con frosting de queso. 10 o 20 porciones.
+- Chajá: bizcochuelo de vainilla, dulce de leche, crema y duraznos. 10 o 20 porciones.
+- Frutimiska chocolate: bizcochuelo de chocolate, dulce de leche, crema y frutillas. 10 o 20 porciones.
+- Frutimiska vainilla: base de vainilla con galletitas, dulce de leche y crema chantilly. 10 o 20 porciones.
+
+Porciones sueltas de torta: no vendemos. Si preguntan por una porción se dice corto y se
+ofrece una mini torta o algún individual, para no cortar la venta.
+
+Cafetería. Es SOLO para tomar o retirar en el local: la cafetería no se envía. Está acá para
+que sepas qué manejamos y puedas contestar, no para ofrecerla como envío.
+- Clásicos: café doble, café americano, latte, mocaccino, capuccino, chocolatada, flat white, té, mate cocido.
+- Lattes saborizados: avellana, vainilla, caramelo, pistacho, coco, frambuesa, matcha.
+- Cafés fríos y smoothies: iced coffee, iced latte, smoothie de frutos rojos con leche condensada.
+- Licuados: banana, frutilla, durazno.
+- Juguitos frescos: limonada, limonada de frutos rojos, jugo de naranja, jugo de naranja con mango y maracuyá.
+- Bebidas: línea Coca-Cola, aguas saborizadas.
+- También tenemos leche deslactosada y de almendras, y cualquier café se puede pedir "iced".
+`.trim(),
 };

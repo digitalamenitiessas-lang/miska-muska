@@ -196,8 +196,10 @@ export function Ajustes({
           </p>
           <div className="grid-2" style={{ gap: 12 }}>
             <Field label="Dirección del local" value={draft.address} onChange={(v) => set('address', v)} />
-            <Field label="Alias de transferencia" value={draft.transferAlias} onChange={(v) => set('transferAlias', v)} />
-            <Field label="Titular / Mercado Pago" value={draft.transferHolder} onChange={(v) => set('transferHolder', v)} />
+            <Field label="Alias de transferencia (pedidos)" value={draft.transferAlias} onChange={(v) => set('transferAlias', v)} />
+            <Field label="Titular / Mercado Pago (pedidos)" value={draft.transferHolder} onChange={(v) => set('transferHolder', v)} />
+            <Field label="Alias de transferencia (cursos)" value={draft.transferAliasCursos} onChange={(v) => set('transferAliasCursos', v)} />
+            <Field label="Titular de la cuenta de cursos" value={draft.transferHolderCursos} onChange={(v) => set('transferHolderCursos', v)} />
             <Field label="Tienda online" value={draft.webUrl} onChange={(v) => set('webUrl', v)} />
             <Field label="Página de cursos" value={draft.coursesUrl} onChange={(v) => set('coursesUrl', v)} />
             <Field label="Categoría desayunos" value={draft.breakfastsUrl} onChange={(v) => set('breakfastsUrl', v)} />
@@ -246,6 +248,34 @@ export function Ajustes({
               es el de arriba.
             </span>
           </div>
+        </div>
+      </section>
+
+      {/* La ficha de conocimiento. Es texto libre a propósito: lo que el local
+          quiere que el bot sepa no entra en columnas, y si hiciera falta un
+          deploy cada vez, el bot sabría solo lo que alguien tuvo tiempo de
+          modelar. Va al prompt tal cual se escriba acá. */}
+      <section className="card">
+        <div className="card-pad">
+          <h3 className="card-title">Lo que el bot tiene que saber</h3>
+          <p className="small muted" style={{ marginTop: -6 }}>
+            De qué está hecha cada torta, qué hay en la cafetería, qué no vendemos. Todo lo que
+            el bot contesta hoy con un "lo consulto en cocina" y podría contestar solo. Escribilo
+            como se lo contarías a alguien que arranca a trabajar: va al bot tal cual, en el
+            próximo mensaje.
+          </p>
+          <textarea
+            rows={16}
+            value={draft.conocimiento}
+            onChange={(e) => set('conocimiento', e.target.value)}
+            style={{ width: '100%', fontFamily: 'inherit' }}
+            placeholder="Matilda: bizcochuelo húmedo de chocolate, rellena y cubierta con crema Bariloche…"
+          />
+          <p className="small muted">
+            <strong>Precios y disponibilidad no van acá.</strong> Eso vive en el Catálogo, que es
+            lo que cobra. Un precio escrito en este cuadro es un segundo precio que nadie
+            actualiza, y el día que no coincidan el cliente le va a creer al que leyó.
+          </p>
         </div>
       </section>
 

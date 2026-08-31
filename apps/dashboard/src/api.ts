@@ -223,6 +223,9 @@ export interface Settings {
   address: string;
   transferAlias: string;
   transferHolder: string;
+  /** La cuenta de los cursos, que no es la de los pedidos. */
+  transferAliasCursos: string;
+  transferHolderCursos: string;
   webUrl: string;
   coursesUrl: string;
   breakfastsUrl: string;
@@ -230,6 +233,8 @@ export interface Settings {
   cartaUrl: string;
   /** Cuándo se subió, para avisar si quedó vieja frente a los precios. */
   cartaSubidaEn: string;
+  /** Texto libre con lo que el local sabe y ninguna tabla guarda. Va al prompt. */
+  conocimiento: string;
 }
 
 export interface ChannelHealth {

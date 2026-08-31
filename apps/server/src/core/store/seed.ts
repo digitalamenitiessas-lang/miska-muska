@@ -244,7 +244,6 @@ const QUICK_REPLIES = [
       'Tenemos cursos 🥰 los online los tenés todos acá: {{linkCursos}}\n' +
       'Los presenciales van cambiando cada semana, así que consultame cuál hay ahora y te ' +
       'cuento.\n' +
-      'La inscripción queda confirmada únicamente con el pago, porque los cupos son limitados. ' +
       'te gustaría que te reserve un lugar?',
   },
   {

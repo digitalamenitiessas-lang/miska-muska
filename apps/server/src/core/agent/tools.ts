@@ -18,6 +18,7 @@ import type {
   Product,
 } from '../types/domain.js';
 import {
+  aliasDeCursos,
   claveDeCategoria,
   itemsQueTocanLaConsulta,
   normalizarNombre,
@@ -485,6 +486,8 @@ export async function executeTool(
   ctx: ToolContext,
 ): Promise<ToolResult> {
   const { repos, settings } = ctx;
+  // Los cursos cobran en su propia cuenta, que no es la de los pedidos.
+  const aliasCursos = aliasDeCursos(settings);
 
   try {
     switch (name) {
@@ -1257,13 +1260,14 @@ export async function executeTool(
             precio: curso.price,
             lugares_libres_ahora: libres - 1,
             instruccion:
-              `Quedó anotada en la planilla, PENDIENTE de pago. Pasale el alias ` +
-              `${settings.transferAlias} (${settings.transferHolder}) por el total de ` +
-              `${curso.price.toLocaleString('es-AR')} y pedile el comprobante. Avisale que el ` +
-              'lugar queda reservado recién con el pago, porque los cupos son limitados, y que ' +
-              'por eso no hay devoluciones ni cancelaciones — eso se dice ANTES de que ' +
-              'transfiera. NO le digas que ya está inscripta: eso lo confirma el local cuando ' +
-              've la transferencia.',
+              `Quedó anotada en la planilla, PENDIENTE de pago. Pasale el alias DE CURSOS, ` +
+              `que no es el de los pedidos: ${aliasCursos.alias} (${aliasCursos.titular}), por ` +
+              `${curso.price.toLocaleString('es-AR')}, y pedile el comprobante. Ese mensaje ` +
+              'lleva SOLO eso: el alias, el titular y el total. Nada de cupos limitados, ' +
+              'devoluciones, cancelaciones ni plazos — todo eso es cierto y se contesta si ' +
+              'pregunta, pero metido acá suena a letra chica y así lo pidió el local. Y NO le ' +
+              'digas que ya está inscripta ni que ya la anotaste: eso lo confirma el local ' +
+              'cuando ve la transferencia.',
           },
         };
       }

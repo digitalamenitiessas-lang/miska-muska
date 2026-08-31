@@ -334,6 +334,18 @@ export interface BotSettings {
   address: string;
   transferAlias: string;
   transferHolder: string;
+  /**
+   * El alias de los CURSOS, que no es el mismo que el de los pedidos.
+   *
+   * Son dos cuentas distintas y la plata de los cursos va a la suya. Mandar el
+   * alias de pedidos para una inscripción es un cobro en la cuenta equivocada,
+   * que después alguien tiene que ir a buscar a mano.
+   *
+   * Si queda vacío, el bot usa el de pedidos: es preferible cobrar en la cuenta
+   * de al lado que quedarse sin alias en medio de una inscripción.
+   */
+  transferAliasCursos: string;
+  transferHolderCursos: string;
   webUrl: string;
   coursesUrl: string;
   breakfastsUrl: string;
@@ -350,6 +362,26 @@ export interface BotSettings {
   cartaUrl: string;
   /** ISO 8601 de cuándo se subió la carta, para detectar que quedó vieja. */
   cartaSubidaEn: string;
+  /**
+   * Lo que el local sabe y el bot no puede deducir de ninguna tabla.
+   *
+   * Es texto libre y va tal cual al prompt. Existe porque la mitad de las
+   * correcciones que llegan no son un bug ni un precio: son un dato que el bot
+   * no tenía (de qué es el bizcochuelo de la Matilda, qué cafés hay, que no
+   * vendemos porciones). Ninguna de esas cosas entra en el catálogo —no se
+   * venden por mensaje, o son una descripción y no un SKU— y todas se contestan
+   * mal si no están escritas en algún lado.
+   *
+   * Deliberadamente NO es una tabla con campos: si hubiera que agregar una
+   * columna cada vez que el local quiere que el bot sepa algo, el bot iba a
+   * saber solo lo que un programador tuvo tiempo de modelar. Acá lo escriben
+   * ellos, en Ajustes, y está en el próximo mensaje.
+   *
+   * Lo que NO va acá: precios, disponibilidad y stock. Eso vive en el catálogo,
+   * que es lo que cobra. Un precio escrito acá es una segunda fuente de verdad
+   * que nadie actualiza, así que el prompt lo dice y el panel también.
+   */
+  conocimiento: string;
 }
 
 export interface MetricPoint {
