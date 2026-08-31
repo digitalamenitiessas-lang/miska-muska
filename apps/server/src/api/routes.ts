@@ -26,13 +26,17 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
       needsAttention: query.needsAttention === '1',
       limit: query.limit ? Number(query.limit) : 100,
     });
-    // Se adjunta el contacto para que el panel no tenga que pedirlo uno por uno.
-    return Promise.all(
-      list.map(async (conversation) => ({
-        ...conversation,
-        contact: await repos.contacts.get(conversation.contactId),
-      })),
-    );
+    /*
+      Los contactos van en UNA consulta y no en una por conversación. Con cien
+      charlas eso eran cien consultas contra un pool de cinco: veinte rondas
+      encoladas contra Supabase por cada vez que el panel refresca la lista, que
+      es en cada evento del bot.
+    */
+    const contactos = await repos.contacts.byIds(list.map((c) => c.contactId));
+    return list.map((conversation) => ({
+      ...conversation,
+      contact: contactos.get(conversation.contactId) ?? null,
+    }));
   });
 
   app.get('/api/conversations/:id', async (req, reply) => {

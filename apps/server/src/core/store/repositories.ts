@@ -250,6 +250,24 @@ function toQuickReply(r: Row): QuickReply {
 
 export function createRepositories() {
   const contacts = {
+    /**
+     * Varios contactos de una sola consulta.
+     *
+     * La bandeja necesita el contacto de cada conversación que lista. Antes los
+     * pedía de a uno: cien conversaciones eran cien consultas, contra un pool de
+     * CINCO conexiones, o sea veinte rondas contra Supabase encoladas una atrás
+     * de la otra. Ese era el "delay de la aplicación misma" que reportó el local
+     * con diez charlas, y con trescientas se vuelve inusable.
+     *
+     * Devuelve un Map porque quien la llama va a buscar por id.
+     */
+    async byIds(ids: string[]): Promise<Map<string, Contact>> {
+      const unicos = [...new Set(ids)];
+      if (!unicos.length) return new Map();
+      const rows = await q('SELECT * FROM contacts WHERE id = ANY($1)', [unicos]);
+      return new Map(rows.map((r) => [String(r.id), toContact(r)]));
+    },
+
     /** Inserta o actualiza el contacto por (canal, externalId), en un solo viaje. */
     async upsert(channel: ChannelId, c: InboundContact): Promise<Contact> {
       const row = await one(
@@ -343,9 +361,28 @@ export function createRepositories() {
       }
       if (opts.needsAttention) where.push('needs_attention');
       args.push(opts.limit ?? 100);
+      /*
+        La bandeja se ordena por la ÚLTIMA ACTIVIDAD DE LA CHARLA, no por cuándo
+        se tocó la fila.
+
+        Ordenaba por `updated_at`, y esa columna la bumpean un montón de cosas
+        que no son un mensaje nuevo: marcar una charla para atención, tomarla o
+        devolverla, abrir o cerrar una consulta. El reporte del local fue
+        exacto: "había un mensaje de hace una hora y media y se puso arriba, en
+        vez de otro que me había llegado hace un minuto". Era eso: una charla
+        vieja a la que le llegó un comprobante saltaba arriba de una nueva.
+
+        `GREATEST` con dos columnas que pueden ser NULL necesita el COALESCE
+        adentro: en Postgres, GREATEST(x, NULL) no devuelve x, devuelve NULL, y
+        una charla sin saliente todavía se iría al fondo.
+      */
       const rows = await q(
         `SELECT * FROM conversations ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-         ORDER BY updated_at DESC LIMIT $${args.length}`,
+         ORDER BY GREATEST(
+           COALESCE(last_inbound_at, created_at),
+           COALESCE(last_outbound_at, created_at)
+         ) DESC
+         LIMIT $${args.length}`,
         args,
       );
       return rows.map(toConversation);
