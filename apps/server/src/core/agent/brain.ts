@@ -119,7 +119,13 @@ function supportsExplicitCaching(model: string): boolean {
 }
 
 /** Convierte el historial guardado en turnos de la API. */
-function toApiMessages(history: StoredMessage[]): ChatMessage[] {
+/** Ver el porqué al final de `toApiMessages()`. */
+const CIERRE_SIN_CLIENTE =
+  '[nota del sistema] Lo último que hay en el chat lo escribió el local, no el cliente. ' +
+  'Seguí vos la conversación desde acá.';
+
+/** Exportada para `scripts/probar-cierre-del-chat.mts`. */
+export function toApiMessages(history: StoredMessage[]): ChatMessage[] {
   const messages: ChatMessage[] = [];
   for (const m of history) {
     if (m.author === 'system' || m.contentKind === 'typing') continue;
@@ -137,6 +143,26 @@ function toApiMessages(history: StoredMessage[]): ChatMessage[] {
     }
   }
   while (messages.length && messages[0].role !== 'user') messages.shift();
+  /*
+    La charla tiene que TERMINAR con un mensaje del cliente, y no siempre pasa:
+    cuando el local contesta una consulta, la respuesta viaja en el contexto del
+    sistema y no en el chat, así que el historial termina en el "dejame
+    consultarlo" del bot. Lo mismo con cualquier turno forzado.
+
+    Dejarlo así rompe de dos maneras distintas. OpenRouter rutea el modelo entre
+    Anthropic, Google Vertex y Azure: los dos últimos devuelven 400 ("does not
+    support assistant message prefill"), y era el ~11 % de los turnos que se
+    caían todos los días sin explicación. Anthropic no falla, pero hace algo
+    peor en silencio: toma ese último mensaje como prefill y CONTINÚA la frase
+    del bot en vez de escribir una nueva.
+
+    La nota cierra la lista con un turno del usuario y de paso le dice al modelo
+    qué está mirando. El corchete es la misma convención que `[operador del
+    local]` de acá arriba.
+  */
+  if (messages.at(-1)?.role === 'assistant') {
+    messages.push({ role: 'user', content: CIERRE_SIN_CLIENTE });
+  }
   return messages;
 }
 
