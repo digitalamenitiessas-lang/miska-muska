@@ -323,13 +323,43 @@ const SOLO_APARTE = /^\s*\*{0,2}\s*[([]([\s\S]*)[)\]]\s*\*{0,2}\s*$|^\s*\*{1,2}(
 const HABLA_DEL_TURNO =
   /\b(respuesta|responder|contestar|contesto|conversaci[óo]n|charla|mensaje|silencio|cerrad[ao]|nada que (decir|agregar)|sin (m[áa]s|nada))\b/i;
 
+/*
+  Y la misma acotación escrita como prosa, sin paréntesis que la delaten.
+
+  De las tres que salieron en cuatro días, la de arriba atrapa dos. La tercera
+  fue esta, y le llegó entera a una clienta:
+
+    "No hay ningún mensaje nuevo del cliente al que responder — lo último fue
+     del local ("Agendada! 😍"), así que no corresponde que yo intervenga ahora.
+     Me quedo esperando a que la persona escriba."
+
+  Lo que la delata no es la forma sino a QUIÉN le habla. El bot le escribe a la
+  clienta y la trata de vos: "te lo anoto", "pasame". Un mensaje que se refiere a
+  ella en tercera persona —"el cliente", "la persona"— no le está hablando a
+  nadie: es el modelo pensando en voz alta.
+
+  Las dos condiciones juntas, otra vez, y por lo mismo: "el nombre de la persona
+  que lo recibe" también la nombra en tercera persona, y esa frase hay que
+  mandarla. Lo que no puede estar es eso Y hablar del turno.
+*/
+const HABLA_DEL_CLIENTE_EN_TERCERA =
+  /\b(?:el|la|l[oa]s)\s+(?:client[ae]s?|persona|usuari[oa]s?)\b|\bmensaje\s+(?:nuevo|del\s+client)/i;
+const HABLA_DE_SI_MISMO =
+  /\b(intervenir|intervenga|intervengo|me\s+quedo\s+esperando|no\s+corresponde|no\s+(?:hace\s+falta|hay\s+nada)\s+que\s+(?:responder|contestar|decir)|al\s+que\s+responder|espero\s+a\s+que\s+(?:escriba|responda))\b/i;
+
 /** ¿Esta burbuja es una acotación del modelo y no un mensaje para el cliente? */
 export function esAcotacion(text: string): boolean {
-  const m = SOLO_APARTE.exec(text.trim());
-  if (!m) return false;
-  const adentro = (m[1] ?? m[2] ?? '').trim();
-  if (!adentro) return false;
-  return HABLA_DEL_TURNO.test(adentro);
+  const limpio = text.trim();
+
+  // La forma más común: toda la burbuja es un aparte entre paréntesis.
+  const m = SOLO_APARTE.exec(limpio);
+  if (m) {
+    const adentro = (m[1] ?? m[2] ?? '').trim();
+    if (adentro && HABLA_DEL_TURNO.test(adentro)) return true;
+  }
+
+  // Y la de prosa suelta: habla del cliente en tercera persona Y de su propio turno.
+  return HABLA_DEL_CLIENTE_EN_TERCERA.test(limpio) && HABLA_DE_SI_MISMO.test(limpio);
 }
 
 /** Normaliza las burbujas de un turno y descarta las que queden vacías. */
