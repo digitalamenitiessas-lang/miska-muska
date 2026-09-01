@@ -81,6 +81,19 @@ export default function App() {
   */
   const [orderTick, setOrderTick] = useState(0);
   const [lastEvent, setLastEvent] = useState<LiveEvent | null>(null);
+  /*
+    El salto a una charla desde otra pantalla: tocar el nombre en Pedidos o en
+    Cursos abre esa conversacion en la bandeja.
+
+    Lleva un contador y no solo el id porque el mismo salto se puede pedir dos
+    veces: mirar un pedido, volver, y tocar el mismo nombre otra vez. Con solo el
+    id, la segunda vez el valor no cambia y el efecto de la bandeja no corre.
+  */
+  const [salto, setSalto] = useState<{ id: string; n: number } | null>(null);
+  const irAlChat = (conversationId: string) => {
+    setSalto((previo) => ({ id: conversationId, n: (previo?.n ?? 0) + 1 }));
+    setView('bandeja');
+  };
   /** Si esta computadora hace ruido cuando una charla necesita a una persona. */
   const [sonando, setSonando] = useState(sonidoEncendido);
   const toast = useToast();
@@ -328,13 +341,16 @@ export default function App() {
             lastEvent={lastEvent}
             tick={tick}
             onConversationsChanged={loadShell}
+            salto={salto}
             toast={toast.show}
           />
         ) : (
           <div className="content">
-            {view === 'pedidos' ? <Pedidos tick={orderTick} toast={toast.show} /> : null}
+            {view === 'pedidos' ? (
+              <Pedidos tick={orderTick} onVerChat={irAlChat} toast={toast.show} />
+            ) : null}
             {view === 'catalogo' ? <Catalogo toast={toast.show} /> : null}
-            {view === 'cursos' ? <Cursos toast={toast.show} /> : null}
+            {view === 'cursos' ? <Cursos onVerChat={irAlChat} toast={toast.show} /> : null}
             {view === 'campanas' ? <Campanas toast={toast.show} /> : null}
             {view === 'rapidos' ? <Rapidos toast={toast.show} /> : null}
             {view === 'metricas' ? <Metricas /> : null}

@@ -15,7 +15,14 @@ import { ComandaInscripcion } from './Comanda';
  * decisión de una persona, que se toma cuando aparece la transferencia, y es el
  * momento en que se le avisa: ese botón manda el mensaje de confirmación.
  */
-export function Cursos({ toast }: { toast: (text: string) => void }) {
+export function Cursos({
+  onVerChat,
+  toast,
+}: {
+  /** Abre la charla de esta inscripta en la bandeja. */
+  onVerChat: (conversationId: string) => void;
+  toast: (text: string) => void;
+}) {
   const [cursos, setCursos] = useState<CursoConTurnos[]>([]);
   const [loading, setLoading] = useState(true);
   const [abierto, setAbierto] = useState<string | null>(null);
@@ -169,6 +176,7 @@ export function Cursos({ toast }: { toast: (text: string) => void }) {
           onCerrar={() => setAbierto(null)}
           onActualizar={(id, patch) => void actualizarInscripto(id, patch)}
           onRecargar={() => void abrirPlanilla(curso.course.id)}
+          onVerChat={onVerChat}
           toast={toast}
         />
       ) : null}
@@ -199,6 +207,7 @@ function Planilla({
   onCerrar,
   onActualizar,
   onRecargar,
+  onVerChat,
   toast,
 }: {
   curso: CursoConTurnos;
@@ -206,6 +215,7 @@ function Planilla({
   onCerrar: () => void;
   onActualizar: (id: string, patch: Partial<CourseSignup>) => void;
   onRecargar: () => void;
+  onVerChat: (conversationId: string) => void;
   toast: (text: string) => void;
 }) {
   const [agregando, setAgregando] = useState(false);
@@ -275,13 +285,22 @@ function Planilla({
                     return (
                       <tr key={i.id} style={{ opacity: i.status === 'cancelado' ? 0.5 : 1 }}>
                         <td>
-                          <button
-                            className="link-numero"
-                            title="Ver la ficha: todo lo que sabemos de esta inscripción"
-                            onClick={() => setComanda(i.id)}
-                          >
-                            {i.fullName}
-                          </button>
+                          {/* El nombre lleva al chat. La ficha ya tiene su boton
+                              propio en la columna de acciones, asi que aca el
+                              nombre duplicaba algo que ya existia. */}
+                          {i.conversationId ? (
+                            <button
+                              className="link-numero"
+                              title="Abrir la conversación con esta persona"
+                              onClick={() => onVerChat(i.conversationId!)}
+                            >
+                              {i.fullName}
+                            </button>
+                          ) : (
+                            <span title="Esta inscripción se cargó a mano, sin conversación">
+                              {i.fullName}
+                            </span>
+                          )}
                         </td>
                         <td className="small">{i.contactInfo ?? '—'}</td>
                         <td className="small">{turno(i.sessionId)}</td>

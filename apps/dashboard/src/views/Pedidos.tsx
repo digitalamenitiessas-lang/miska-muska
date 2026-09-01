@@ -22,7 +22,16 @@ const NEXT: Partial<Record<OrderStatus, OrderStatus>> = {
   listo: 'entregado',
 };
 
-export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) => void }) {
+export function Pedidos({
+  tick,
+  onVerChat,
+  toast,
+}: {
+  tick: number;
+  /** Abre la charla de este pedido en la bandeja. */
+  onVerChat: (conversationId: string) => void;
+  toast: (text: string) => void;
+}) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<OrderStatus | 'todos'>('todos');
   const [loading, setLoading] = useState(true);
@@ -179,7 +188,21 @@ export function Pedidos({ tick, toast }: { tick: number; toast: (text: string) =
                         <div className="small muted">{o.createdBy === 'bot' ? '🤖' : '👤'}</div>
                       </td>
                       <td>
-                        <div>{o.customerName}</div>
+                        {/* El nombre lleva al chat; el numero, a la comanda. Uno es la
+                            persona y el otro es el pedido. */}
+                        {o.conversationId ? (
+                          <button
+                            className="link-numero"
+                            title="Abrir la conversación con esta persona"
+                            onClick={() => onVerChat(o.conversationId!)}
+                          >
+                            {o.customerName}
+                          </button>
+                        ) : (
+                          <div title="Este pedido se cargó sin una conversación asociada">
+                            {o.customerName}
+                          </div>
+                        )}
                         <div className="small muted">
                           {[o.customerPhone, o.customerDni].filter(Boolean).join(' · ') || '—'}
                         </div>

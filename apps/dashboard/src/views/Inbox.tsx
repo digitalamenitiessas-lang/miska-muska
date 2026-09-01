@@ -30,12 +30,15 @@ export function Inbox({
   lastEvent,
   tick,
   onConversationsChanged,
+  salto,
   toast,
 }: {
   conversations: Conversation[];
   lastEvent: LiveEvent | null;
   tick: number;
   onConversationsChanged: () => void;
+  /** Charla que hay que abrir porque la pidieron desde Pedidos o Cursos. */
+  salto: { id: string; n: number } | null;
   toast: (text: string) => void;
 }) {
   const [filter, setFilter] = useState<Filter>('todas');
@@ -143,6 +146,23 @@ export function Inbox({
     if (selected || !visible.length) return;
     setSelected(visible.find((c) => c.needsAttention)?.id ?? visible[0].id);
   }, [visible, selected]);
+
+  /*
+    Vinieron de Pedidos o de Cursos tocando un nombre: se abre esa charla.
+
+    No hace falta que esté en la lista cargada. La bandeja trae las últimas cien
+    y el pedido puede ser de una conversación más vieja; `loadDetail` la pide
+    por id, así que el chat abre igual aunque la fila no esté a la izquierda.
+
+    Depende del contador y no solo del id, para que tocar dos veces el mismo
+    nombre funcione las dos veces.
+  */
+  useEffect(() => {
+    if (!salto) return;
+    setSelected(salto.id);
+    setPanelMovil('chat');
+    setBusqueda('');
+  }, [salto?.n, salto?.id]);
 
   /*
     Lo que se muestra es el detalle SI Y SOLO SI es el de la charla elegida.
