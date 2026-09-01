@@ -1165,9 +1165,23 @@ export async function executeTool(
           ok: true,
           data: {
             ...orderView(order),
+            /*
+              El texto es largo a propósito y va acá y no solo en el prompt: es
+              el momento exacto en el que el modelo se equivoca, y una regla
+              pegada a la decisión pesa mucho más que la misma regla a cuatro
+              mil tokens de distancia. Ya funcionó así con el alias de cursos.
+            */
             recordatorio:
-              'Queda en borrador hasta el comprobante. Pasale el alias ' +
-              `${settings.transferAlias} (${settings.transferHolder}) y pedile la captura.`,
+              'ESTE PEDIDO TODAVÍA NO ESTÁ TOMADO. Quedó en borrador y se toma cuando llegue ' +
+              'el comprobante, no antes. Así que en tu próximo mensaje NO uses ninguna de ' +
+              'estas: "quedó anotado", "te lo anoté", "quedó tomado", "te lo reservo", "te la ' +
+              'reservamos", "quedó reservado", "te lo guardo". La persona lee eso, se queda ' +
+              'tranquila y no transfiere, y el local prepara algo que nadie viene a buscar.\n' +
+              `El mensaje que va ahora es: el total ($${total.toLocaleString('es-AR')}), y que ` +
+              'para confirmarlo le pasás el alias ' +
+              `${settings.transferAlias} (${settings.transferHolder}), pidiéndole la captura.\n` +
+              'Recién CUANDO LLEGUE EL COMPROBANTE le decís que quedó anotado, con su nombre. ' +
+              'Ese es el mensaje que la persona está esperando, y llega en su momento.',
           },
         };
       }

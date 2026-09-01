@@ -50,3 +50,64 @@ export function llegoComprobante(
     .slice(pedimosPlataEn + 1)
     .some((m) => m.direction === 'in' && ES_ADJUNTO(m.contentKind));
 }
+
+/*
+  La otra cara del comprobante: decir que algo quedó reservado sin tenerlo.
+
+  Pasó dos veces en la misma charla: "para el viernes te la reservamos sin
+  problema" antes de hablar de plata, y después "listo Sofía, quedó anotada tu
+  torta kinder…" seguido del alias. La persona lee las dos primeras palabras y
+  no transfiere; el local guarda una torta que nadie busca.
+
+  ESTO SOLO ANOTA EN EL LOG, no reescribe nada, y es a propósito. Un pedido
+  cargado termina SIEMPRE con un mensaje de esta familia, así que una guarda que
+  reemplazara la burbuja se llevaría puesto el total y el alias, que son
+  correctos y hacen falta. Lo que corresponde no es tapar la frase sino escribir
+  otra, y eso lo arregla la instrucción que devuelve `crear_pedido`.
+
+  Queda midiendo para saber si esa instrucción alcanzó. Si en unos días esto
+  sigue encendido, ahí sí hay con qué escribir la guarda que reescribe, y sobre
+  todo con qué saber por qué texto cambiarla.
+*/
+const normalizar = (texto: string): string =>
+  texto
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ');
+
+/** Afirmaciones de que algo ya está guardado para esa persona. */
+const YA_RESERVADO = [
+  /\b(quedo|queda|esta|ya esta) (anotad|reservad|tomad|guardad|apartad)[oa]/,
+  /\b(te|se) (lo|la) (anote|anoto|reservo|reservamos|guardo|guardamos|aparto|apartamos)\b/,
+  /\bte (lo|la) dejo (anotad|reservad|guardad)[oa]/,
+  // "ya te reservamos", "ya lo anoté", "ya se lo guardamos": el pronombre varía.
+  /\bya (te|se|lo|la|les)? ?(lo|la)? ?(anote|anotamos|reserve|reservamos|guarde|guardamos|aparte|apartamos)\b/,
+];
+
+/*
+  Las mismas palabras dichas como condición son CORRECTAS y no se cuentan: "el
+  lugar se reserva con la transferencia" es exactamente lo que hay que decir.
+  Por eso se mira antes y después — la condición puede ir de los dos lados.
+*/
+const ES_CONDICION_ANTES =
+  /\b(cuando|apenas|recien|una vez que|ni bien|para poder|para confirmar|para reservar|si )\b/;
+const ES_CONDICION_DESPUES =
+  /\b(con el pago|con la transferencia|con el comprobante|recien|una vez que|cuando)\b/;
+
+const MIRAR = 45;
+
+/** true si el texto afirma que algo ya quedó reservado, sin condicionarlo al pago. */
+export function diceQueQuedoReservado(texto: string): boolean {
+  const plano = normalizar(texto);
+  for (const patron of YA_RESERVADO) {
+    const m = patron.exec(plano);
+    if (!m) continue;
+    const antes = plano.slice(Math.max(0, m.index - MIRAR), m.index);
+    if (ES_CONDICION_ANTES.test(antes)) continue;
+    const despues = plano.slice(m.index + m[0].length, m.index + m[0].length + MIRAR);
+    if (ES_CONDICION_DESPUES.test(despues)) continue;
+    return true;
+  }
+  return false;
+}

@@ -8,6 +8,7 @@
   importa: una guarda que pisa la respuesta correcta es peor que no tenerla.
 */
 import { afirmaQueYaSalio, prometeEnvioGratis } from '../src/core/policies/envios.js';
+import { diceQueQuedoReservado } from '../src/core/policies/comprobantes.js';
 
 const DEBE_PRENDER = [
   'No, lo que pagás en efectivo cuando llegue es el pedido en sí ($6.300), no hay un cobro aparte por el envío 🙌🏼',
@@ -75,8 +76,29 @@ const revisar = (
   console.log(`${nombre}: ${prender.length} detectadas, ${callar.length} respetadas`);
 };
 
+/* El termómetro de "quedó reservado" sin comprobante. Solo anota, no reescribe. */
+const RESERVADO_SI = [
+  'Listo Sofía, quedó anotada tu torta kinder de 20 porciones para el viernes, retirás entre las 17 y las 18hs 🙌',
+  'Para el viernes te la reservamos sin problema. Cuántas querés llevar?',
+  'Dale, te lo anoto para el miércoles',
+  'Ya te reservamos las dos cookies',
+  'Te la dejo anotada para mañana',
+  'Tu pedido queda reservado 🥰',
+];
+
+const RESERVADO_NO = [
+  'El total es $50.900. Para confirmarlo te paso el alias: miskapedidos (Mathias Exequiel Lovey).',
+  'El lugar se reserva con la transferencia.',
+  'Queda reservado recién con el pago total.',
+  'Apenas me mandes el comprobante te lo anoto 🙌🏼',
+  'Para reservarla necesitamos una seña por transferencia.',
+  'Cuando llegue la captura te lo dejo anotado.',
+  'Lo único que se reserva es el cumpleaños, y va con seña.',
+];
+
 revisar('envío gratis', prometeEnvioGratis, DEBE_PRENDER, NO_DEBE_PRENDER);
 revisar('ya salió', afirmaQueYaSalio, YA_SALIO_SI, YA_SALIO_NO);
+revisar('quedó reservado', diceQueQuedoReservado, RESERVADO_SI, RESERVADO_NO);
 
 console.log(fallas === 0 ? 'OK' : `${fallas} casos mal`);
 process.exit(fallas === 0 ? 0 : 1);

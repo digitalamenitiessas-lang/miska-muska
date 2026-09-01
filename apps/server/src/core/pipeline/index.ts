@@ -31,6 +31,7 @@ import type {
 import { isOutsideBusinessHours } from '../policies/rules.js';
 import { localToday } from '../store/db.js';
 import { agotadosConPrecio, preciosQueNoCoinciden } from '../policies/precios.js';
+import { diceQueQuedoReservado } from '../policies/comprobantes.js';
 import {
   afirmaQueYaSalio,
   prometeEnvioGratis,
@@ -873,6 +874,28 @@ export class Pipeline {
           'warn',
           `OFRECIÓ ALGO APAGADO (${conversationId}): ${agotados.join(', ')}.`,
         );
+      }
+
+      /*
+        El termómetro de "quedó reservado". Solo anota, igual que el de precios,
+        y por el mismo motivo: la frase vive en la misma burbuja que el total y
+        el alias, que son correctos, así que reemplazarla se llevaría puesto lo
+        que sí hay que decir. Lo que corresponde no es tapar la frase sino
+        escribir otra, y de eso se ocupa la instrucción de `crear_pedido`.
+
+        Esto mide si esa instrucción alcanzó. Si sigue encendido en unos días,
+        ahí hay con qué escribir la guarda que reescribe — y, sobre todo, con
+        qué saber por cuál texto reemplazarla.
+      */
+      if (diceQueQuedoReservado(contenido.text)) {
+        const cobrado = abiertos.some((o) => o.paid > 0);
+        if (!cobrado) {
+          log(
+            'warn',
+            `DIJO QUE QUEDÓ RESERVADO SIN COBRAR (${conversationId}): ` +
+              `"${contenido.text.slice(0, 120)}"`,
+          );
+        }
       }
     }
 
