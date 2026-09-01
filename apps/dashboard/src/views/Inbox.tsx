@@ -12,6 +12,7 @@ import {
   ultimaActividad,
 } from '../api';
 import { CHANNEL_LABEL, Empty, ORDER_STATUS_LABEL, ORDER_STATUS_TONE, Pill, clock, money, timeAgo } from '../ui';
+import { prepararFoto } from '../imagen';
 import { ComandaPedido } from './Comanda';
 
 type Filter = 'todas' | 'sin-leer' | 'consultas' | 'atencion' | 'bot' | 'humano';
@@ -321,19 +322,71 @@ export function Inbox({
     pegadoAlFinal.current = true;
   };
 
+  /**
+   * Enviar: las fotos que estén en espera, o el texto si no hay ninguna.
+   *
+   * Es una sola puerta a propósito. Con dos —una para el texto y otra para las
+   * fotos— el borrador quedaba en manos de las dos y terminaba saliendo dos
+   * veces: como epígrafe de la foto y como mensaje suelto.
+   *
+   * Todo lo que se consume se captura ANTES del primer await: la charla, el
+   * texto y las fotos. Sin eso, una subida lenta terminaba limpiando el
+   * borrador de la conversación que estuviera abierta al terminar, que puede
+   * ser otra.
+   */
   const send = async () => {
+    if (!selected || sending || subiendoFoto) return;
+    const charla = selected;
     const text = draft.trim();
-    if (!text || !selected) return;
-    setSending(true);
+    const fotos = fotosEnEspera;
+    if (!text && !fotos.length) return;
+
+    if (!fotos.length) {
+      setSending(true);
+      try {
+        await api.sendMessage(charla, text);
+        setDraft('');
+        seguirElFinal();
+        await loadDetail(charla);
+      } catch (err) {
+        toast(`No se pudo enviar: ${String(err)}`);
+      } finally {
+        setSending(false);
+      }
+      return;
+    }
+
+    setSubiendoFoto(true);
+    // Se vacían de entrada: ya están capturadas, y así no se pueden mandar dos
+    // veces si alguien vuelve a apretar Enviar mientras suben.
+    setFotosEnEspera([]);
+    setDraft('');
+    let enviadas = 0;
     try {
-      await api.sendMessage(selected, text);
-      setDraft('');
-      seguirElFinal();
-      await loadDetail(selected);
+      // El texto acompaña a la PRIMERA foto, como epígrafe. Las demás van solas.
+      let epigrafe = text || undefined;
+      for (const { file } of fotos) {
+        const { url, advertencia } = await api.uploadMedia(file);
+        if (advertencia) toast(advertencia);
+        await api.sendPhoto(charla, url, epigrafe);
+        epigrafe = undefined;
+        enviadas += 1;
+      }
     } catch (err) {
-      toast(`No se pudo enviar: ${String(err)}`);
+      const detalle = String(err);
+      const yaSalieron = enviadas ? ` Se mandaron ${enviadas} de ${fotos.length}.` : '';
+      toast(
+        (detalle.includes('415')
+          ? 'Ese archivo no es una foto que podamos mandar. Probá con una jpg o png.'
+          : detalle.includes('413') || detalle.includes('too large')
+            ? 'La foto pesa demasiado incluso achicada. Probá con otra.'
+            : `No pude mandar la foto: ${detalle}`) + yaSalieron,
+      );
     } finally {
-      setSending(false);
+      for (const f of fotos) URL.revokeObjectURL(f.vista);
+      setSubiendoFoto(false);
+      seguirElFinal();
+      await loadDetail(charla);
     }
   };
 
@@ -413,7 +466,69 @@ export function Inbox({
     window.setTimeout(() => composeRef.current?.focus(), 0);
   };
 
-  /** Una foto sí sale derecho: no hay nada que editarle. */
+  /*
+    Mandar una foto del momento, como en WhatsApp.
+
+    El cajón ⚡ manda fotos que ya están cargadas en el catálogo, y eso cubre la
+    carta y los flyers. Pero lo que más piden las clientas es ver una torta
+    puntual, y esa foto la saca alguien en el local con el teléfono: no está
+    cargada en ningún lado ni tiene por qué estarlo.
+
+    Antes de subir pasa por `prepararFoto`, que la achica. Sin eso, la foto de
+    un celular pesa más que el tope del servidor y lo único que ve el operador
+    es que falla.
+
+    Se mandan de a una y en orden: si alguien elige tres fotos de tortas, tienen
+    que llegar en el orden en que las eligió.
+  */
+  const [subiendoFoto, setSubiendoFoto] = useState(false);
+  const archivoRef = useRef<HTMLInputElement | null>(null);
+  /*
+    Las fotos QUEDAN EN ESPERA, no salen al elegirlas.
+
+    La primera versión las mandaba en el acto y estaba mal por dos motivos, y el
+    segundo es grave. Uno: no se puede ver qué se va a mandar, y un mensaje que
+    salió no vuelve. Dos: pegar con Ctrl+V texto copiado de Excel, Word o
+    Outlook trae, además del texto, un mapa de bits en el portapapeles —así
+    funciona "pegado especial como imagen" en Windows—, así que pegar la lista
+    de precios interna en el chat le mandaba a la clienta una captura de la
+    planilla. Con los costos adentro.
+
+    Ahora se acumulan acá, se ven en miniatura, y salen cuando alguien aprieta
+    Enviar. Ese momento es también el que consume el texto como epígrafe, así
+    que ya no hay una ventana en la que el borrador se limpie solo.
+  */
+  const [fotosEnEspera, setFotosEnEspera] = useState<Array<{ file: File; vista: string }>>([]);
+
+  const agregarFotos = async (files: File[]) => {
+    const imagenes = files.filter((f) => f.type.startsWith('image/'));
+    if (!imagenes.length) return;
+    const listas = await Promise.all(
+      imagenes.map(async (f) => {
+        const file = await prepararFoto(f);
+        return { file, vista: URL.createObjectURL(file) };
+      }),
+    );
+    setFotosEnEspera((previas) => [...previas, ...listas]);
+    composeRef.current?.focus();
+  };
+
+  const sacarFoto = (i: number) =>
+    setFotosEnEspera((previas) => {
+      URL.revokeObjectURL(previas[i]?.vista ?? '');
+      return previas.filter((_, n) => n !== i);
+    });
+
+  // Cambiar de charla descarta lo que estaba en espera: una foto elegida para
+  // una clienta no puede quedar cargada apuntando a otra.
+  useEffect(() => {
+    setFotosEnEspera((previas) => {
+      for (const f of previas) URL.revokeObjectURL(f.vista);
+      return [];
+    });
+  }, [selected]);
+
+  /** Una foto del catálogo sale derecho: no hay nada que editarle. */
   const mandarFoto = async (url: string, label: string) => {
     if (!selected) return;
     setCajonAbierto(false);
@@ -693,6 +808,30 @@ export function Inbox({
                 />
               ) : null}
 
+              {/* Lo que está por salir, a la vista. Un mensaje que salió no
+                  vuelve, así que se mira antes de mandarlo. */}
+              {fotosEnEspera.length ? (
+                <div className="fotos-en-espera">
+                  {fotosEnEspera.map((f, i) => (
+                    <div key={f.vista} className="foto-en-espera">
+                      <img src={f.vista} alt={f.file.name} />
+                      <button
+                        className="foto-sacar"
+                        aria-label={`Sacar ${f.file.name}`}
+                        title="Sacar esta foto"
+                        onClick={() => sacarFoto(i)}
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ))}
+                  <span className="small muted" style={{ alignSelf: 'center' }}>
+                    {fotosEnEspera.length === 1 ? 'Va esta foto' : `Van ${fotosEnEspera.length} fotos`}
+                    . Si escribís algo, va con la primera.
+                  </span>
+                </div>
+              ) : null}
+
               <div className="compose-row">
                 <button
                   className="btn btn-ghost btn-cajon"
@@ -701,6 +840,27 @@ export function Inbox({
                   onClick={() => setCajonAbierto((v) => !v)}
                 >
                   ⚡
+                </button>
+                <input
+                  ref={archivoRef}
+                  type="file"
+                  accept="image/*"
+                  multiple
+                  style={{ display: 'none' }}
+                  onChange={(e) => {
+                    const files = [...(e.target.files ?? [])];
+                    if (files.length) void agregarFotos(files);
+                    // Se limpia para poder volver a elegir el mismo archivo.
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  className="btn btn-ghost btn-cajon"
+                  disabled={subiendoFoto}
+                  title="Mandar una foto de esta computadora o del teléfono"
+                  onClick={() => archivoRef.current?.click()}
+                >
+                  {subiendoFoto ? '…' : '📎'}
                 </button>
                 <textarea
                   ref={composeRef}
@@ -718,13 +878,36 @@ export function Inbox({
                       void send();
                     }
                   }}
+                  /*
+                    Pegar una foto con Ctrl+V, como en WhatsApp Web.
+
+                    SI HAY TEXTO EN EL PORTAPAPELES, GANA EL TEXTO. Copiar de
+                    Excel, Word u Outlook deja el texto Y un mapa de bits —así
+                    funciona el "pegar como imagen" de Windows—, así que mirar
+                    solo los archivos convertía pegar la lista de precios en
+                    mandarle a la clienta una captura de la planilla. Copiar una
+                    imagen de verdad no deja texto plano, así que el corte es
+                    limpio.
+
+                    Y no manda nada: la deja en espera. Lo que sale por WhatsApp
+                    no vuelve, así que se mira antes.
+                  */
+                  onPaste={(e) => {
+                    if (e.clipboardData.getData('text/plain').trim()) return;
+                    const fotos = [...e.clipboardData.files].filter((f) =>
+                      f.type.startsWith('image/'),
+                    );
+                    if (!fotos.length) return;
+                    e.preventDefault();
+                    void agregarFotos(fotos);
+                  }}
                 />
                 <button
                   className="btn btn-primary"
-                  disabled={sending || !draft.trim()}
+                  disabled={sending || subiendoFoto || (!draft.trim() && !fotosEnEspera.length)}
                   onClick={() => void send()}
                 >
-                  {sending ? '…' : 'Enviar'}
+                  {sending || subiendoFoto ? '…' : fotosEnEspera.length ? 'Enviar foto' : 'Enviar'}
                 </button>
               </div>
               <div className="small muted" style={{ marginTop: 5 }}>

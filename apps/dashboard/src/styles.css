@@ -810,6 +810,49 @@ table.grid tbody tr:hover {
   margin-bottom: 8px;
 }
 
+/* --- Fotos esperando para salir ---------------------------------------- */
+
+.fotos-en-espera {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 8px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--mint-wash);
+}
+
+.foto-en-espera {
+  position: relative;
+  line-height: 0;
+}
+
+.foto-en-espera img {
+  width: 74px;
+  height: 74px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+
+.foto-sacar {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  width: 20px;
+  height: 20px;
+  border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+
 /* --- El cajón de respuestas -------------------------------------------- */
 
 .cajon {
