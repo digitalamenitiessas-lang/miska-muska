@@ -31,7 +31,12 @@ import type {
 import { isOutsideBusinessHours } from '../policies/rules.js';
 import { localToday } from '../store/db.js';
 import { agotadosConPrecio, preciosQueNoCoinciden } from '../policies/precios.js';
-import { prometeEnvioGratis, TEXTO_ENVIO_SE_COBRA } from '../policies/envios.js';
+import {
+  afirmaQueYaSalio,
+  prometeEnvioGratis,
+  TEXTO_ENVIO_SE_COBRA,
+  TEXTO_NO_SE_SI_SALIO,
+} from '../policies/envios.js';
 import { renderQuickReply } from '../agent/persona.js';
 import { runTurn } from '../agent/brain.js';
 import type { ToolContext } from '../agent/tools.js';
@@ -41,8 +46,13 @@ import { deliver, typingDelay } from './egress.js';
 
 export type AdapterResolver = (channel: ChannelId) => ChannelAdapter | undefined;
 
-/** Ventana de espera para juntar mensajes seguidos del mismo cliente. */
-const DEBOUNCE_MS = 1500;
+/**
+ * Ventana de espera para juntar mensajes seguidos del mismo cliente, cuando
+ * todavía no se leyó la configuración.
+ *
+ * Es solo el respaldo: el valor que manda es `esperaMs` de Ajustes.
+ */
+const ESPERA_POR_DEFECTO = 4000;
 
 /*
   Adjuntos entrantes que se bajan y se guardan.
@@ -137,6 +147,18 @@ export class Pipeline {
     vuelo no le pise la decisión al operador.
   */
   #devueltaAlBot = new Map<string, number>();
+  /*
+    Cuándo una persona TOMÓ cada charla. El espejo de #devueltaAlBot, y hace
+    falta por lo mismo: el modo se lee al arrancar el turno, y entre eso y la
+    respuesta pasan varios segundos —el modelo, hasta seis rondas de
+    herramientas, y el tipeo simulado—. Si en el medio alguien aprieta "Tomar
+    yo", el turno viejo termina y contesta igual.
+
+    Del local: "cuando ponemos tomar yo es como que tiene un delay y sigue
+    respondiendo, y recién a lo segundo deja de responder". No era un delay: era
+    la respuesta que ya estaba en el horno.
+  */
+  #tomadaPorPersona = new Map<string, number>();
   /** Descargas de adjuntos en vuelo. Ver MAX_DESCARGAS_A_LA_VEZ. */
   #bajando = 0;
 
@@ -198,7 +220,8 @@ export class Pipeline {
       return;
     }
 
-    this.#scheduleAgentTurn(conversation.id);
+    const { esperaMs } = await this.#repos.settings.read();
+    this.#scheduleAgentTurn(conversation.id, esperaMs);
   }
 
   /**
@@ -464,14 +487,25 @@ export class Pipeline {
     }
   }
 
-  /** Coalesce: si llega otro mensaje, se reinicia el reloj. */
-  #scheduleAgentTurn(conversationId: string): void {
+  /**
+   * Coalesce: si llega otro mensaje, se reinicia el reloj.
+   *
+   * La espera sale de Ajustes porque es una decisión de atención y no técnica.
+   * Mucha gente escribe en renglones —"hola" / "quiero hacer un pedido" / "para
+   * mañana"— y con una ventana corta el bot contesta el primero mientras la
+   * persona todavía está tipeando el tercero. Del local: "que espere a que
+   * termine de escribir para responder todo de una sola vez".
+   *
+   * El precio es que cada respuesta tarda esa espera de más, así que el número
+   * lo elige quien atiende y no yo.
+   */
+  #scheduleAgentTurn(conversationId: string, esperaMs = ESPERA_POR_DEFECTO): void {
     const existing = this.#pending.get(conversationId);
     if (existing) clearTimeout(existing);
     const timer = setTimeout(() => {
       this.#pending.delete(conversationId);
       void this.#runAgentTurn(conversationId);
-    }, DEBOUNCE_MS);
+    }, esperaMs);
     this.#pending.set(conversationId, timer);
   }
 
@@ -748,13 +782,34 @@ export class Pipeline {
     */
     let alertaDeGuarda = false;
     let guardaEscalo = false;
+    let motivoGuarda = '';
     for (const contenido of contents) {
       if (contenido.kind !== 'text') continue;
-      if (!prometeEnvioGratis(contenido.text)) continue;
-      log('warn', `Guarda: el bot iba a decir que el envío no se cobra (${conversationId}).`);
-      contenido.text = TEXTO_ENVIO_SE_COBRA;
-      guardaEscalo = true;
-      alertaDeGuarda = true;
+      if (prometeEnvioGratis(contenido.text)) {
+        log('warn', `Guarda: el bot iba a decir que el envío no se cobra (${conversationId}).`);
+        contenido.text = TEXTO_ENVIO_SE_COBRA;
+        guardaEscalo = true;
+        alertaDeGuarda = true;
+        motivoGuarda =
+          '[envio_gratis] El bot estaba por decir que el envío no se cobra. Pasale vos el ' +
+          'costo, que depende de la zona.';
+        continue;
+      }
+      /*
+        El bot no sabe si el cadete salió. Lo sabe el local. Afirmar que un
+        pedido va en camino es distinto de prometer una hora: no promete, dice
+        que algo ya pasó — y pasó de verdad, con un pedido de $42.300 sin
+        cobrar un peso.
+      */
+      if (afirmaQueYaSalio(contenido.text)) {
+        log('warn', `Guarda: el bot iba a decir que el envío ya salió (${conversationId}).`);
+        contenido.text = TEXTO_NO_SE_SI_SALIO;
+        guardaEscalo = true;
+        alertaDeGuarda = true;
+        motivoGuarda =
+          '[envio_en_camino] El bot estaba por decir que el pedido ya salió o va en camino. ' +
+          'Confirmale vos cómo viene la entrega.';
+      }
     }
 
     /*
@@ -792,12 +847,7 @@ export class Pipeline {
       preguntar cuánto sale el envío, y ese número no lo tenemos.
     */
     if (guardaEscalo) {
-      await repos.conversations.setAttention(
-        conversationId,
-        true,
-        '[envio_gratis] El bot estaba por decir que el envío no se cobra. Pasale vos el costo, ' +
-          'que depende de la zona.',
-      );
+      await repos.conversations.setAttention(conversationId, true, motivoGuarda);
       await repos.conversations.setMode(conversationId, 'human');
       const marcada = await repos.conversations.get(conversationId);
       if (marcada) bus.emit({ type: 'conversation', conversation: marcada });
@@ -827,12 +877,21 @@ export class Pipeline {
     }
 
     /*
-      Las fotos van después del texto, no antes: primero se explica y después se
-      muestra, que es como manda una foto una persona. El degradado por canal se
-      ocupa del resto — si algún día hay un canal sin imágenes, ahí se convierte
-      en texto con el link, y acá no cambia nada.
+      Las fotos van después del texto: primero se explica y después se muestra,
+      que es como manda una foto una persona. El degradado por canal se ocupa
+      del resto — si algún día hay un canal sin imágenes, ahí se convierte en
+      texto con el link, y acá no cambia nada.
+
+      La excepción es el flyer de un curso, que viene marcado con `primero`. Ahí
+      la foto no ilustra la respuesta, ES la respuesta, y llegaba segunda: el
+      cliente leía el precio y los turnos en una burbuja, y recién después el
+      flyer con el saludo adentro.
     */
-    for (const photo of toolContext.effects.photos ?? []) {
+    const fotos = toolContext.effects.photos ?? [];
+    for (const photo of fotos.filter((f) => f.primero)) {
+      contents.unshift({ kind: 'image', url: photo.url, caption: photo.caption });
+    }
+    for (const photo of fotos.filter((f) => !f.primero)) {
       contents.push({ kind: 'image', url: photo.url, caption: photo.caption });
     }
 
@@ -859,6 +918,30 @@ export class Pipeline {
       }
       const limpia = await repos.conversations.get(conversationId);
       if (limpia) bus.emit({ type: 'conversation', conversation: limpia });
+    }
+
+    /*
+      SI ALGUIEN TOMÓ LA CHARLA MIENTRAS PENSÁBAMOS, ESTO NO SALE.
+
+      El modo se mira al arrancar el turno, y desde ahí hasta acá pasan varios
+      segundos: la llamada al modelo, las rondas de herramientas, el tipeo
+      simulado. Apretar "Tomar yo" en el medio no alcanzaba para frenar una
+      respuesta que ya estaba escrita, y por eso desde el local se veía como un
+      delay: el bot contestaba una vez más y recién después se callaba.
+
+      Se descarta al final y no antes a propósito. Todo lo que el turno haya
+      hecho por el camino —cargar el pedido, abrir una consulta, prender la
+      alerta— ya está guardado y sigue valiendo. Lo único que no sale es el
+      mensaje, que es justamente lo que la persona quiso evitar cuando tomó la
+      conversación.
+
+      La escalada es la excepción: ahí el modo lo cambió este mismo turno.
+    */
+    const tomada = (this.#tomadaPorPersona.get(conversationId) ?? 0) > arrancoEn;
+    if (tomada && !escalate && !guardaEscalo) {
+      log('info', `Respuesta descartada (${conversationId}): la tomó una persona en el medio.`);
+      await this.#marcarContestadoPorPersona(conversationId);
+      return;
     }
 
     await this.#send(conversationId, contents, {
@@ -915,6 +998,7 @@ export class Pipeline {
   marcarCambioDeModo(conversationId: string, mode: ConversationMode): void {
     this.#errorStreak.delete(conversationId);
     if (mode === 'bot') this.#devueltaAlBot.set(conversationId, Date.now());
+    else this.#tomadaPorPersona.set(conversationId, Date.now());
   }
 
   /**

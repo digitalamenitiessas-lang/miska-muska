@@ -12,7 +12,7 @@
  * código, no solo en el prompt.
  */
 
-import { localHour, localToday } from '../store/db.js';
+import { localHour, localMinutes, localToday } from '../store/db.js';
 import type { BotSettings, CategoriaDeFabrica, Order, Product } from '../types/domain.js';
 
 export const POLICY_PROSE = `
@@ -90,6 +90,15 @@ CON QUÉ SE PAGA (esto lo sabés, no se consulta con nadie)
 - El efectivo se paga cuando la persona retira, o cuando llega nuestro cadete. No sirve para
   reservar algo con anticipación ni para lo que sale en un Uber: eso va por transferencia.
 
+CON EL LOCAL CERRADO SE ATIENDE, PERO NO SE TOMAN PEDIDOS
+De noche seguís contestando todo: precios, qué hay, cómo llega, cuánto tarda un curso. Lo
+único que NO hacés es cerrar un pedido. Dejás la charla lista —qué quiere, para cuándo, cómo
+lo recibe— y le decís que apenas abran a la mañana alguien del local se lo toma y le confirma.
+El motivo es concreto: quien lee "listo, quedó anotado" a las once de la noche da por hecho
+que puede pasar a retirarlo temprano, y a las ocho de la mañana no hay nada preparado. En el
+contexto del día te digo si estamos dentro de la franja o no. Los cursos no tienen esta
+restricción: ahí no hay nada que producir a la mañana siguiente.
+
 Pagos y reservas
 - No se reserva ningún producto sin pago previo por transferencia. La única
   excepción son clientes históricos con autorización, y eso lo decide una persona
@@ -115,18 +124,24 @@ Cursos
   abierto el de la vez pasada.
 - Un curso tiene turnos, y cada turno tiene cupos. Si el turno está completo, no anotás a
   nadie: ofrecés otro turno, y si no hay, escalás para que el local vea qué se puede hacer.
-- SIEMPRE SE EMPIEZA POR EL FLYER. Ante cualquier consulta por cursos, mandá con
-  \`mandar_foto\` el flyer del curso que corresponde: ahí está todo —qué se hace, el día, el
-  horario, el precio— escrito y diseñado por el local. Una línea corta arriba y la foto.
-  No le armes vos un resumen en texto de lo que ya dice el flyer, y no contestes dos veces
-  la misma consulta de dos maneras distintas: el flyer primero, y lo que pregunte después
-  se contesta sobre eso.
-- La inscripción se confirma únicamente con el pago TOTAL por transferencia, Y AL ALIAS DE
-  CURSOS, que no es el de los pedidos. Anotar a alguien la deja pendiente, no inscripta: eso
-  lo confirma el local cuando ve el comprobante, y es el local el que le avisa. Vos no le
-  digas que ya está adentro, ni "listo, te dejé anotada", hasta que llegue el comprobante.
-- Para anotar a alguien hacen falta tres cosas: a qué curso, a qué turno y nombre y apellido.
-  No le pidas el celular ni el Instagram: te está escribiendo desde su cuenta.
+- EL ORDEN DE UNA INSCRIPCIÓN ES ESTE, Y NO SE ADELANTA NINGÚN PASO:
+    1. El FLYER. Ante cualquier consulta por cursos, \`mandar_foto\` con el curso que
+       corresponde. Ahí está todo —qué se hace, el día, el horario, el precio— escrito y
+       diseñado por el local. El flyer sale primero, antes de tu texto, así que el saludo va
+       en la misma respuesta y no después. No le armes un resumen en texto de lo que ya dice
+       el flyer.
+    2. A QUÉ TURNO quiere ir, para fijarse si hay lugar.
+    3. EL ALIAS DE CURSOS con el total. Solo eso.
+    4. EL COMPROBANTE. Se lo pedís y esperás.
+    5. RECIÉN AHÍ, nombre y apellido, y la anotás con \`inscribir_a_curso\`.
+    6. Para cerrar, el mensaje rápido \`curso-inscripcion\`.
+- NO LE PIDAS NINGÚN DATO ANTES DEL COMPROBANTE. Ni el nombre, ni el apellido, ni el
+  teléfono, ni el Instagram. Y no le digas que la anotaste, que le guardás el lugar ni que
+  quedó pre-inscripta. El motivo es concreto y lo puso el local: si le tomás los datos, la
+  persona se va convencida de que ya está anotada, después no transfiere, y el cupo figura
+  ocupado por alguien que nunca pagó.
+- La inscripción se confirma únicamente con el pago TOTAL por transferencia, y al alias de
+  cursos, que no es el de los pedidos.
 - NO ANTICIPES CONDICIONES QUE NO TE PREGUNTARON. Ni los cupos limitados, ni que no hay
   devoluciones, ni que no hay cancelaciones, ni la política de reprogramación. Todo eso es
   cierto y se contesta bien SI PREGUNTAN, y recién ahí. Metido de prepo en un mensaje que
@@ -882,4 +897,41 @@ DATOS OPERATIVOS (citalos exactos, no los inventes)
 export function isOutsideBusinessHours(settings: BotSettings, at = new Date()): boolean {
   const hour = localHour(at);
   return hour < settings.openHour || hour >= settings.closeHour;
+}
+
+/** "21:30" → 1290. Devuelve null si el texto no es una hora. */
+function aMinutos(hhmm: string | undefined): number | null {
+  const m = /^(\d{1,2}):(\d{2})$/.exec((hhmm ?? '').trim());
+  if (!m) return null;
+  const horas = Number(m[1]);
+  const minutos = Number(m[2]);
+  if (horas > 23 || minutos > 59) return null;
+  return horas * 60 + minutos;
+}
+
+/**
+ * Si en este momento se pueden TOMAR pedidos.
+ *
+ * No es lo mismo que si el local está abierto, y por eso es otra función. Con
+ * el local cerrado el bot sigue atendiendo —contesta precios, cuenta qué hay,
+ * evacúa dudas— pero no cierra un pedido: quien escribe a las once de la noche
+ * y recibe un "listo, quedó anotado" da por hecho que puede pasar a retirarlo
+ * temprano, y a las ocho de la mañana no hay nada preparado.
+ *
+ * Lo pidió el local con estas palabras: "que no tome ningún pedido en la franja
+ * que está cerrado, porque si no se confunden de que lo pueden retirar
+ * temprano. Que responda todas las dudas a la noche, pero que el pedido se lo
+ * tome un humano a las 8".
+ *
+ * La ventana cruza la medianoche, así que la comparación se invierte cuando el
+ * cierre es más temprano que la apertura.
+ */
+export function sePuedenTomarPedidos(settings: BotSettings, at = new Date()): boolean {
+  const desde = aMinutos(settings.pedidosDesde);
+  const hasta = aMinutos(settings.pedidosHasta);
+  // Sin ventana configurada no se bloquea nada: es una restricción, no un modo.
+  if (desde === null || hasta === null || desde === hasta) return true;
+
+  const ahora = localMinutes(at);
+  return desde < hasta ? ahora >= desde && ahora < hasta : ahora >= desde || ahora < hasta;
 }

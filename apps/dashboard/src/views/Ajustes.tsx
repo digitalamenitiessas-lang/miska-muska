@@ -184,6 +184,25 @@ export function Ajustes({
               onChange={(e) => set('maxTypingMs', Number(e.target.value))}
               style={{ width: '100%' }}
             />
+
+            <label className="label" style={{ marginTop: 10 }}>
+              Espera antes de contestar ({(draft.esperaMs / 1000).toFixed(1)} s)
+            </label>
+            <input
+              type="range"
+              min={1000}
+              max={12000}
+              step={500}
+              value={draft.esperaMs}
+              onChange={(e) => set('esperaMs', Number(e.target.value))}
+              style={{ width: '100%' }}
+            />
+            <p className="small muted" style={{ margin: '2px 0 0' }}>
+              Mucha gente escribe en renglones sueltos —"hola", "quiero un pedido", "para
+              mañana"—. El bot espera este rato desde el último mensaje y contesta todo junto. Si
+              lo subís contesta más completo pero tarda más; el reloj se reinicia con cada
+              mensaje nuevo.
+            </p>
           </div>
         </section>
       </div>
@@ -246,6 +265,36 @@ export function Ajustes({
               Franja gruesa, solo para saber si el local está cerrado: fuera de ella el bot sigue
               atendiendo pero no promete entregas inmediatas. El horario que le CUENTA al cliente
               es el de arriba.
+            </span>
+          </div>
+
+          {/* La franja de pedidos es aparte del horario, y con minutos: el local
+              cierra 21:30 y con horas enteras quedaba media hora tomando pedidos
+              que nadie iba a preparar. */}
+          <div className="row wrap" style={{ gap: 12, marginTop: 14 }}>
+            <div>
+              <label className="label">Toma pedidos desde</label>
+              <input
+                type="time"
+                value={draft.pedidosDesde}
+                onChange={(e) => set('pedidosDesde', e.target.value)}
+                style={{ width: 120 }}
+              />
+            </div>
+            <div>
+              <label className="label">hasta</label>
+              <input
+                type="time"
+                value={draft.pedidosHasta}
+                onChange={(e) => set('pedidosHasta', e.target.value)}
+                style={{ width: 120 }}
+              />
+            </div>
+            <span className="small muted" style={{ alignSelf: 'flex-end', maxWidth: 420 }}>
+              Fuera de esta franja el bot <strong>atiende pero no toma pedidos</strong>: contesta
+              precios y saca dudas, y avisa que el pedido se lo toma una persona cuando abran. Es
+              para que nadie venga a retirar temprano algo que nunca se preparó. Los cursos no
+              tienen esta restricción.
             </span>
           </div>
         </div>

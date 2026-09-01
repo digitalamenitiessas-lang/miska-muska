@@ -367,6 +367,27 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
     const order = await repos.orders.update(id, req.body as never);
     if (!order) return reply.code(404).send({ error: 'No existe' });
     bus.emit({ type: 'order', order });
+
+    /*
+      Cobrar el pedido apaga el aviso del comprobante.
+
+      El aviso dice "mandó una foto y el pedido está sin cobrar": cuando alguien
+      aprieta "Comprobante ✓" eso deja de ser cierto en el mismo segundo, y sin
+      esto la franja roja seguía ahí. Del reporte del local: "marqué que ya llegó
+      el comprobante y sigue diciendo sin cobrar".
+
+      Se apaga SOLO si la alerta era esa. Un reclamo, una consulta de cocina o una
+      escalada no tienen nada que ver con haber cobrado, y borrarlas de paso sería
+      esconder algo que sigue esperando a una persona.
+    */
+    if (order.conversationId && order.total > 0 && order.paid >= order.total) {
+      const charla = await repos.conversations.get(order.conversationId);
+      if (charla?.needsAttention && charla.attentionReason?.startsWith('[comprobante]')) {
+        await repos.conversations.setAttention(charla.id, false, null);
+        const limpia = await repos.conversations.get(charla.id);
+        if (limpia) bus.emit({ type: 'conversation', conversation: limpia });
+      }
+    }
     return order;
   });
 

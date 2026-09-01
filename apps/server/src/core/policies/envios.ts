@@ -86,3 +86,73 @@ export function prometeEnvioGratis(texto: string): boolean {
 export const TEXTO_ENVIO_SE_COBRA =
   'El envío se cobra aparte, y cuánto sale depende de la zona 🙌🏼 Ya le paso tu ' +
   'dirección a alguien del local para que te confirme el costo.';
+
+/*
+  La segunda mentira sobre envíos, del mismo día que la primera: el bot le
+  escribió a un cliente "ya estamos con el envío en camino para llegar en esa
+  franja" por un pedido de $42.300 que tenía cobrado cero.
+
+  Es distinto de prometer una hora. Acá no promete: AFIRMA que algo ya pasó. Y
+  eso el bot no lo puede saber nunca —si el cadete salió lo sabe el local, no
+  nosotros—, así que no depende de si está pago o no: no se dice y punto.
+*/
+const YA_SALIO = [
+  /\bya (salio|salimos|sali)\b/,
+  /\bya (lo|la|le|te lo|te la) (mandamos|enviamos|despachamos|llevan|llevamos)\b/,
+  /\bya esta(mos)? (en camino|yendo|saliendo|en la calle)\b/,
+  /\besta saliendo\b/,
+  /\bel cadete (ya )?(salio|va|esta yendo)\b/,
+  /\bsalio para\b/,
+  /*
+    "en camino" a secas, y hace falta: la frase real era "ya estamos CON EL
+    ENVÍO en camino", con tres palabras metidas en el medio que rompían
+    cualquier patrón más cerrado. Lo que la salva de dispararse de gusto es el
+    filtro de futuro: "te aviso cuando esté en camino" no entra.
+  */
+  /\ben camino\b/,
+];
+
+/*
+  Lo que sale del horno no es un reparto.
+
+  "Ya salió del horno esta mañana" es una frase perfecta y la guarda la mataba.
+  Se mira lo que viene JUSTO DESPUÉS del match, que es donde aparece.
+*/
+const NO_ES_EL_REPARTO = /^\s*(del horno|de la cocina|del molde|el pan|la torta del horno)/;
+
+/** Cuánto se mira después de la frase para descartar que hablara de otra cosa. */
+const DESPUES = 25;
+
+/*
+  Palabras que convierten la afirmación en una promesa a futuro. "Te aviso
+  cuando esté en camino" no es una mentira, es lo que corresponde decir, y sin
+  este filtro la guarda le pisaba la respuesta correcta.
+*/
+const ES_FUTURO = /\b(cuando|en cuanto|apenas|ni bien|una vez que|si|te aviso)\b/;
+
+/** Cuánto antes de la frase se mira para ver si en realidad hablaba a futuro. */
+const ANTES = 40;
+
+/** true si el texto afirma que el pedido ya salió o va en camino. */
+export function afirmaQueYaSalio(texto: string): boolean {
+  const plano = normalizar(texto);
+  for (const patron of YA_SALIO) {
+    const m = patron.exec(plano);
+    if (!m) continue;
+    const preludio = plano.slice(Math.max(0, m.index - ANTES), m.index);
+    if (ES_FUTURO.test(preludio)) continue;
+    const cola = plano.slice(m.index + m[0].length, m.index + m[0].length + DESPUES);
+    if (NO_ES_EL_REPARTO.test(cola)) continue;
+    return true;
+  }
+  return false;
+}
+
+/**
+ * Con qué se reemplaza.
+ *
+ * Dice lo único cierto que se puede decir en ese punto: que el pedido está
+ * anotado y que el momento de la entrega lo confirma el local.
+ */
+export const TEXTO_NO_SE_SI_SALIO =
+  'Quedó todo anotado 🙌🏼 En un rato te confirman desde el local cómo viene la entrega.';

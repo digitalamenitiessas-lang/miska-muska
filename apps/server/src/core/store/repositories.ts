@@ -1406,12 +1406,16 @@ export const DEFAULT_SETTINGS: BotSettings = {
   escalateAfterErrors: 2,
   typingMsPerChar: 22,
   maxTypingMs: 3200,
+  esperaMs: 4000,
   scheduleText:
     'Lunes a sábado de 8:00 a 13:30 y de 16:00 a 21:30. Entre las 13:00 y las 16:00 ' +
     'atendemos por el carrito de adelante, y también hacemos envíos en esa franja. ' +
     'Domingos de 14:00 a 21:30.',
   openHour: 8,
   closeHour: 22,
+  // El local cierra 21:30. De ahi a las 8 el bot atiende pero no toma pedidos.
+  pedidosDesde: '08:00',
+  pedidosHasta: '21:30',
   address: 'Marcos Paz 473, San Miguel de Tucumán',
   transferAlias: 'MISKATUC',
   transferHolder: 'MISKA MUSKA SAS (Mercado Pago)',

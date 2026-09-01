@@ -7,7 +7,7 @@
   de la charla que la motivó— y las de abajo son las que NO, que es la mitad que
   importa: una guarda que pisa la respuesta correcta es peor que no tenerla.
 */
-import { prometeEnvioGratis } from '../src/core/policies/envios.js';
+import { afirmaQueYaSalio, prometeEnvioGratis } from '../src/core/policies/envios.js';
 
 const DEBE_PRENDER = [
   'No, lo que pagás en efectivo cuando llegue es el pedido en sí ($6.300), no hay un cobro aparte por el envío 🙌🏼',
@@ -33,23 +33,50 @@ const NO_DEBE_PRENDER = [
   'Hacemos envíos con nuestro cadete a Banda del Río Salí.',
 ];
 
-let fallas = 0;
-for (const texto of DEBE_PRENDER) {
-  if (!prometeEnvioGratis(texto)) {
-    fallas += 1;
-    console.log(`SE ESCAPA  ${texto}`);
-  }
-}
-for (const texto of NO_DEBE_PRENDER) {
-  if (prometeEnvioGratis(texto)) {
-    fallas += 1;
-    console.log(`FALSO POSITIVO  ${texto}`);
-  }
-}
+/* La segunda guarda: afirmar que el pedido ya salió. */
+const YA_SALIO_SI = [
+  'Quedó todo anotado así, Lautaro. Ya estamos con el envío en camino para llegar en esa franja 💕',
+  'ya salió el cadete',
+  'tu pedido va en camino 🙌🏼',
+  'ya te lo mandamos con el cadete',
+  'el cadete está en camino',
+  'ya lo llevan para allá',
+  'está saliendo ahora mismo',
+];
 
-console.log(
-  fallas === 0
-    ? `OK · ${DEBE_PRENDER.length} detectadas, ${NO_DEBE_PRENDER.length} respetadas`
-    : `${fallas} casos mal`,
-);
+const YA_SALIO_NO = [
+  'Te aviso cuando esté en camino 🙌🏼',
+  'En cuanto salga el cadete te escribo.',
+  'Apenas salimos para allá te mando un mensaje.',
+  'Quedó anotado. En un rato te confirman desde el local cómo viene la entrega.',
+  'El envío se cobra aparte, y cuánto sale depende de la zona.',
+  'Ya salió del horno esta mañana, está fresquísimo.',
+];
+
+let fallas = 0;
+const revisar = (
+  nombre: string,
+  fn: (t: string) => boolean,
+  prender: string[],
+  callar: string[],
+) => {
+  for (const texto of prender) {
+    if (!fn(texto)) {
+      fallas += 1;
+      console.log(`SE ESCAPA (${nombre})  ${texto}`);
+    }
+  }
+  for (const texto of callar) {
+    if (fn(texto)) {
+      fallas += 1;
+      console.log(`FALSO POSITIVO (${nombre})  ${texto}`);
+    }
+  }
+  console.log(`${nombre}: ${prender.length} detectadas, ${callar.length} respetadas`);
+};
+
+revisar('envío gratis', prometeEnvioGratis, DEBE_PRENDER, NO_DEBE_PRENDER);
+revisar('ya salió', afirmaQueYaSalio, YA_SALIO_SI, YA_SALIO_NO);
+
+console.log(fallas === 0 ? 'OK' : `${fallas} casos mal`);
 process.exit(fallas === 0 ? 0 : 1);

@@ -319,6 +319,12 @@ export interface BotSettings {
   typingMsPerChar: number;
   maxTypingMs: number;
   /**
+   * Cuanto se espera, en ms, a que el cliente termine de escribir antes de
+   * contestar. Mucha gente escribe en renglones sueltos: con una ventana corta
+   * el bot contesta el primero mientras la persona tipea el tercero.
+   */
+  esperaMs: number;
+  /**
    * Horario del local tal cual se lo cuenta al cliente. Es texto libre porque el
    * horario real no entra en dos números: es partido, cambia los domingos, y
    * entre las 13 y las 16 atienden por el carrito de adelante.
@@ -330,6 +336,19 @@ export interface BotSettings {
    */
   openHour: number;
   closeHour: number;
+  /**
+   * La franja en la que el bot puede TOMAR pedidos, en HH:MM.
+   *
+   * Aparte del horario de atención, y con minutos, porque el local cierra 21:30
+   * y con horas enteras quedaba media hora tomando pedidos que nadie iba a
+   * preparar. Fuera de esta franja el bot sigue contestando todo —precios, qué
+   * hay, dudas— pero no cierra un pedido: quien escribe a la medianoche y lee
+   * "listo, quedó anotado" da por hecho que puede pasar a retirarlo temprano.
+   *
+   * Vacías = sin restricción.
+   */
+  pedidosDesde: string;
+  pedidosHasta: string;
   /** Datos que el bot cita textualmente. */
   address: string;
   transferAlias: string;

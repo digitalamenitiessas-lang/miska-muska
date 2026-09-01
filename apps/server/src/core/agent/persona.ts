@@ -24,7 +24,12 @@ import type {
   Product,
   QuickReply,
 } from '../types/domain.js';
-import { claveDeCategoria, POLICY_PROSE, operationalFacts } from '../policies/rules.js';
+import {
+  claveDeCategoria,
+  operationalFacts,
+  POLICY_PROSE,
+  sePuedenTomarPedidos,
+} from '../policies/rules.js';
 import { localToday } from '../store/db.js';
 import { normalizeWriting } from '../policies/writing.js';
 
@@ -364,7 +369,26 @@ export function buildDailyContext(input: DailyContextInput): string {
     `Hoy es ${fecha}, ${hora} (hora de Tucumán). En formato de pedido, hoy es ${localToday()}.`,
   ];
 
-  if (outsideHours) {
+  /*
+    Fuera de la franja de pedidos el bot atiende pero no cierra. Va acá, en el
+    contexto del día, y no en el prompt estable: depende de la hora, así que en
+    el estable estaría cacheado y mentiría la mitad del día.
+
+    Está además de la guarda de `crear_pedido` porque las dos hacen cosas
+    distintas: la guarda impide cargarlo, esto hace que el bot lo diga bien
+    desde el primer mensaje en vez de descubrirlo cuando ya prometió.
+  */
+  if (!sePuedenTomarPedidos(settings, now)) {
+    parts.push(
+      `AHORA NO SE TOMAN PEDIDOS. Los pedidos se toman de ${settings.pedidosDesde} a ` +
+        `${settings.pedidosHasta}, y estamos fuera de esa franja. Seguí atendiendo normalmente: ` +
+        'contestá precios, contá qué hay, sacá todas las dudas y dejá la charla lista. Pero NO ' +
+        'cargues el pedido y NO le digas que quedó anotado, ni que se lo reservás. Decile que ' +
+        `apenas abran a las ${settings.pedidosDesde} alguien del local se lo toma y le ` +
+        'confirma. Es importante que quede claro que todavía no está tomado: si cree que sí, a ' +
+        'la mañana temprano viene a retirar algo que nadie preparó.',
+    );
+  } else if (outsideHours) {
     parts.push(
       `El local está cerrado en este momento (abre ${settings.openHour}:00). Podés seguir ` +
         'atendiendo y tomando pedidos para más adelante, pero no prometas entregas inmediatas.',

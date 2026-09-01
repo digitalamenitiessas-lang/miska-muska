@@ -240,6 +240,25 @@ export function localToday(at: Date = new Date()): string {
 }
 
 /** Hora local (0-23) en Tucumán. */
+/**
+ * La hora local en minutos desde medianoche.
+ *
+ * Existe porque `localHour` redondea a la hora y el local cierra 21:30. Con
+ * horas enteras había media hora en la que el bot tomaba pedidos que nadie iba
+ * a preparar.
+ */
+export function localMinutes(at: Date = new Date()): number {
+  const [h, m] = new Intl.DateTimeFormat('en-GB', {
+    timeZone: TIMEZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
+    .format(at)
+    .split(':');
+  return Number(h) * 60 + Number(m);
+}
+
 export function localHour(at: Date = new Date()): number {
   return Number(
     new Intl.DateTimeFormat('en-GB', {

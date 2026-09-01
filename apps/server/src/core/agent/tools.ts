@@ -23,9 +23,11 @@ import {
   itemsQueTocanLaConsulta,
   normalizarNombre,
   notaDeUsoMensajeRapido,
+  sePuedenTomarPedidos,
   validateOrder,
   type OrderDraft,
 } from '../policies/rules.js';
+import { llegoComprobante } from '../policies/comprobantes.js';
 import { renderQuickReply } from './persona.js';
 import { sinSaludoInicial } from '../policies/writing.js';
 import { bus, log } from '../events/bus.js';
@@ -70,7 +72,8 @@ export interface ToolContext {
      * mañana aparece un canal sin imágenes, el degradado la convierte en texto
      * solo ahí, sin tocar nada de esto.
      */
-    photos?: Array<{ url: string; caption?: string }>;
+    /** `primero`: va ANTES del texto del turno. Hoy solo el flyer de un curso. */
+    photos?: Array<{ url: string; caption?: string; primero?: boolean }>;
   };
 }
 
@@ -275,13 +278,14 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
 
   tool(
     'inscribir_a_curso',
-    'Anota a una persona en un turno de un curso. Llamala cuando ya te haya dicho a qué curso ' +
-      'quiere ir, en qué turno, y su nombre y apellido. NO le pidas un teléfono ni un usuario ' +
-      'de Instagram: te está escribiendo desde su cuenta, y la planilla anota sola por dónde ' +
-      'llegó. Lo único que le falta preguntarle es el nombre y apellido. ' +
-      'Queda anotada como PENDIENTE: el lugar se reserva recién con el pago total por ' +
-      'transferencia, así que después de anotarla pasale el alias y pedile el comprobante. ' +
-      'No le digas que ya está inscripta: eso lo confirma el local cuando ve la transferencia.',
+    'Anota a una persona en un turno de un curso. VA ÚLTIMA, no primera: se llama recién ' +
+      'CUANDO YA LLEGÓ EL COMPROBANTE de la transferencia. Si todavía no pagó, esta ' +
+      'herramienta te va a rebotar, y con razón — no se anota a nadie antes de cobrar. ' +
+      'El orden completo es: mandás el flyer, preguntás a qué turno quiere ir, pasás el alias ' +
+      'de CURSOS con el total, esperás la captura, y recién ahí le pedís nombre y apellido y ' +
+      'llamás a esta herramienta. NO le pidas el nombre antes, no le digas que la anotaste y ' +
+      'no le digas que le guardás el lugar: eso hace que se vaya creyendo que ya está ' +
+      'pre-inscripta. Tampoco le pidas teléfono ni Instagram: te escribe desde su cuenta.',
     {
       curso_id: { type: 'string', description: 'Id del curso (lo devuelve buscar_cursos).' },
       turno_id: {
@@ -582,6 +586,30 @@ export async function executeTool(
       }
 
       case 'crear_pedido': {
+        /*
+          CON EL LOCAL CERRADO NO SE TOMAN PEDIDOS.
+
+          El bot sigue atendiendo a la noche —contesta precios, cuenta qué hay,
+          saca dudas— pero no cierra un pedido. Pedido de las once de la noche
+          que recibe un "listo, quedó anotado" es alguien que a las ocho de la
+          mañana está en la puerta esperando algo que nadie preparó.
+
+          Solo los pedidos: una inscripción a un curso no tiene esta restricción
+          porque no hay nada que producir a la mañana siguiente.
+        */
+        if (!sePuedenTomarPedidos(settings)) {
+          return {
+            ok: false,
+            error:
+              `Ahora el local está cerrado y los pedidos se toman de ${settings.pedidosDesde} ` +
+              `a ${settings.pedidosHasta}. NO cargues este pedido y NO le digas que quedó ` +
+              'anotado. Contestale todo lo que pregunte, dejá la charla lista —qué quiere, ' +
+              'para cuándo, cómo lo recibe— y decile que apenas abran a la mañana alguien del ' +
+              `local se lo toma y le confirma. Que no se quede pensando que puede pasar a ` +
+              'retirarlo temprano, que es lo que estaba pasando.',
+          };
+        }
+
         /*
           Con una modificación esperando respuesta, el pedido no se carga. La
           guarda va acá y no solo en el prompt porque es lo que costó plata: el
@@ -1213,6 +1241,35 @@ export async function executeTool(
               'turno que devuelve buscar_cursos.',
           };
         }
+        /*
+          NADIE SE ANOTA ANTES DE PAGAR.
+
+          Era el orden al revés y costaba lugares: el bot pedía el nombre, lo
+          anotaba en la planilla, decía "te anoté" y recién ahí pasaba el alias.
+          Con eso la persona se iba con la sensación de estar pre-inscripta y
+          después no transfería, y el cupo figuraba tomado por alguien que nunca
+          pagó. Palabras del local: "no quiero que le tome ningún dato sin el
+          comprobante, porque si no la gente falla que ya se pre-inscribió".
+
+          Es una guarda y no una línea del prompt porque la línea ya estaba
+          —"no le digas que ya está inscripta"— y el modelo anotaba igual. Lo que
+          cuesta un cupo se valida en código.
+        */
+        const historial = await repos.messages.history(ctx.conversation.id, 60);
+        const pago = llegoComprobante(historial, [aliasCursos.alias, settings.transferAlias]);
+        if (!pago) {
+          return {
+            ok: false,
+            error:
+              'Todavía no llegó el comprobante, así que NO se anota a nadie y NO se le piden ' +
+              `datos. El orden es: el flyer, después a qué turno quiere ir, después el alias ` +
+              `de cursos (${aliasCursos.alias}, ${aliasCursos.titular}) con el total, y recién ` +
+              'cuando mande la captura le pedís nombre y apellido y volvés a llamar esta ' +
+              'herramienta. No le digas que la anotaste, no le digas que le guardás el lugar, ' +
+              'y no le pidas el nombre todavía.',
+          };
+        }
+
         if (nombre.length < 3) {
           return { ok: false, error: 'Falta el nombre y apellido de quien se anota.' };
         }
@@ -1260,14 +1317,10 @@ export async function executeTool(
             precio: curso.price,
             lugares_libres_ahora: libres - 1,
             instruccion:
-              `Quedó anotada en la planilla, PENDIENTE de pago. Pasale el alias DE CURSOS, ` +
-              `que no es el de los pedidos: ${aliasCursos.alias} (${aliasCursos.titular}), por ` +
-              `${curso.price.toLocaleString('es-AR')}, y pedile el comprobante. Ese mensaje ` +
-              'lleva SOLO eso: el alias, el titular y el total. Nada de cupos limitados, ' +
-              'devoluciones, cancelaciones ni plazos — todo eso es cierto y se contesta si ' +
-              'pregunta, pero metido acá suena a letra chica y así lo pidió el local. Y NO le ' +
-              'digas que ya está inscripta ni que ya la anotaste: eso lo confirma el local ' +
-              'cuando ve la transferencia.',
+              'Quedó anotada en la planilla, con el comprobante ya recibido. Para cerrar, ' +
+              'mandale el mensaje rápido `curso-inscripcion`, que es el texto del equipo para ' +
+              'este momento y trae lo del grupo de WhatsApp. Ese es el cierre: no agregues ' +
+              'nada más ni le vuelvas a pedir datos.',
           },
         };
       }
@@ -1358,7 +1411,24 @@ export async function executeTool(
           };
         }
         const texto = typeof input.texto === 'string' ? input.texto.trim() : '';
-        ctx.effects.photos.push({ url: producto.imageUrl, caption: texto || undefined });
+        /*
+          El flyer del curso va PRIMERO, y por eso viaja marcado.
+
+          Para todo lo demás la foto va después del texto, que es como muestra
+          algo una persona: primero explica, después enseña. Con un curso es al
+          revés, porque el flyer no ilustra la respuesta, ES la respuesta: tiene
+          el día, la hora, el lugar y el precio, escritos y diseñados por el
+          local.
+
+          Salía al revés y se notaba: llegaba una burbuja contando el precio y
+          los turnos, y recién después el flyer con el "hola" adentro. El saludo
+          quedaba segundo.
+        */
+        ctx.effects.photos.push({
+          url: producto.imageUrl,
+          caption: texto || undefined,
+          primero: Boolean(cursoId),
+        });
 
         return {
           ok: true,

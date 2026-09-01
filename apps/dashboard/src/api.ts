@@ -240,6 +240,11 @@ export interface Settings {
   escalateAfterErrors: number;
   typingMsPerChar: number;
   maxTypingMs: number;
+  /** Espera, en ms, a que el cliente termine de escribir. */
+  esperaMs: number;
+  /** Franja en la que el bot puede tomar pedidos, HH:MM. */
+  pedidosDesde: string;
+  pedidosHasta: string;
   /** Horario tal cual lo cuenta el bot. Texto libre: el real es partido y cambia los domingos. */
   scheduleText: string;
   openHour: number;
