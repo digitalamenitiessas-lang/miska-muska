@@ -377,17 +377,32 @@ function Gastometro({ gasto, onVerMas }: { gasto: Gasto; onVerMas: () => void })
   */
   const plata = (n: number) => (n > 0 && n < 0.01 ? `$${n.toFixed(4)}` : `$${n.toFixed(2)}`);
 
+  /*
+    El día 1 del mes, "hoy" y "el mes" son el mismo número, y con los dos
+    puestos uno al lado del otro eso se lee como un error de cálculo. Lo
+    reportaron como bug y no lo era: era el primero de septiembre.
+
+    Se dice por qué en vez de mostrar el número repetido. Vuelve solo al día
+    siguiente, cuando los dos vuelven a ser distintos.
+    */
+  const arrancoElMesHoy = Math.abs(gasto.mes - gasto.hoy) < 0.000001;
+  const detalleMes = arrancoElMesHoy ? 'el mes arrancó hoy' : `mes ${plata(gasto.mes)}`;
+
   return (
     <button
       className="gastometro"
       onClick={onVerMas}
-      title={`Hoy ${plata(gasto.hoy)} · Este mes ${plata(gasto.mes)} · Histórico ${plata(
-        gasto.historico,
-      )}\nEn dólares, lo que cobra OpenRouter por el modelo. Tocá para ver el detalle.`}
+      title={
+        `Hoy ${plata(gasto.hoy)} · Este mes ${plata(gasto.mes)} · Histórico ${plata(
+          gasto.historico,
+        )}` +
+        (arrancoElMesHoy ? '\nHoy es el primer día del mes, por eso los dos son iguales.' : '') +
+        '\nEn dólares, lo que cobra OpenRouter por el modelo. Tocá para ver el detalle.'
+      }
     >
       <span className="gastometro-label">Modelo hoy</span>
       <span className="gastometro-valor">{plata(gasto.hoy)}</span>
-      <span className="gastometro-mes">mes {plata(gasto.mes)}</span>
+      <span className="gastometro-mes">{detalleMes}</span>
     </button>
   );
 }
