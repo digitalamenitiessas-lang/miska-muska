@@ -17,11 +17,10 @@ import { bus, log } from '../events/bus.js';
 import type { Contact, Conversation, StoredMessage } from '../types/domain.js';
 import { describeInbound, type InboundMessage } from '../types/message.js';
 
-export interface IngressResult {
-  conversation: Conversation;
-  contact: Contact;
-  stored: StoredMessage;
-}
+export type IngressResult =
+  | { conversation: Conversation; contact: Contact; stored: StoredMessage; duplicado?: false }
+  /** Ya lo teníamos: la plataforma lo reintentó. Sin `stored`, pero con la charla. */
+  | { conversation: Conversation; contact: Contact; duplicado: true; stored?: undefined };
 
 /** Postgres: violación de restricción única. */
 const UNIQUE_VIOLATION = '23505';
@@ -49,7 +48,18 @@ export async function ingest(
     // La conversación y no el canal: los ids de Telegram se repiten entre chats,
     // así que sin ella dos líneas idénticas pueden ser dos charlas distintas.
     log('info', `Mensaje duplicado ignorado (${conversation.id} ${inbound.channelMessageId})`);
-    return null;
+    /*
+      Se devuelve la conversación igual, y no null a secas.
+
+      Un duplicado casi siempre es un reintento de la plataforma, y desde que el
+      webhook contesta 500 cuando algo falla, esos reintentos son nuestros: si
+      el primer intento alcanzó a GUARDAR el mensaje pero se cayó antes de
+      programar la respuesta, el mensaje quedaba en la bandeja y el bot no lo
+      contestaba nunca. Con la conversación en la mano, quien llama puede
+      volver a programar el turno — y eso es seguro porque el turno se saltea
+      solo si ese mismo mensaje ya fue contestado.
+    */
+    return { conversation, contact, duplicado: true };
   }
 
   const text = describeInbound(inbound.content);

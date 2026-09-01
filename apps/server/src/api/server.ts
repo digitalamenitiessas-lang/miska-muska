@@ -13,6 +13,7 @@ import { bus, log, type AppEvent } from '../core/events/bus.js';
 import type { Repositories } from '../core/store/repositories.js';
 import type { Pipeline } from '../core/pipeline/index.js';
 import type { ChannelRegistry } from '../channels/registry.js';
+import type { InboundMessage } from '../core/types/message.js';
 import { WhatsAppAdapter } from '../channels/whatsapp/adapter.js';
 import { registerManagementRoutes } from './routes.js';
 
@@ -136,15 +137,113 @@ export async function buildServer(deps: ApiDeps): Promise<FastifyInstance> {
 
   // --- Webhooks -----------------------------------------------------------
 
+  /*
+    PRIMERO SE GUARDA, DESPUÉS SE FIRMA EL RECIBO.
+
+    Los dos webhooks contestaban 200 y recién entonces procesaban, con un
+    `.catch` que escribía una línea en el log. Si guardar fallaba —la base
+    lenta, el pool lleno, un hipo de Supabase— el mensaje se perdía PARA
+    SIEMPRE: la plataforma ya tenía su 200 y no lo volvía a mandar. Del lado de
+    la clienta, escribió y el local nunca contestó.
+
+    Lo importante es que no hace falta inventar una cola de reintentos: Meta y
+    Telegram YA reintentan cuando la respuesta no es 2xx. Lo único que hacíamos
+    era impedírselo. Ahora, si no pudimos guardar, se contesta 500 y ellos lo
+    traen de nuevo.
+
+    Reintentar es seguro, y además ALCANZA, por las dos mitades del ingreso: si
+    el mensaje no se había guardado, el reintento lo guarda; y si se había
+    guardado pero nos caímos antes de programar la respuesta, la dedupe lo
+    reconoce —no lo duplica— y de todos modos reprograma el turno. Sin esa
+    segunda mitad, el reintento devolvía un 200 educado sobre un mensaje que
+    seguía sin contestar.
+
+    Y hay un techo de tiempo, porque una plataforma que espera de más termina
+    dando de baja el webhook. Ocho segundos es MENOS que los tiempos de espera
+    de la propia base (10 s para conseguir conexión, 15 s por consulta), así que
+    cuando el pool está saturado el techo salta primero y el trabajo sigue
+    corriendo por detrás. Eso está bien y no es un descuido: ese trabajo
+    huérfano termina guardando el mensaje, y el reintento que ya pedimos cae en
+    el caso de arriba y programa la respuesta.
+
+    Los mensajes van de a uno y no en paralelo: un lote de diez arrancaba diez
+    cadenas de golpe contra un pool de cinco conexiones, que es justo lo que
+    provocaba el fallo que esto viene a arreglar.
+  */
+  const TECHO_WEBHOOK_MS = 8000;
+
+  async function recibir(
+    reply: FastifyReply,
+    canal: string,
+    leerMensajes: () => Iterable<InboundMessage>,
+    deps: ApiDeps,
+  ): Promise<FastifyReply> {
+    let vencido: NodeJS.Timeout | undefined;
+    const techo = new Promise<never>((_, rechazar) => {
+      vencido = setTimeout(
+        () => rechazar(new Error(`no pude guardar en ${TECHO_WEBHOOK_MS} ms`)),
+        TECHO_WEBHOOK_MS,
+      );
+    });
+
+    try {
+      /*
+        El parseo va ADENTRO del try. Estaba afuera, y un payload que rompiera
+        el parser salía como un 500 de Fastify sin una sola línea nuestra en el
+        log: el peor error es el que no deja rastro de por qué pasó.
+      */
+      const lista = [...leerMensajes()];
+      if (!lista.length) return reply.code(200).send({ ok: true });
+
+      /*
+        Se intentan TODOS, y recién al final se decide qué contestar.
+
+        Con un `for` que aborta al primer error, un mensaje que falla siempre
+        —uno solo— dejaba sin procesar a los que venían atrás en el mismo lote,
+        y como el reintento trae el lote entero, esos quedaban bloqueados para
+        siempre detrás de él. Ahora el que falla no se lleva puestos a los otros:
+        se guardan los que se pueden, y el 500 pide que traigan de nuevo lo que
+        no. La dedupe se encarga de que los ya guardados no se dupliquen.
+      */
+      const fallos: unknown[] = [];
+      await Promise.race([
+        (async () => {
+          for (const mensaje of lista) {
+            try {
+              await deps.pipeline.handleInbound(mensaje);
+            } catch (err) {
+              fallos.push(err);
+            }
+          }
+        })(),
+        techo,
+      ]);
+
+      if (!fallos.length) return reply.code(200).send({ ok: true });
+      log(
+        'error',
+        `No pude guardar ${fallos.length} de ${lista.length} mensajes de ${canal}: ` +
+          'pido que los reintenten en vez de perderlos',
+        fallos[0],
+      );
+      return reply.code(500).send({ error: 'reintentar' });
+    } catch (err) {
+      log(
+        'error',
+        `Se me pasó el tiempo guardando un mensaje de ${canal}: pido que lo reintenten`,
+        err,
+      );
+      return reply.code(500).send({ error: 'reintentar' });
+    } finally {
+      clearTimeout(vencido);
+    }
+  }
+
   app.post('/webhooks/telegram', async (req: FastifyRequest, reply: FastifyReply) => {
     const adapter = deps.channels.get('telegram');
     if (!adapter) return reply.code(503).send({ error: 'Canal no disponible' });
-    // Se responde 200 de inmediato: Telegram reintenta si tardamos.
-    reply.code(200).send({ ok: true });
     const headers = req.headers as Record<string, string | undefined>;
-    for (const message of adapter.parseWebhook(req.body, headers)) {
-      deps.pipeline.handleInbound(message).catch((err) => log('error', 'Pipeline (telegram)', err));
-    }
+    return recibir(reply, 'telegram', () => adapter.parseWebhook(req.body, headers), deps);
   });
 
   app.get('/webhooks/whatsapp', async (req: FastifyRequest, reply: FastifyReply) => {
@@ -166,10 +265,7 @@ export async function buildServer(deps: ApiDeps): Promise<FastifyInstance> {
       log('warn', 'Webhook de WhatsApp con firma inválida: descartado.');
       return reply.code(401).send({ error: 'Firma inválida' });
     }
-    reply.code(200).send({ ok: true });
-    for (const message of adapter.parseWebhook(req.body)) {
-      deps.pipeline.handleInbound(message).catch((err) => log('error', 'Pipeline (whatsapp)', err));
-    }
+    return recibir(reply, 'whatsapp', () => adapter.parseWebhook(req.body), deps);
   });
 
   // --- SSE ----------------------------------------------------------------

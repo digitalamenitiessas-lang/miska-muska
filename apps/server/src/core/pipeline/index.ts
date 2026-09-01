@@ -173,6 +173,24 @@ export class Pipeline {
     const result = await ingest(this.#repos, inbound);
     if (!result) return;
 
+    /*
+      Un reintento de la plataforma sobre algo que ya teníamos guardado.
+
+      No se vuelve a guardar ni se vuelve a rutear, pero SÍ se reprograma el
+      turno. Desde que el webhook contesta 500 cuando algo falla, un reintento
+      puede estar tapando un hueco nuestro: el mensaje se guardó y el proceso se
+      cayó antes de programar la respuesta, y sin esto quedaba en la bandeja sin
+      que el bot lo contestara nunca.
+
+      Programar de más es gratis: el turno se saltea solo si el último entrante
+      ya fue contestado, y en ese caso deja un "Turno omitido" en el log.
+    */
+    if (result.duplicado) {
+      const { esperaMs } = await this.#repos.settings.read();
+      this.#scheduleAgentTurn(result.conversation.id, esperaMs);
+      return;
+    }
+
     const { conversation, stored } = result;
 
     /*
