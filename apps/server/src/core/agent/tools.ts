@@ -301,10 +301,10 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
     'mandar_foto',
     'Le manda al cliente la foto de un producto del catálogo, como imagen de verdad. ' +
       'Usala cuando quiera VER algo antes de decidir: una torta, un box, o el curso ' +
-      'presencial de esta semana. Solo funciona con productos que tienen foto cargada: eso te ' +
-      'lo dice el campo tiene_foto de buscar_catalogo y disponibilidad_hoy. Si no tiene foto, ' +
-      'no la inventes ni pegues un link: describí el producto con palabras. Mandá una foto por ' +
-      'vez, y no más de dos en un mismo turno.',
+      'presencial de esta semana. LLAMALA IGUAL AUNQUE tiene_foto SEA false: si no hay foto ' +
+      'cargada, esta herramienta avisa al local para que una persona se la mande, que es lo ' +
+      'que el cliente pidió. Describirla con palabras NO reemplaza una foto. Lo único que ' +
+      'nunca se hace es inventar un link. Mandá una foto por vez, y no más de dos por turno.',
     {
       producto_id: {
         type: 'string',
@@ -1429,11 +1429,42 @@ export async function executeTool(
         }
         const producto = item as { name: string; id: string; imageUrl: string | null };
         if (!producto.imageUrl) {
+          /*
+            NO HAY FOTO: LA MANDA UNA PERSONA.
+
+            Antes el bot describía el producto con palabras, y eso no es lo que
+            la clienta pidió: pidió verlo. Ahora se prende la alerta en la
+            bandeja y alguien del local le saca una foto y se la manda con el
+            clip del chat, que para eso está.
+
+            `soloAvisar` a propósito: la charla NO se le saca al bot. Falta una
+            foto, no hay un problema que resolver, y el bot puede seguir
+            vendiendo mientras tanto — si le sacáramos la conversación, cada
+            pedido de foto la dejaría frenada esperando a una persona.
+
+            Y `ok: true` porque no es un error del modelo: hizo lo correcto al
+            pedir la foto. Con ok:false reintenta, y acá no hay nada que
+            reintentar.
+          */
+          ctx.effects.escalate = {
+            reason: 'falta_foto',
+            summary:
+              `Pidió ver ${producto.name} y no tenemos foto cargada. Sacale una y mandásela ` +
+              'con el clip 📎 del chat. (Si la cargás en Catálogo, la próxima la manda el bot solo.)',
+            soloAvisar: true,
+          };
+          log('info', `Sin foto de ${producto.name}: avisado al local`);
           return {
-            ok: false,
-            error:
-              `${producto.name} no tiene foto cargada. No inventes una ni le pegues un link: ` +
-              'describilo con palabras, que para eso están los datos que sí tenés.',
+            ok: true,
+            data: {
+              mandada: null,
+              instruccion:
+                `No tenemos foto de ${producto.name} cargada, así que ya le avisé al local ` +
+                'para que te la mande una persona. Decíselo simple y sin prometer una hora: ' +
+                '"dejame que te la muestro, ahora te la paso 🙌🏼". NO la describas con ' +
+                'palabras como si eso reemplazara la foto —te pidió verla—, no inventes un ' +
+                'link, y seguí atendiendo normalmente el resto de la charla.',
+            },
           };
         }
         if (!FOTO_VALIDA.test(producto.imageUrl)) {
