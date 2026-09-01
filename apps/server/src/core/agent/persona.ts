@@ -28,6 +28,7 @@ import {
   claveDeCategoria,
   operationalFacts,
   POLICY_PROSE,
+  seEncargaConAnticipacion,
   sePuedenTomarPedidos,
 } from '../policies/rules.js';
 import { localToday } from '../store/db.js';
@@ -442,11 +443,29 @@ export function buildDailyContext(input: DailyContextInput): string {
           .map((p) => `${p.name} $${p.price.toLocaleString('es-AR')}`)
           .join(' · ')}`,
     );
+    /*
+      La lista de agotados dice, producto por producto, si se puede encargar.
+
+      Decía en general "ofrecé consultarlos para otro día", y eso está bien para
+      una torta y está mal para todo lo demás: los sorrentinos y las cookies no
+      se hacen por encargo, el stock lo maneja el local, y ofrecer coordinar una
+      fecha deja a alguien esperando algo que nadie va a preparar.
+    */
+    const marca = (p: Product) =>
+      seEncargaConAnticipacion(p.category) ? '' : ' [no se encarga]';
+    const lineasConMarca = [...porCategoria.entries()].map(
+      ([categoria, list]) =>
+        `  ${categoria}: ${list
+          .map((p) => `${p.name} $${p.price.toLocaleString('es-AR')}${marca(p)}`)
+          .join(' · ')}`,
+    );
     parts.push(
-      'HOY NO HAY (existen y tienen precio, pero hoy están agotados: podés decir cuánto ' +
-        `salen y ofrecer consultarlos para otro día, pero NO los cargues en un pedido de hoy):\n${lineas.join(
-          '\n',
-        )}`,
+      'HOY NO HAY (existen y tienen precio, pero hoy están agotados). Podés decir cuánto ' +
+        'salen y ofrecer lo que sí hay, pero NO los cargues en un pedido de hoy.\n' +
+        'Los que dicen [no se encarga] son los que NO se producen para una fecha: con esos ' +
+        'no ofrezcas consultarlos para otro día ni coordinar una entrega, porque el stock lo ' +
+        'maneja el local y nadie sabe cuándo vuelve a haber. Con los otros —tortas y ' +
+        `desayunos— sí:\n${lineasConMarca.join('\n')}`,
     );
   }
 

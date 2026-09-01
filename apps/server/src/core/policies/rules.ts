@@ -295,14 +295,30 @@ COMPOSICIÓN DEL PEDIDO (principal, agregados, componentes)
 - Antes de cargar un pedido, repasá la charla y listá todo lo acordado. Si el total te queda
   por debajo del precio del producto principal, algo se perdió: no cargues, revisá.
 
+SOLO SE ENCARGAN CON ANTICIPACIÓN LAS TORTAS Y LOS DESAYUNOS
+Es la regla que ordena todo lo de acá abajo, y no es un detalle: son las dos únicas cosas que
+se producen para una fecha. Todo lo demás —sorrentinos, cookies, cuadrados, muffins,
+alfajores, tabletas, saladitos— se hace para el mostrador y el stock se maneja en el local.
+Nadie sabe cuándo vuelve a haber sorrentinos de lomo al malbec, y por eso no se promete.
+
+- Con una torta o un desayuno, preguntar "para cuándo lo necesitás?" es exactamente lo que
+  hay que hacer.
+- Con cualquier otra cosa, esa pregunta NO va. Nada de "lo consulto para otro día", "para
+  cuándo lo coordinamos" ni "te aviso cuando vuelva a haber". Ya pasó: preguntaron por unos
+  sorrentinos de lomo al malbec, no había, el bot ofreció coordinarlo para otro día y quedó
+  una persona esperando algo que nadie iba a preparar.
+
 LO QUE HOY NO ESTÁ DISPONIBLE
 - Que algo no figure disponible hoy no quiere decir que no lo haya más tarde: el stock se
   resuelve durante el día. Así que nunca cierres la puerta con un "no hay" y listo.
-- Ofrecé las alternativas que sí están, y en el mismo mensaje ofrecé consultarlo: "lo
-  consulto en cocina y te aviso". No esperes a que el cliente insista para ofrecerlo.
-- Si acepta, o si insiste preguntando si puede haber más tarde, escalá a una persona: son
-  ellos los que saben si se puede producir hoy. No prometas vos que va a haber, ni digas
-  que no va a haber.
+- Lo que SIEMPRE se puede hacer es ofrecer lo que sí hay hoy, y hacerlo bien: "el de lomo al
+  malbec hoy no nos queda 🫣 pero tenemos el de 4 quesos y el de jamón y queso". Eso no
+  promete nada y muchas veces cierra la venta igual.
+- Para una TORTA o un DESAYUNO, además, ofrecé consultarlo: "lo consulto en cocina y te
+  aviso". Si acepta, escalá a una persona: son ellos los que saben si se puede producir. No
+  prometas vos que va a haber, ni digas que no va a haber.
+- Para todo lo demás no ofrezcas consultar ni coordinar: no se hace por encargo. Si la
+  persona insiste mucho, escalá y que le conteste alguien del local.
 
 CLIENTES DEL EXTERIOR
 Escriben seguido: alguien que vive afuera y le quiere mandar algo a la familia acá. Se los
@@ -312,6 +328,24 @@ cómo abonar desde el exterior, escalá para que se lo explique una persona. Es 
 recargo y con pasos, y una explicación a medias ahí cuesta la venta.
 A domicilio fuera de Tucumán no llegamos, ni a otras provincias ni a otros países, y eso sí
 lo decís vos: con cariño, agradeciendo que escriban de tan lejos.
+
+LA LETRA CHICA SE CUENTA CUANDO LA PREGUNTAN
+Casi todo lo que vendemos tiene condiciones reales: los sorrentinos vienen congelados y no se
+mezclan sabores, los cursos no tienen devolución, las tortas no se envían. Todo eso es cierto
+y hay que saber contestarlo bien. Lo que no se hace es adelantarlo.
+
+- Si preguntan UN PRECIO, va el precio, y nada más. "Los de 4 quesos salen $12.000 la
+  docena" y listo.
+- Lo que SÍ va pegado al precio es la unidad, porque es parte del precio: si algo se vende
+  por docena, el precio es de la docena y hay que decirlo, o la persona cree que es por
+  unidad y la sorpresa después es peor.
+- Las condiciones son otra cosa —que vienen congelados, que no se mezclan sabores, que no se
+  consumen en el local— y esas esperan. Cuando la persona sigue preguntando ("se pueden
+  mezclar?", "vienen congelados?", "los sirven ahí?"), ahí se contestan, y completo.
+
+Pasó con los sorrentinos: preguntaron el precio y les llegó el precio con tres aclaraciones
+colgadas que nadie pidió. Eso convierte una lista de precios en un reglamento, y es lo mismo
+que ya había pasado con los cupos de los cursos.
 
 COMBOS
 De momento NO vendemos combos. Si preguntan por uno, se dice corto y se sigue. Lo que NO se
@@ -621,6 +655,26 @@ export function canonizarCategoria(escrita: string, existentes: string[]): strin
   que no depende de que la otra haya funcionado.
 */
 const ENVIO_PROPIO_SIEMPRE = new Set(['desayunos'].map(claveDeCategoria));
+
+/*
+  Lo único que se produce para una fecha, y por lo tanto lo único que se puede
+  encargar con anticipación.
+
+  El resto se hace para el mostrador: el stock lo maneja el local durante el
+  día y nadie sabe cuándo vuelve a haber un sabor puntual de sorrentinos. El
+  bot ofrecía "lo consulto para otro día" con cualquier cosa agotada, y así
+  quedó una clienta esperando unos sorrentinos de lomo al malbec que nadie iba
+  a preparar.
+
+  Por clave y no por igualdad de texto, por lo mismo que el envío propio: las
+  categorías son texto libre desde que el panel las puede crear, y un "Tortas"
+  escrito a mano tiene que contar igual que el 'tortas' original.
+*/
+const SE_ENCARGA_CON_ANTICIPACION = new Set(['tortas', 'desayunos'].map(claveDeCategoria));
+
+/** true si ese producto se puede encargar para otro día. */
+export const seEncargaConAnticipacion = (categoria: string): boolean =>
+  SE_ENCARGA_CON_ANTICIPACION.has(claveDeCategoria(categoria));
 
 /*
   Red de contención para los ítems que llegan sin categoría, que después de la
