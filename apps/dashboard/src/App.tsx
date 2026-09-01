@@ -14,6 +14,7 @@ import {
 } from './api';
 import { Pill, Switch, useToast } from './ui';
 import { ponerSonido, sonarAviso, sonidoEncendido } from './sonido';
+import { avisarEnPantalla } from './avisos';
 import { Inbox } from './views/Inbox';
 import { Pedidos } from './views/Pedidos';
 import { Catalogo } from './views/Catalogo';
@@ -250,7 +251,28 @@ export default function App() {
     const previas = marcadas.current;
     marcadas.current = ahora;
     if (!previas) return;
-    if ([...ahora].some((id) => !previas.has(id))) sonarAviso();
+    const nuevas = conversations.filter((c) => c.needsAttention && !previas.has(c.id));
+    if (!nuevas.length) return;
+
+    sonarAviso();
+
+    /*
+      Y el cartelito del sistema, además del sonido. El local pidió las dos
+      cosas: "el ruidito no alcanza, la gente no se va a dar cuenta".
+
+      Se nombra a la clienta y el motivo, porque un aviso que dice "necesitan una
+      mano" obliga a abrir el panel para saber si es urgente. Con el nombre
+      adelante se decide sin moverse.
+    */
+    const primera = nuevas[0];
+    const quien =
+      primera.contact?.fullName?.trim() || primera.contact?.displayName?.trim() || 'Una clienta';
+    const motivo = (primera.attentionReason ?? '').replace(/^\[[^\]]+\]\s*/, '').trim();
+    void avisarEnPantalla(
+      nuevas.length > 1 ? `${nuevas.length} charlas necesitan una mano` : `${quien} necesita una mano`,
+      motivo || 'Tocá para abrir la bandeja',
+      nuevas.length === 1 ? primera.id : undefined,
+    );
   }, [conversations]);
 
   /*

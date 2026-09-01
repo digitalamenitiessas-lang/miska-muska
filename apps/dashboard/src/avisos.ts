@@ -125,3 +125,48 @@ export async function apagarAvisos(): Promise<EstadoAvisos> {
   }
   return 'apagados';
 }
+
+/**
+ * EL CARTELITO DEL SISTEMA, cuando el panel está abierto.
+ *
+ * El local: "el ruidito no alcanza, la gente no se va a dar cuenta; necesito que
+ * llame más la atención cuando el bot necesita una persona".
+ *
+ * Esto NO es el aviso al celular. Aquel viaja por el servidor y sirve con el
+ * panel cerrado; este lo dispara la propia página en el momento, sin round trip,
+ * y es el que aparece como una notificación de Windows arriba a la derecha
+ * mientras alguien está usando otra cosa en la misma computadora.
+ *
+ * `requireInteraction` es la mitad del pedido: sin eso Windows lo esconde a los
+ * cinco segundos, que es justo lo que pasa cuando nadie está mirando la pantalla.
+ * Así se queda hasta que alguien lo toca.
+ *
+ * El `tag` es el mismo que usa el service worker para los avisos al celular, y
+ * eso es a propósito: si el aviso del servidor llega también, reemplaza a este
+ * en vez de apilar dos carteles por la misma charla.
+ *
+ * No pide permiso. Pedirlo acá, de sorpresa y en medio de una venta, es la forma
+ * de que alguien apriete "bloquear" y se quede sin avisos para siempre: el
+ * permiso se pide desde el botón, que lo aprieta alguien que ya sabe para qué es.
+ */
+export async function avisarEnPantalla(
+  titulo: string,
+  cuerpo: string,
+  conversacionId?: string,
+): Promise<void> {
+  try {
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
+    const registro = await navigator.serviceWorker?.getRegistration();
+    if (!registro) return;
+    await registro.showNotification(titulo, {
+      body: cuerpo,
+      icon: '/icon-192.png',
+      badge: '/icon-192.png',
+      requireInteraction: true,
+      tag: conversacionId ? 'charla:' + conversacionId : 'miska',
+      data: { conversacionId: conversacionId ?? null },
+    });
+  } catch {
+    // Un aviso que no sale no puede tumbar el panel. Para eso está el sonido.
+  }
+}
