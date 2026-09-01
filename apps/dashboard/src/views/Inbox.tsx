@@ -438,14 +438,40 @@ export function Inbox({
     const limpiarBorrador = () =>
       setDraft((actual) => (actual.startsWith(textoCrudo) ? actual.slice(textoCrudo.length) : actual));
 
+    /*
+      Y si el envío falla, el texto vuelve. Solo en SU charla: si mientras tanto
+      abrió otra, reponerlo ahí le metería en la conversación de una clienta el
+      mensaje que era para otra.
+    */
+    const reponerBorrador = () => {
+      if (seleccionadaRef.current !== charla) return;
+      setDraft((actual) => (actual.startsWith(textoCrudo) ? actual : textoCrudo + actual));
+    };
+
     if (!fotos.length) {
       setSending(true);
+      /*
+        EL BORRADOR SE LIMPIA ANTES DE MANDAR, NO DESPUÉS.
+
+        Limpiarlo después parece lo prudente y se siente al revés. El local lo
+        describió así: "yo escribo, envío, y me sigue apareciendo como que sigo
+        escribiendo y no se me borra el mensaje, hay como un delay ahí". No era
+        una impresión: el texto se quedaba en el cuadro TODO el viaje de ida y
+        vuelta —Tucumán, el servidor, Meta, y de nuevo Tucumán—, que con una red
+        de celular es un segundo largo. Un segundo mirando el mensaje intacto
+        alcanza para pensar que no salió y apretar de nuevo.
+
+        Es lo que hace WhatsApp: el cuadro se vacía apenas apretás. Y si algo
+        falla, el texto vuelve y el aviso lo explica; perder un segundo de
+        certeza en el caso raro es mejor que perderlo en todos los envíos.
+      */
+      limpiarBorrador();
       try {
         await api.sendMessage(charla, text);
-        limpiarBorrador();
         seguirElFinal();
         await loadDetail(charla);
       } catch (err) {
+        reponerBorrador();
         toast(`No se pudo enviar: ${String(err)}`);
       } finally {
         setSending(false);
