@@ -63,6 +63,55 @@ const JERGA_INTERNA: Array<[RegExp, string]> = [
 ];
 
 /*
+  Hablar desde el lado equivocado del mostrador.
+
+  El caso real: "hoy retiramos hasta las 21:30". Retirar lo hace la CLIENTA; el
+  local no retira nada. Dicho en primera persona del plural queda al revés, y a
+  quien lo lee le suena a que somos nosotros los que vamos a buscar el pedido.
+  Lo que el local dice es "hoy estamos hasta las 21:30".
+
+  Mismo criterio que las otras dos tablas: mapa CERRADO y anclado a la forma
+  exacta que apareció. "Retiramos" suelto NO se toca, porque hay frases donde
+  está bien ("si no lo retiran, lo retiramos de la vitrina"); lo que se corrige
+  es el uso horario, que es el que salió mal y el único que es siempre un error.
+*/
+/** Mantiene la mayúscula inicial del original. */
+function comoVenia(original: string, reemplazo: string): string {
+  return original[0] === original[0].toUpperCase()
+    ? reemplazo[0].toUpperCase() + reemplazo.slice(1)
+    : reemplazo;
+}
+
+/*
+  Se pide que lo que sigue sea UN HORARIO, y no alcanza con la preposición.
+  "Lo retiramos de la vitrina a la noche" está bien dicho —ahí el que retira es
+  el local— y con un patrón más suelto quedaba "lo estamos de la vitrina".
+  El reemplazo es una función para no perder la mayúscula cuando la frase
+  arranca con "Retiramos".
+*/
+const LADO_EQUIVOCADO: Array<[RegExp, (coincidencia: string) => string]> = [
+  [
+    new RegExp(
+      /*
+        El espacio va DENTRO del lookahead y con su propio grupo. Afuera, el
+        match se lo comía y quedaba "Estamosdesde las 9"; y sin el grupo, el `|`
+        parte el patrón entero y el espacio solo valdría para la primera
+        alternativa.
+      */
+      '\\bretiramos(?= (?:' +
+        // "hasta las 21:30", "de 9 a 21", "desde las 9"
+        '(?:hasta|desde|de) (?:las? |los? |el )?\\d' +
+        '|' +
+        // "los sábados hasta las 22"
+        'los (?:lunes|martes|mi[ée]rcoles|jueves|viernes|s[áa]bados?|domingos?)\\b' +
+      '))',
+      'gi',
+    ),
+    (coincidencia) => comoVenia(coincidencia, 'estamos'),
+  ],
+];
+
+/*
   "no figura" y "no me aparece" quedaron AFUERA a propósito, y vale la pena que
   esté escrito para que nadie los agregue de nuevo con buena intención: cambiarlos
   por "no tenemos" da vuelta el orden de la frase. "Esa torta no figura" salía
@@ -119,6 +168,14 @@ export function normalizeWriting(text: string): WritingResult {
     }
   }
 
+  for (const [re, aDerechas] of LADO_EQUIVOCADO) {
+    const derecho = out.replace(re, (m) => aDerechas(m));
+    if (derecho !== out) {
+      fixes.push('lado equivocado del mostrador');
+      out = derecho;
+    }
+  }
+
   return { text: out.trim(), fixes };
 }
 
@@ -132,6 +189,39 @@ export function normalizeWriting(text: string): WritingResult {
   para los dos casos: lo único que cambia es si ya hubo conversación.
 */
 const SALUDO_INICIAL = /^\s*(hola+|buenas|buen d[ií]a|buenas tardes|buenas noches)\b[\s!¡,.:]*/i;
+
+/*
+  Lo que es puro trámite de cortesía y no pregunta nada.
+
+  Existe para una guarda concreta: el mensaje rápido "saludo" es un hola
+  enlatado, y se estaba mandando como respuesta a gente que había preguntado
+  algo. Medido sobre tres días: salió doce veces y en seis la persona había
+  escrito una pregunta de verdad —"tienen disponible tarta de frutilla",
+  "le quedan fechas para muffins", "qué precio de el box de brownies"—. Una de
+  ellas esperó una hora y volvió a escribir "??".
+*/
+/*
+  Las más largas van PRIMERO. Con `buenas?` adelante, "buenas tardes" perdía el
+  "buenas" y quedaba un "tardes" suelto que hacía pasar el mensaje por pregunta.
+*/
+const PURA_CORTESIA =
+  /\b(buenas tardes|buenas noches|buen d[ií]as?|qu[eé] tal|c[oó]mo (est[aá]s|andas|anda|va|te va)|todo bien|hola+s*|holi+s*|buenas?|saludos|hi|hey|disculp[aá]|perd[oó]n|por favor)\b/giu;
+
+/**
+ * ¿Este mensaje es SOLO un saludo, sin nada que contestar?
+ *
+ * Se saca la cortesía y se mira si queda algo. "Holaa, cómo estás?" no deja
+ * nada: es un hola. "Hola, qué precio tienen las cookies?" deja "qué precio
+ * tienen las cookies", que es justo lo que hay que contestar.
+ */
+export function esSoloUnSaludo(texto: string): boolean {
+  return (
+    texto
+      .replace(PURA_CORTESIA, ' ')
+      .replace(/[^\p{L}\p{N}]+/gu, ' ')
+      .trim().length === 0
+  );
+}
 
 /**
  * Saca el saludo con el que arranca un texto, si tiene uno.
@@ -173,13 +263,88 @@ export function sinArranqueSobreactuado(text: string): string {
   return cortado;
 }
 
+/*
+  Anunciar la foto que ya salió.
+
+  La foto viaja ANTES del texto, así que cuando la persona lee, la imagen ya
+  está arriba: "ahí tenés la carta" le está contando algo que ya pasó. La
+  prohibición está en el prompt Y en la descripción de `mandar_foto`, y aun así
+  salió tres veces —la última, "Ahí tenés toda la carta!" con la carta arriba—.
+  Tres es cuando deja de ser un descuido del modelo y pasa a ser trabajo nuestro.
+
+  Mismo criterio que el arranque sobreactuado: se corta solo si el anuncio es
+  una oración entera y lo que sigue arranca en mayúscula. Si el anuncio y la
+  frase útil son una sola oración, cortar deja algo peor y no se toca.
+*/
+const ANUNCIO_DE_FOTO =
+  new RegExp(
+    '^\\s*(' +
+      // "ahí la tenés", "acá tenés toda la carta", "ahí lo ves"
+      '(ah[ií]|ac[áa])\\s+(la|lo|las|los|te)?\\s*(ten[ée]s|va|van|ves)\\b[^.!?]*' +
+      '|' +
+      // "ahí te mando las dos", "ahí te paso la carta"
+      '(ah[ií]|ac[áa])\\s+te\\s+(mando|paso|dejo|comparto|adjunto)\\b[^.!?]*' +
+      '|' +
+      // "te paso la carta", "te mando la foto", "te adjunto el flyer"
+      'te\\s+(paso|mando|dejo|comparto|adjunto)\\s+(la|el|las|los)\\s*' +
+      '(carta|foto|imagen|flyer|lista|men[úu])\\b[^.!?]*' +
+      '|' +
+      // "mirá la imagen", "mirá, esta es la carta"
+      'mir[áa][\\s,]+[^.!?]{0,40}(carta|foto|imagen|flyer)\\b[^.!?]*' +
+    ')\\s*[!.…]+\\s+',
+    'i',
+  );
+
+/** Saca el anuncio de una foto que ya salió, si la burbuja arranca con uno. */
+export function sinAnuncioDeFoto(text: string): string {
+  const cortado = text.replace(ANUNCIO_DE_FOTO, '');
+  if (!cortado || cortado === text) return text;
+  const primera = cortado[0];
+  if (primera !== primera.toUpperCase()) return text;
+  return cortado;
+}
+
+/*
+  Acotaciones de guion.
+
+  A una clienta le llegó, textual, "*(sin respuesta adicional, la conversación
+  quedó cerrada con el agradecimiento)*". Es el modelo narrando que no tiene
+  nada que decir, en vez de no decir nada.
+
+  La causa se arregló en otro lado —ahora existe `no_contestar`, que es la forma
+  legítima de callarse— y esto es la red por si igual se escapa: una burbuja que
+  es ENTERA un aparte, y que además habla de la conversación o de la respuesta,
+  no es un mensaje para nadie.
+
+  Las dos condiciones juntas y no una sola: "(te lo dejo anotado)" también es una
+  burbuja entera entre paréntesis, y esa sí hay que mandarla.
+*/
+const SOLO_APARTE = /^\s*\*{0,2}\s*[([]([\s\S]*)[)\]]\s*\*{0,2}\s*$|^\s*\*{1,2}([^*]+)\*{1,2}\s*$/;
+const HABLA_DEL_TURNO =
+  /\b(respuesta|responder|contestar|contesto|conversaci[óo]n|charla|mensaje|silencio|cerrad[ao]|nada que (decir|agregar)|sin (m[áa]s|nada))\b/i;
+
+/** ¿Esta burbuja es una acotación del modelo y no un mensaje para el cliente? */
+export function esAcotacion(text: string): boolean {
+  const m = SOLO_APARTE.exec(text.trim());
+  if (!m) return false;
+  const adentro = (m[1] ?? m[2] ?? '').trim();
+  if (!adentro) return false;
+  return HABLA_DEL_TURNO.test(adentro);
+}
+
 /** Normaliza las burbujas de un turno y descarta las que queden vacías. */
 export function normalizeBubbles(bubbles: string[]): { bubbles: string[]; fixes: string[] } {
   const fixes: string[] = [];
   const out: string[] = [];
   for (const bubble of bubbles) {
-    const podado = sinArranqueSobreactuado(bubble);
-    if (podado !== bubble) fixes.push('arranque sobreactuado');
+    if (esAcotacion(bubble)) {
+      fixes.push('acotación de guion');
+      continue;
+    }
+    const sinAnuncio = sinAnuncioDeFoto(bubble);
+    if (sinAnuncio !== bubble) fixes.push('anuncio de foto');
+    const podado = sinArranqueSobreactuado(sinAnuncio);
+    if (podado !== sinAnuncio) fixes.push('arranque sobreactuado');
     const result = normalizeWriting(podado);
     fixes.push(...result.fixes);
     // Una burbuja que era solo puntuación puede quedar vacía, y un texto vacío

@@ -639,6 +639,48 @@ export function createRepositories() {
       return rows.map(toMessage);
     },
 
+    /**
+     * El historial que ve el MODELO: los últimos, más el arranque del día.
+     *
+     * `history` a secas se queda con los últimos N y ya, y eso le costó una
+     * venta al local. Una clienta pidió "torta de franuit" en el mensaje 6; para
+     * cuando el bot fue a confirmar el pedido, en el mensaje 48, ese mensaje se
+     * había caído de la ventana de 40. Lo único fresco era el precio que había
+     * dicho una persona del local —"te sale 50.000 la de 20 porciones"— y hay
+     * TRES tortas que salen eso: reconstruyó el sabor desde el precio y le
+     * confirmó una torta matilda que nadie pidió.
+     *
+     * Medido: 26 de 293 charlas de tres días pasan los 40 mensajes, y son
+     * justamente las largas, donde se está cerrando una venta.
+     *
+     * Se traen los primeros del DÍA y no los primeros de la charla, porque una
+     * conversación vive para siempre: los primeros mensajes pueden ser de la
+     * semana pasada, y anclar eso sería peor que perderlo. Lo que arranca hoy es
+     * lo que se está vendiendo hoy.
+     */
+    async historyParaElModelo(
+      conversationId: string,
+      ultimos = 40,
+      primerosDelDia = 6,
+    ): Promise<StoredMessage[]> {
+      const rows = await q(
+        `WITH ultimos AS (
+           SELECT * FROM messages WHERE conversation_id = $1
+           ORDER BY created_at DESC LIMIT $2
+         ), arranque AS (
+           SELECT * FROM messages
+           WHERE conversation_id = $1
+             AND created_at >= date_trunc('day', now() AT TIME ZONE $4) AT TIME ZONE $4
+           ORDER BY created_at ASC LIMIT $3
+         )
+         SELECT * FROM (
+           SELECT * FROM ultimos UNION SELECT * FROM arranque
+         ) t ORDER BY created_at ASC`,
+        [conversationId, ultimos, primerosDelDia, TIMEZONE],
+      );
+      return rows.map(toMessage);
+    },
+
     async setChannelMessageId(
       id: string,
       channelMessageId: string | null,

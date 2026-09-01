@@ -139,6 +139,14 @@ const QUICK_REPLIES = [
       'en que te puedo ayudar?',
   },
   {
+    key: 'sorrentinos',
+    label: 'Sorrentinos (lista completa con precios)',
+    autoSend: false,
+    triggers: ['sorrentinos', 'sorrentino', 'pastas', 'sorrentinos precio'],
+    body:
+      'Holaa!!☺️💞 Nuestros sorrentinos muuy miska muska vienen por docena congelados, tenemos de:\n{{sorrentinos}}\n\nTe gustaría alguno? 🤗',
+  },
+  {
     key: 'desayunos',
     label: 'Consulta por desayunos / boxes',
     autoSend: false,

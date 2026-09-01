@@ -21,6 +21,7 @@ import {
   aliasDeCursos,
   claveDeCategoria,
   itemsQueTocanLaConsulta,
+  nombreDeWhatsApp,
   normalizarNombre,
   notaDeUsoMensajeRapido,
   sePuedenTomarPedidos,
@@ -29,7 +30,7 @@ import {
 } from '../policies/rules.js';
 import { llegoComprobante } from '../policies/comprobantes.js';
 import { renderQuickReply } from './persona.js';
-import { sinSaludoInicial } from '../policies/writing.js';
+import { esSoloUnSaludo, sinSaludoInicial } from '../policies/writing.js';
 import { bus, log } from '../events/bus.js';
 
 export interface ToolDefinition {
@@ -131,6 +132,26 @@ const tool = (
 });
 
 export const TOOL_DEFINITIONS: ToolDefinition[] = [
+  tool(
+    'no_contestar',
+    'Termina el turno SIN escribir nada, y sin que eso cuente como una falla. Es la ÚNICA forma ' +
+      'de no decir nada. ' +
+      'Usala cuando de verdad no hace falta contestar: una reacción con un emoji sobre algo que ' +
+      'escribiste, un "gracias" cuando la charla ya se cerró y ya le contestaste, un mensaje que no ' +
+      'pide nada. ' +
+      'NUNCA escribas una acotación explicando que no vas a contestar. Eso le llega al cliente: ya ' +
+      'pasó, y una persona recibió el texto "(sin respuesta adicional, la conversación quedó ' +
+      'cerrada con el agradecimiento)". Si no hay nada que decir, llamá esta herramienta y listo. ' +
+      'NO la uses para esquivar algo difícil: si te preguntaron algo, se contesta o se escala. ' +
+      'Y no la uses en el primer mensaje de una charla: ahí siempre se saluda.',
+    {
+      motivo: {
+        type: 'string',
+        description: 'Por qué no hace falta contestar. Queda en el registro, no lo ve el cliente.',
+      },
+    },
+    ['motivo'],
+  ),
   tool(
     'buscar_catalogo',
     'Busca productos por nombre o por categoría y devuelve precio y disponibilidad de hoy. ' +
@@ -558,6 +579,36 @@ export async function executeTool(
         }
 
         /*
+          Y el saludo es para quien SOLO dijo hola.
+
+          La guarda de arriba mira si la charla ya empezó, y no alcanzaba: en el
+          primer mensaje el saludo enlatado salía igual, aunque la persona
+          hubiera preguntado un precio. Doce veces en tres días, y en seis tapó
+          una pregunta concreta. Una clienta esperó una hora y escribió "??".
+
+          Si llegamos hasta acá no hubo ningún saliente todavía, así que todo lo
+          que escribió está sin contestar: alcanza con mirar si algo de eso es
+          más que un hola.
+        */
+        if (clave === 'saludo') {
+          const escritos = await repos.messages.history(ctx.conversation.id, 10);
+          const pregunto = escritos.find(
+            (m) => m.direction === 'in' && m.contentKind === 'text' && !esSoloUnSaludo(m.text),
+          );
+          if (pregunto) {
+            return {
+              ok: false,
+              error:
+                'No dijo solo hola: escribió "' +
+                pregunto.text.slice(0, 120) +
+                '". El saludo enlatado ahí le tapa la pregunta. Contestale ESO, con tus ' +
+                'palabras. Podés arrancar con un hola tuyo, pero la respuesta va en el mismo ' +
+                'mensaje.',
+            };
+          }
+        }
+
+        /*
           "No pedir la transferencia con una consulta abierta" también tiene guarda.
           Mira el CUERPO y no la clave, porque estos textos los edita el equipo
           desde el panel y mañana el alias puede estar en otro mensaje.
@@ -857,7 +908,13 @@ export async function executeTool(
           recipientName: recibeDeclarado ?? abierto?.recipientName ?? null,
         };
 
-        const problems = validateOrder(draft, productsById);
+        // El nombre del perfil no completa el pedido, pero evita volver a pedirlo.
+        const deWhatsApp = nombreDeWhatsApp(ctx.contact.displayName);
+        const problems = validateOrder(
+          draft,
+          productsById,
+          deWhatsApp?.pareceCompleto ? deWhatsApp.nombre : null,
+        );
         if (problems.length) {
           return {
             ok: false,

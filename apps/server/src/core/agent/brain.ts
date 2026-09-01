@@ -107,6 +107,14 @@ export interface BrainTurn {
   /** Etiqueta para analítica: la última herramienta relevante, o 'chat'. */
   intent: string;
   refused: boolean;
+  /**
+   * El modelo decidió no decir nada, y está bien.
+   *
+   * Es distinto de un turno vacío. Un turno vacío es una falla: cuenta para la
+   * racha y termina mandando la charla a atención humana. Esto es una decisión,
+   * y no cuenta para nada.
+   */
+  callado: boolean;
   error?: string;
 }
 
@@ -199,6 +207,7 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
   const started = Date.now();
   const turn: BrainTurn = {
     bubbles: [],
+    callado: false,
     latencyMs: 0,
     inputTokens: 0,
     outputTokens: 0,
@@ -284,6 +293,37 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
     }
 
     const toolCalls = choice.message.tool_calls ?? [];
+
+    /*
+      LA ÚNICA FORMA LEGÍTIMA DE NO DECIR NADA.
+
+      Hasta que existió esto, el modelo estaba acorralado: el prompt le dice que
+      una reacción con un emoji "casi nunca necesita respuesta", pero si no
+      escribía nada lo registrábamos como "el modelo respondió vacío", que suma a
+      la racha de errores y puede escalar la charla con un motivo que no es real.
+
+      Sin salida, hacía lo único que le quedaba: escribir que no iba a contestar.
+      Y eso le llega al cliente. Pasó, textual: alguien mandó un CV, el bot
+      agradeció, y el mensaje siguiente que recibió fue
+      "*(sin respuesta adicional, la conversación quedó cerrada con el
+      agradecimiento)*".
+
+      Se corta acá y no se ejecuta como una herramienta más, para no gastar otra
+      llamada al modelo en un turno cuyo resultado ya está decidido. Solo si viene
+      SOLA: si el modelo pidió además otra herramienta, es que sí tenía algo que
+      hacer, y esto se ignora.
+    */
+    if (toolCalls.length === 1 && toolCalls[0].function.name === 'no_contestar') {
+      turn.callado = true;
+      turn.intent = 'callado';
+      turn.toolCalls.push({
+        name: 'no_contestar',
+        input: toolCalls[0].function.arguments,
+        ok: true,
+      });
+      turn.latencyMs = Date.now() - started;
+      return turn;
+    }
 
     if (!toolCalls.length) {
       const text = choice.message.content?.trim() ?? '';

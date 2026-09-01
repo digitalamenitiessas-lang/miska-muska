@@ -28,13 +28,17 @@ import type {
   InboundMessage,
   OutboundContent,
 } from '../types/message.js';
-import { isOutsideBusinessHours } from '../policies/rules.js';
+import { isOutsideBusinessHours, nombreDeWhatsApp } from '../policies/rules.js';
+import { pideElNombre, yaSePidioElNombre } from '../policies/nombres.js';
 import { localToday } from '../store/db.js';
 import { agotadosConPrecio, preciosQueNoCoinciden } from '../policies/precios.js';
 import { diceQueQuedoReservado } from '../policies/comprobantes.js';
 import {
   afirmaQueYaSalio,
+  comprometeNuestroCadete,
+  elLocalHabloDelEnvio,
   prometeEnvioGratis,
+  TEXTO_EL_ENVIO_LO_CONFIRMA_EL_LOCAL,
   TEXTO_ENVIO_SE_COBRA,
   TEXTO_NO_SE_SI_SALIO,
 } from '../policies/envios.js';
@@ -558,7 +562,7 @@ export class Pipeline {
     const [settings, history, products, quickReplies, activeCampaigns, openOrders, courses] =
       await Promise.all([
         repos.settings.read(),
-        repos.messages.history(conversationId, 40),
+        repos.messages.historyParaElModelo(conversationId, 40, 6),
         repos.products.list(),
         repos.quickReplies.list(),
         repos.campaigns.listActive(),
@@ -662,6 +666,20 @@ export class Pipeline {
       }
       const refreshed = await repos.conversations.get(conversationId);
       if (refreshed) bus.emit({ type: 'conversation', conversation: refreshed });
+    }
+
+    /*
+      El modelo decidió no decir nada. No es una falla: se limpia la racha y se
+      marca el entrante como contestado, porque lo está —la respuesta correcta
+      era el silencio—. Sin marcarlo, el debounce vuelve a disparar el turno y el
+      modelo tiene que volver a decidir lo mismo, gastando una llamada por vez.
+    */
+    if (turn.callado) {
+      this.#errorStreak.delete(conversationId);
+      this.#answered.set(conversationId, ultimoEntrante.id);
+      const motivo = turn.toolCalls.find((t) => t.name === 'no_contestar')?.input;
+      log('info', `Sin nada que contestar (${conversationId}): ${String(motivo ?? '')}`);
+      return;
     }
 
     // --- manejo de errores del modelo ---------------------------------------
@@ -804,6 +822,26 @@ export class Pipeline {
     let motivoGuarda = '';
     for (const contenido of contents) {
       if (contenido.kind !== 'text') continue;
+      /*
+        El bot no arranca un envío solo. Va ANTES que la del envío gratis porque
+        es la decisión de más arriba: si ni siquiera está decidido que lo
+        llevamos nosotros, discutir si se cobra es discutir sobre algo que no
+        existe todavía.
+
+        Solo si el local no habló del tema en esta charla. Cuando una persona ya
+        escribió sobre el cadete, está en el asunto y el bot puede seguirla.
+      */
+      if (comprometeNuestroCadete(contenido.text) && !elLocalHabloDelEnvio(history)) {
+        log('warn', `Guarda: el bot iba a comprometer nuestro cadete (${conversationId}).`);
+        contenido.text = TEXTO_EL_ENVIO_LO_CONFIRMA_EL_LOCAL;
+        guardaEscalo = true;
+        alertaDeGuarda = true;
+        motivoGuarda =
+          '[envio_sin_autorizar] El bot estaba por decir que se lo llevamos con nuestro ' +
+          'cadete, sin que nadie lo autorice. Decidilo vos: si va, con qué costo y cuándo.';
+        continue;
+      }
+
       if (prometeEnvioGratis(contenido.text)) {
         log('warn', `Guarda: el bot iba a decir que el envío no se cobra (${conversationId}).`);
         contenido.text = TEXTO_ENVIO_SE_COBRA;
@@ -911,6 +949,48 @@ export class Pipeline {
           log(
             'warn',
             `DIJO QUE QUEDÓ RESERVADO SIN COBRAR (${conversationId}): ` +
+              `"${contenido.text.slice(0, 120)}"`,
+          );
+        }
+      }
+
+      /*
+        El termómetro del nombre. Mismo criterio que los dos de arriba: solo
+        anota. La pregunta por el nombre casi siempre viaja pegada a los datos
+        que sí hay que pedir —"pasame nombre y apellido, el teléfono y la hora"—
+        así que tocar el texto se llevaría puesto lo que corresponde preguntar.
+
+        Los dos casos se cuentan por separado porque tienen arreglos distintos.
+        Preguntarlo DOS VECES es un problema del prompt: ya lo tenía escrito en
+        la charla y no lo leyó. Preguntarlo TENIÉNDOLO es un problema de lo que
+        le pasamos: hasta hoy el nombre del perfil de WhatsApp no le llegaba
+        nunca, así que preguntaba porque de verdad no lo sabía.
+
+        Si el segundo se apaga y el primero sigue encendido, ahí hay con qué
+        escribir una guarda dura, y con qué saber qué tiene que decir.
+      */
+      if (pideElNombre(contenido.text)) {
+        const perfil = nombreDeWhatsApp(contact.displayName);
+        /*
+          Tres lugares donde puede estar el nombre, y los tres cuentan: el que
+          quedó guardado de un pedido anterior, el del pedido que YA se cargó
+          en esta charla, y el del perfil de WhatsApp cuando trae apellido.
+          El del pedido es el que faltaba: pasó que la clienta mandó el
+          comprobante, dijo "a nombre de Milena Pachado", el pedido ya estaba
+          cargado con ese nombre, y el bot igual se lo preguntó.
+        */
+        const enUnPedido = abiertos.find((o) => o.customerName?.trim())?.customerName ?? null;
+        const conocido =
+          contact.fullName ?? enUnPedido ?? (perfil?.pareceCompleto ? perfil.nombre : null);
+        if (yaSePidioElNombre(history)) {
+          log(
+            'warn',
+            `PIDIÓ EL NOMBRE DOS VECES (${conversationId}): "${contenido.text.slice(0, 120)}"`,
+          );
+        } else if (conocido) {
+          log(
+            'warn',
+            `PIDIÓ EL NOMBRE TENIÉNDOLO (${conversationId}): sabíamos "${conocido}" — ` +
               `"${contenido.text.slice(0, 120)}"`,
           );
         }

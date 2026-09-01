@@ -26,6 +26,7 @@ import type {
 } from '../types/domain.js';
 import {
   claveDeCategoria,
+  nombreDeWhatsApp,
   operationalFacts,
   POLICY_PROSE,
   seEncargaConAnticipacion,
@@ -73,7 +74,14 @@ NUNCA uses frases como:
 
 SÍ usá expresiones como:
   "Holaa" / "Dale, te ayudo" / "Obvio" / "Ya te cuento" / "Esperame un segundo que te
-  explico" / "Contame para cuándo lo necesitás"
+  explico" / "Contame qué estabas buscando"
+
+De qué lado del mostrador estás
+- Vos sos el local. Lo que hace la CLIENTA no se dice en primera persona: ella
+  retira, ella transfiere, ella pide el Uber. Nosotros atendemos, preparamos,
+  enviamos y cobramos.
+  Salió "hoy retiramos hasta las 21:30", que da vuelta quién va a buscar el pedido.
+  Se dice "hoy estamos hasta las 21:30".
 
 Humor
 - Si la conversación da lugar, podés hacer un comentario simpático.
@@ -304,6 +312,12 @@ function knowledgeBlock(settings: BotSettings): string | null {
     'no podés es deducir de acá que la tenemos. Y si te preguntan algo que no está escrito',
     'abajo, no lo completes: se consulta en cocina.',
     '',
+    'Varias de estas fichas traen CONDICIONES mezcladas con la descripción: que algo viene',
+    'congelado, que no se mezcla, que no se consume en el local. Eso son RESPUESTAS, no',
+    'anuncios. Se cuentan cuando las preguntan y nunca se adelantan pegadas a un precio, por',
+    'más que en la ficha estén escritas en el mismo renglón. Ver LA LETRA CHICA SE CUENTA',
+    'CUANDO LA PREGUNTAN.',
+    '',
     texto,
   ].join('\n');
 }
@@ -533,10 +547,24 @@ export function buildDailyContext(input: DailyContextInput): string {
     bloque el bot no tiene forma de saber que ya cargó un pedido. De ahí salían
     los pedidos duplicados y el "volvió a empezar".
   */
+  /*
+    EL NOMBRE VA EN LA LÍNEA. Sin él, el bot cargaba el pedido a nombre de
+    alguien y en el turno siguiente no tenía forma de verlo: la línea traía el
+    número, los ítems, el total y la modalidad, y nada más. Entonces lo volvía a
+    pedir, que es la queja que más repitió el local.
+
+    El caso que lo destapó: la clienta mandó el comprobante, escribió "a nombre
+    de Milena Pachado", su perfil de WhatsApp dice Milena Pachado, y el pedido
+    #3097 ya estaba cargado con ese mismo nombre. Tres lugares donde estaba el
+    dato, y la respuesta fue "decime tu nombre y apellido". De los 36 pedidos de
+    la semana, los 36 tienen nombre cargado: el dato siempre estuvo, lo que
+    faltaba era mostrárselo.
+  */
   const linea = (o: Order) =>
     `  #${o.number} — ${o.items.map((i) => `${i.quantity}x ${i.description}`).join(', ')} — ` +
     `${o.total.toLocaleString('es-AR')} — ${o.status} — ${o.deliveryMode}` +
-    `${o.deliveryDate ? ` ${o.deliveryDate}` : ''}${o.deliveryTime ? ` ${o.deliveryTime}` : ''}`;
+    `${o.deliveryDate ? ` ${o.deliveryDate}` : ''}${o.deliveryTime ? ` ${o.deliveryTime}` : ''}` +
+    `${o.customerName ? ` — a nombre de ${o.customerName}` : ''}`;
 
   /*
     La lista va partida en dos, y esa división es lo que evita el pedido
@@ -552,6 +580,8 @@ export function buildDailyContext(input: DailyContextInput): string {
       `PEDIDO ABIERTO DE ESTA CHARLA (sigue en borrador, se puede ampliar):\n${ampliables
         .map(linea)
         .join('\n')}\n` +
+        'Los datos que ya figuran ahí YA LOS TENÉS: si dice "a nombre de", ese es el nombre y ' +
+        'no se vuelve a pedir. ' +
         'No lo vuelvas a cargar ni se lo vuelvas a anunciar. Si el cliente SUMA algo, llamá ' +
         'crear_pedido con TODOS los ítems (los de antes y el nuevo), repitiendo la fecha, la ' +
         'hora y la modalidad que ya tiene, y con sumar_al_pedido_existente en true. Si pide ' +
@@ -610,7 +640,25 @@ export function buildDailyContext(input: DailyContextInput): string {
 
   if (contact) {
     const known: string[] = [];
-    if (contact.fullName) known.push(`nombre: ${contact.fullName}`);
+    /*
+      El nombre del perfil de WhatsApp no se pasaba nunca, y el local se quejó de que el
+      bot vive preguntando cómo se llama la gente. Va solo si sirve —`nombreDeWhatsApp`
+      descarta los ".", los emojis sueltos y el número— y va dicho como lo que es: un
+      nombre de perfil, no un dato verificado. Por eso la instrucción es confirmarlo y no
+      usarlo a ciegas: el teléfono no siempre es de quien compra.
+    */
+    const perfil = nombreDeWhatsApp(contact.displayName);
+    if (contact.fullName) {
+      known.push(`nombre: ${contact.fullName}`);
+    } else if (perfil) {
+      known.push(
+        perfil.pareceCompleto
+          ? `en WhatsApp figura como "${perfil.nombre}", que parece nombre y apellido: ` +
+            'confirmáselo cuando armes el pedido, no se lo preguntes de nuevo'
+          : `en WhatsApp figura como "${perfil.nombre}", que es el nombre de pila o un ` +
+            'apodo: saludala así, y el apellido pedíselo una sola vez junto con los otros datos',
+      );
+    }
     if (contact.phone) known.push(`tel: ${contact.phone}`);
     if (contact.dni) known.push(`DNI: ${contact.dni}`);
     if (contact.isReturning) known.push('es cliente de años');
@@ -651,6 +699,21 @@ export function renderQuickReply(
     .join('\n');
 
   /*
+    Los sorrentinos van TODOS, estén disponibles hoy o no, y eso es a propósito.
+
+    El local escribió la lista a mano y puso los cinco sabores, incluidos los dos
+    que hoy están apagados: el precio no depende del stock, igual que con las
+    tortas. Qué hay hoy es la otra pregunta y se contesta aparte.
+
+    No se reordena: sale en el orden del catálogo, que es el que el equipo maneja
+    desde el panel.
+  */
+  const sorrentinos = products
+    .filter((p) => claveDeCategoria(p.category) === claveDeCategoria('sorrentinos'))
+    .map((p) => `•⁠  ⁠${p.name.toLowerCase()} $${p.price.toLocaleString('es-AR')}`)
+    .join('\n');
+
+  /*
     Sin filtrar por disponibilidad: en un día sin minis, el filtro dejaba la lista
     vacía y el precio caía a una constante que el panel no actualiza nunca. El
     prompt le prohíbe al modelo decir un precio de memoria; esto lo hacía en su
@@ -676,6 +739,7 @@ export function renderQuickReply(
     linkDesayunos: settings.breakfastsUrl,
     cookiesHoy: cookiesHoy || 'consultanos qué cookies hay hoy',
     miniTortasHoy: miniTortasHoy || 'consultanos qué minis hay hoy',
+    sorrentinos: sorrentinos || null,
     precioMiniTorta: precioMiniTorta === null ? null : String(precioMiniTorta),
   };
   const values: Record<string, string> = {};

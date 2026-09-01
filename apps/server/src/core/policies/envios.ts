@@ -156,3 +156,82 @@ export function afirmaQueYaSalio(texto: string): boolean {
  */
 export const TEXTO_NO_SE_SI_SALIO =
   'Quedó todo anotado 🙌🏼 En un rato te confirman desde el local cómo viene la entrega.';
+
+/*
+  LA TERCERA MENTIRA SOBRE ENVÍOS, Y LA QUE MÁS SE REPITE: decidir el envío solo.
+
+  El caso que la motivó, textual: "Como estás ahí ahora, te lo mandamos con
+  nuestro cadete en moto. Me confirmás el nombre de quien lo recibe...". Nadie
+  del local autorizó ese envío, ni ese cadete, ni esa moto. Es la misma familia
+  del pedido de Jimena, que el local resumió así: "tomó pedido con envío, envíos
+  gratis, con nuestro cadete, horario específico y sin consultar".
+
+  Ofrecerlo NO es el problema —"lo podemos ver con nuestro cadete, dejame
+  confirmarlo" está bien—. El problema es COMPROMETERLO: primera persona del
+  plural, en presente o futuro, dando el envío por hecho. Nuestro cadete sale
+  cuando el local decide, con la carga que ya tiene y por una zona que nosotros
+  no conocemos.
+
+  Y la moto: esa distinción es del Uber que manda el CLIENTE. Con qué se mueve
+  nuestro cadete no es un dato que tengamos.
+*/
+const COMPROMETE_EL_CADETE = [
+  // "te lo mandamos", "te lo llevamos", "se lo enviamos"
+  /\b(te|se) l[oa]s? (mandamos|llevamos|enviamos|acercamos|despachamos)\b/,
+  // "lo manda nuestro cadete", "lo lleva nuestro cadete", "va con nuestro cadete"
+  /\b(lo|la|los|las) (manda|lleva|reparte|entrega) (nuestro|el) cadete\b/,
+  /\bva con (nuestro|el) cadete\b/,
+  // "sale nuestro cadete", "te lo manda el cadete"
+  /\b(sale|va|pasa) (nuestro|el) cadete\b/,
+  /\b(te|se) l[oa]s? (manda|lleva|acerca) (nuestro|el) cadete\b/,
+  // "lo mandamos con nuestro cadete"
+  /\b(mandamos|llevamos|enviamos) .{0,20}\bcadete\b/,
+];
+
+/*
+  Lo que NO cuenta, porque es exactamente lo que queremos que haga: ofrecerlo
+  como una posibilidad a confirmar, o contar la regla general de qué se envía.
+*/
+const SOLO_LO_OFRECE = [
+  /\b(consulto|confirmo|pregunto|averiguo|veo con|paso a|le paso)\b/,
+  /\b(podemos|podríamos|podriamos|se puede|habría|habria|hay opción|hay opcion)\b/,
+  /\bsi (el local|la encargada|en el local)\b/,
+];
+
+/** ¿El texto da por hecho que nuestro cadete lo lleva? */
+export function comprometeNuestroCadete(texto: string): boolean {
+  const plano = normalizar(texto);
+  if (SOLO_LO_OFRECE.some((r) => r.test(plano))) return false;
+  return COMPROMETE_EL_CADETE.some((r) => r.test(plano));
+}
+
+/**
+ * ¿Alguien del local ya habló del envío en esta charla?
+ *
+ * Si una persona del local escribió sobre el cadete o el envío, está en el
+ * tema: ahí el bot puede seguir esa conversación sin que la guarda se meta.
+ * Es el mismo criterio que "cuando una persona autoriza algo, autoriza eso":
+ * lo que no puede es arrancarlo solo.
+ */
+export function elLocalHabloDelEnvio(
+  mensajes: Array<{ direction: string; author: string; text: string }>,
+): boolean {
+  return mensajes.some(
+    (m) =>
+      m.direction === 'out' &&
+      m.author === 'human' &&
+      /\b(cadete|envio|envío|reparto|delivery|moto)\b/i.test(m.text),
+  );
+}
+
+/**
+ * Con qué se reemplaza.
+ *
+ * No se recorta la frase: se cambia la burbuja entera, por lo mismo que las
+ * otras dos guardas. Y dice lo único cierto en ese punto: que el envío existe,
+ * que lo confirma una persona, y que el costo depende de la zona.
+ */
+export const TEXTO_EL_ENVIO_LO_CONFIRMA_EL_LOCAL =
+  'Dejame confirmar con el local si te lo podemos llevar nosotros y cuánto sale el ' +
+  'envío hasta ahí 🙏🏻 En un ratito te aviso. Si preferís, también podés retirarlo en ' +
+  'el local o mandar un Uber a buscarlo.';
