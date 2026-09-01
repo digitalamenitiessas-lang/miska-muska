@@ -247,6 +247,32 @@ const QUICK_REPLIES = [
       'te gustaría que te reserve un lugar?',
   },
   {
+    /*
+      Lo escribió Agus. Va tal cual, y vive acá y no en el prompt para que la
+      redacción sea de ellas: es un "no" y un "pero sí por acá" en el mismo
+      mensaje, y esas dos mitades juntas son lo que hace que no suene a portazo.
+
+      Los disparadores son estrechos a propósito. "efectivo" solo habría hecho
+      que este mensaje se sugiriera en media bandeja, incluida la gente que
+      pregunta con qué se puede pagar y a la que hay que contestarle otra cosa.
+    */
+    key: 'pago-efectivo',
+    label: 'Quiere encargar pagando en efectivo al retirar',
+    autoSend: false,
+    triggers: [
+      'pago en efectivo cuando retiro',
+      'pago al retirar',
+      'abono al retirar',
+      'te pago cuando lo busco',
+      'pago cuando lo retiro',
+      'efectivo al retirar',
+    ],
+    body:
+      'Para tomarte el pedido necesitamos una seña por transferencia y el comprobante 😊\n' +
+      'Si preferís pagar en efectivo, podés llegarte por nuestro local y elegir entre lo que ' +
+      'tengamos disponible en ese momento 🩷',
+  },
+  {
     key: 'no-cafeteria',
     label: 'No enviamos cafetería',
     autoSend: false,
