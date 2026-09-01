@@ -186,14 +186,14 @@ export function Ajustes({
             />
 
             <label className="label" style={{ marginTop: 10 }}>
-              Espera antes de contestar ({(draft.esperaMs / 1000).toFixed(1)} s)
+              Espera antes de contestar ({((draft.esperaMs ?? 4000) / 1000).toFixed(1)} s)
             </label>
             <input
               type="range"
               min={1000}
               max={12000}
               step={500}
-              value={draft.esperaMs}
+              value={draft.esperaMs ?? 4000}
               onChange={(e) => set('esperaMs', Number(e.target.value))}
               style={{ width: '100%' }}
             />
@@ -276,7 +276,7 @@ export function Ajustes({
               <label className="label">Toma pedidos desde</label>
               <input
                 type="time"
-                value={draft.pedidosDesde}
+                value={draft.pedidosDesde ?? ''}
                 onChange={(e) => set('pedidosDesde', e.target.value)}
                 style={{ width: 120 }}
               />
@@ -285,7 +285,7 @@ export function Ajustes({
               <label className="label">hasta</label>
               <input
                 type="time"
-                value={draft.pedidosHasta}
+                value={draft.pedidosHasta ?? ''}
                 onChange={(e) => set('pedidosHasta', e.target.value)}
                 style={{ width: 120 }}
               />
