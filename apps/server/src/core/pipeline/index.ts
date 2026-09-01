@@ -29,7 +29,9 @@ import type {
   OutboundContent,
 } from '../types/message.js';
 import { isOutsideBusinessHours } from '../policies/rules.js';
+import { localToday } from '../store/db.js';
 import { agotadosConPrecio, preciosQueNoCoinciden } from '../policies/precios.js';
+import { prometeEnvioGratis, TEXTO_ENVIO_SE_COBRA } from '../policies/envios.js';
 import { renderQuickReply } from '../agent/persona.js';
 import { runTurn } from '../agent/brain.js';
 import type { ToolContext } from '../agent/tools.js';
@@ -723,6 +725,85 @@ export class Pipeline {
     }
 
     /*
+      EL ENVÍO NUNCA ES GRATIS.
+
+      Una clienta preguntó "el cadete lo tengo que pagar yo?" y el bot le
+      contestó "no, no hay un cobro aparte por el envío". Nadie le dijo eso
+      nunca: el envío siempre se cobra, y cuánto sale depende de la zona, que es
+      un dato que el bot no tiene.
+
+      Ya estaba prohibido en el prompt, con todas las letras, y el modelo lo dijo
+      igual. Es exactamente lo que pasó con la dirección antes de cobrar, así que
+      la respuesta es la misma: además de la prosa, una guarda.
+
+      Y escala. Esto no se arregla cambiando la burbuja y siguiendo: alguien ya
+      leyó un precio que no era, o está por leerlo, y hay que decirle el costo de
+      verdad. Eso lo sabe una persona.
+    */
+    /*
+      Dos banderas y no una, porque son dos cosas distintas: `alertaDeGuarda`
+      marca la charla en la bandeja, y `guardaEscalo` además se la saca al bot.
+      Mezclarlas hacía que un aviso —"mirá este envío"— le arrancara la charla al
+      bot en el medio de una venta que venía bien.
+    */
+    let alertaDeGuarda = false;
+    let guardaEscalo = false;
+    for (const contenido of contents) {
+      if (contenido.kind !== 'text') continue;
+      if (!prometeEnvioGratis(contenido.text)) continue;
+      log('warn', `Guarda: el bot iba a decir que el envío no se cobra (${conversationId}).`);
+      contenido.text = TEXTO_ENVIO_SE_COBRA;
+      guardaEscalo = true;
+      alertaDeGuarda = true;
+    }
+
+    /*
+      UN ENVÍO NUESTRO PARA HOY LO MIRA UNA PERSONA. Siempre.
+
+      No es una guarda sobre lo que el bot dice, sino sobre lo que compromete: un
+      cadete para hoy depende de que haya cadete libre, de la zona y del
+      recorrido que ya tiene armado, y de esas tres cosas el bot no sabe
+      ninguna. Que el pedido quede cargado está bien; que nadie del local se
+      entere hasta que la clienta reclama, no.
+
+      Solo avisa, no cambia el modo: el bot sigue atendiendo normalmente. Lo que
+      cambia es que la charla aparece marcada en la bandeja el mismo minuto en
+      que se comprometió el envío, y no una hora después.
+    */
+    const cargado = toolContext.effects.createdOrder;
+    if (cargado?.deliveryMode === 'cadete-miska' && cargado.deliveryDate === localToday()) {
+      await repos.conversations.setAttention(
+        conversationId,
+        true,
+        `[envio_hoy] El bot tomó el pedido ${cargado.number} con nuestro cadete para HOY` +
+          `${cargado.deliveryTime ? ` (${cargado.deliveryTime})` : ''}. Confirmá que se puede y ` +
+          'decile la franja y el costo del envío.',
+      );
+      const marcado = await repos.conversations.get(conversationId);
+      if (marcado) bus.emit({ type: 'conversation', conversation: marcado });
+      log('info', `Envío propio para hoy en el pedido ${cargado.number}: avisado al local.`);
+      alertaDeGuarda = true;
+    }
+
+    /*
+      La escalada de la guarda va acá y no arriba con la del modelo: `escalate`
+      sale del resultado de las herramientas y ya se procesó. Que la charla pase
+      a una persona es parte del arreglo, no un extra — el cliente va a
+      preguntar cuánto sale el envío, y ese número no lo tenemos.
+    */
+    if (guardaEscalo) {
+      await repos.conversations.setAttention(
+        conversationId,
+        true,
+        '[envio_gratis] El bot estaba por decir que el envío no se cobra. Pasale vos el costo, ' +
+          'que depende de la zona.',
+      );
+      await repos.conversations.setMode(conversationId, 'human');
+      const marcada = await repos.conversations.get(conversationId);
+      if (marcada) bus.emit({ type: 'conversation', conversation: marcada });
+    }
+
+    /*
       El termómetro de precios. SOLO ANOTA, no toca el mensaje: ver el porqué en
       core/policies/precios.ts. Si esto queda callado unas semanas, la guarda que
       reescribe no hace falta; si se enciende, se escribe con casos reales.
@@ -771,7 +852,11 @@ export class Pipeline {
     const alCerrar = await repos.conversations.get(conversationId);
     if (alCerrar?.pendingReview?.resueltoEn) {
       await repos.conversations.clearReview(conversationId);
-      if (!escalate) await repos.conversations.setAttention(conversationId, false, null);
+      // La guarda cuenta igual que una escalada del modelo: si no, la alerta que
+      // acaba de prender se apagaría dos líneas después.
+      if (!escalate && !alertaDeGuarda) {
+        await repos.conversations.setAttention(conversationId, false, null);
+      }
       const limpia = await repos.conversations.get(conversationId);
       if (limpia) bus.emit({ type: 'conversation', conversation: limpia });
     }
@@ -779,7 +864,7 @@ export class Pipeline {
     await this.#send(conversationId, contents, {
       author: 'bot',
       intent: turn.intent,
-      handler: escalate ? 'escalate' : 'agent',
+      handler: escalate || guardaEscalo ? 'escalate' : 'agent',
       quickReplyKey: toolContext.effects.quickReplyUsed,
       metrics: {
         latencyMs: turn.latencyMs,
