@@ -1426,6 +1426,7 @@ export const DEFAULT_SETTINGS: BotSettings = {
   breakfastsUrl: 'https://miskamuska.com.ar/product-category/desayunos/',
   cartaUrl: '',
   cartaSubidaEn: '',
+  cartaCafeteriaUrl: '',
   /*
     El arranque de la ficha de conocimiento: lo que el local pasó por escrito.
     A partir de acá lo edita el equipo desde Ajustes y este valor no vuelve a

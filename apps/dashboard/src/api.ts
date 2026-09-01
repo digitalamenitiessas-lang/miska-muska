@@ -262,6 +262,8 @@ export interface Settings {
   cartaUrl: string;
   /** Cuándo se subió, para avisar si quedó vieja frente a los precios. */
   cartaSubidaEn: string;
+  /** La carta de cafetería, que es otra imagen. Sin precios: los dan en el local. */
+  cartaCafeteriaUrl: string;
   /** Texto libre con lo que el local sabe y ninguna tabla guarda. Va al prompt. */
   conocimiento: string;
 }

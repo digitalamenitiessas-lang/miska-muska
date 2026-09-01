@@ -382,6 +382,16 @@ export interface BotSettings {
   /** ISO 8601 de cuándo se subió la carta, para detectar que quedó vieja. */
   cartaSubidaEn: string;
   /**
+   * La carta de CAFETERIA, que es otra imagen y otra cosa.
+   *
+   * Se pedia igual de seguido que la de pasteleria -"la carta de infusiones"- y
+   * habia una sola cargada, asi que el bot mandaba la de pasteleria a quien
+   * preguntaba por un cafe. No lleva fecha de subida porque no tiene precios
+   * que se puedan desincronizar del catalogo: los precios de cafeteria se dan
+   * en el local.
+   */
+  cartaCafeteriaUrl: string;
+  /**
    * Lo que el local sabe y el bot no puede deducir de ninguna tabla.
    *
    * Es texto libre y va tal cual al prompt. Existe porque la mitad de las

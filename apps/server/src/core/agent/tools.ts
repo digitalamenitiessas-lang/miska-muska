@@ -317,12 +317,15 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
           'producto_id, no los dos.',
       },
       carta: {
-        type: 'boolean',
+        type: 'string',
         description:
-          'Poné true para mandar LA CARTA de pastelería entera, la imagen con todos los ' +
-          'precios. Es lo que hay que mandar cuando piden "la carta", "la lista", "los ' +
-          'precios" o "qué tenés" sin nombrar una categoría. Va sola: sin producto_id ni ' +
-          'curso_id.',
+          'Para mandar una CARTA entera, la imagen que arma el local. Hay DOS y no son la ' +
+          'misma: "pasteleria" es la de cookies, muffins, cuadrados, alfajores y mini tortas, ' +
+          'con los precios, y va cuando piden "la carta", "la lista" o "los precios" sin ' +
+          'nombrar categoría. "cafeteria" es la de cafés, lattes, licuados, juguitos y ' +
+          'bebidas, y va cuando preguntan por infusiones, café, algo para tomar o "la carta de ' +
+          'bebidas". Mandar la de pastelería a quien preguntó por un café es contestarle otra ' +
+          'cosa. Va sola: sin producto_id ni curso_id.',
       },
       texto: {
         type: 'string',
@@ -1339,27 +1342,53 @@ export async function executeTool(
           vieja. Un bot que le pide disculpas a la clienta por su propia carta es
           peor que una carta desactualizada.
         */
-        if (input.carta === true) {
-          if (!settings.cartaUrl || !FOTO_VALIDA.test(settings.cartaUrl)) {
+        /*
+          `carta` fue un booleano mientras hubo una sola. Ahora son dos, y se
+          acepta el true viejo como pastelería: si el modelo se guía por un
+          ejemplo del historial y manda true, mejor que salga la de pastelería a
+          que no salga nada.
+        */
+        const cualCarta =
+          input.carta === true
+            ? 'pasteleria'
+            : String(input.carta ?? '')
+                .trim()
+                .toLowerCase();
+
+        if (cualCarta) {
+          const esCafeteria = cualCarta.startsWith('cafe');
+          const url = esCafeteria ? settings.cartaCafeteriaUrl : settings.cartaUrl;
+          const nombre = esCafeteria ? 'la carta de cafetería' : 'la carta de pastelería';
+
+          if (!url || !FOTO_VALIDA.test(url)) {
             return {
               ok: false,
               error:
-                'Todavía no hay una carta cargada en el panel. No la inventes ni pegues un ' +
-                'link: pasale los precios de la categoría que le interese, con buscar_catalogo.',
+                `Todavía no hay ${nombre} cargada en el panel. No la inventes ni pegues un ` +
+                (esCafeteria
+                  ? 'link: contale con palabras qué manejamos, que eso sí lo sabés, y aclarale ' +
+                    'que es para tomar en el local.'
+                  : 'link: pasale los precios de la categoría que le interese, con buscar_catalogo.'),
             };
           }
+
           ctx.effects.photos = ctx.effects.photos ?? [];
           ctx.effects.photos.push({
-            url: settings.cartaUrl,
+            url,
             caption: typeof input.texto === 'string' ? input.texto.trim() || undefined : undefined,
           });
+
           return {
             ok: true,
             data: {
-              mandada: 'la carta de pastelería',
-              instruccion:
-                'Ya va la carta. Acompañala con una línea corta y cerrá invitando a encargar. ' +
-                'No repitas los precios en texto: están en la imagen.',
+              mandada: nombre,
+              instruccion: esCafeteria
+                ? 'Ya va la carta de cafetería. Con la foto van dos cosas, y las dos importan: ' +
+                  'que la cafetería es SOLO para tomar o retirar en el local —no se envía— y ' +
+                  'que los precios se dan ahí, no por acá. Decilo en una línea, sin sonar a ' +
+                  'reglamento, y no inventes ningún precio.'
+                : 'Ya va la carta. Acompañala con una línea corta y cerrá invitando a encargar. ' +
+                  'No repitas los precios en texto: están en la imagen.',
             },
           };
         }
@@ -1367,7 +1396,9 @@ export async function executeTool(
         if (!productoId && !cursoId) {
           return {
             ok: false,
-            error: 'Decime qué foto mandar: producto_id, curso_id, o carta en true.',
+            error:
+              'Decime qué foto mandar: producto_id, curso_id, o carta en "pasteleria" o ' +
+              '"cafeteria".',
           };
         }
 

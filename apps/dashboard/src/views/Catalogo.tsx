@@ -353,6 +353,9 @@ function LaCarta({ products, toast }: { products: Product[]; toast: (t: string) 
       .catch(() => undefined);
   }, []);
 
+  const cafeteriaRef = useRef<HTMLInputElement | null>(null);
+  const [subiendoCafe, setSubiendoCafe] = useState(false);
+
   const subir = async (file: File) => {
     setSubiendo(true);
     try {
@@ -365,6 +368,25 @@ function LaCarta({ products, toast }: { products: Product[]; toast: (t: string) 
     } finally {
       setSubiendo(false);
       if (archivoRef.current) archivoRef.current.value = '';
+    }
+  };
+
+  /*
+    La de cafetería no lleva fecha de subida: no tiene precios que se puedan
+    desincronizar del catálogo, así que no hay nada que avisar. Los precios de
+    cafetería se dan en el local.
+  */
+  const subirCafeteria = async (file: File) => {
+    setSubiendoCafe(true);
+    try {
+      const { url } = await api.uploadMedia(file);
+      setSettings(await api.saveSettings({ cartaCafeteriaUrl: url }));
+      toast('Carta de cafetería actualizada.');
+    } catch (err) {
+      toast(`No pude subir la carta de cafetería: ${String(err)}`);
+    } finally {
+      setSubiendoCafe(false);
+      if (cafeteriaRef.current) cafeteriaRef.current.value = '';
     }
   };
 
@@ -430,6 +452,68 @@ function LaCarta({ products, toast }: { products: Product[]; toast: (t: string) 
             coincide con lo que cobra el bot — y el cliente le cree a la foto. Subila de nuevo.
           </p>
         ) : null}
+
+        {/* La segunda carta. Son dos porque son dos cosas: pedían "la carta de
+            infusiones" y les llegaba la de cookies. */}
+        <div
+          className="row wrap"
+          style={{
+            gap: 10,
+            alignItems: 'flex-start',
+            marginTop: 14,
+            paddingTop: 14,
+            borderTop: '1px solid var(--line)',
+          }}
+        >
+          {settings.cartaCafeteriaUrl ? (
+            <a
+              href={settings.cartaCafeteriaUrl}
+              target="_blank"
+              rel="noreferrer"
+              title="Ver la carta de cafetería"
+            >
+              <img
+                className="carta-mini"
+                src={settings.cartaCafeteriaUrl}
+                alt="La carta de cafetería"
+                loading="lazy"
+              />
+            </a>
+          ) : null}
+          <div className="grow" style={{ minWidth: 0 }}>
+            <h3 className="card-title" style={{ margin: 0 }}>
+              La carta de cafetería
+            </h3>
+            <p className="small muted" style={{ margin: '4px 0 0' }}>
+              {settings.cartaCafeteriaUrl
+                ? 'El bot la manda cuando preguntan por infusiones, cafés o algo para tomar, y ' +
+                  'aclara que es solo para el local y que los precios se dan ahí.'
+                : 'Todavía no hay ninguna, y por eso a quien pregunta por un café le llega la ' +
+                  'de pastelería. Subila y el bot manda la que corresponde.'}
+            </p>
+          </div>
+          <input
+            ref={cafeteriaRef}
+            type="file"
+            accept="image/jpeg,image/png,image/webp"
+            style={{ display: 'none' }}
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              if (f) void subirCafeteria(f);
+            }}
+          />
+          <button
+            className="btn btn-sm btn-primary"
+            disabled={subiendoCafe}
+            onClick={() => cafeteriaRef.current?.click()}
+          >
+            {subiendoCafe
+              ? 'Subiendo…'
+              : settings.cartaCafeteriaUrl
+                ? 'Cambiar'
+                : 'Subir la de cafetería'}
+          </button>
+        </div>
       </div>
     </section>
   );
