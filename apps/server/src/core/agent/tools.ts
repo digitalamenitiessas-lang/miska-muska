@@ -72,8 +72,8 @@ export interface ToolContext {
      * mañana aparece un canal sin imágenes, el degradado la convierte en texto
      * solo ahí, sin tocar nada de esto.
      */
-    /** `primero`: va ANTES del texto del turno. Hoy solo el flyer de un curso. */
-    photos?: Array<{ url: string; caption?: string; primero?: boolean }>;
+    /** Salen ANTES del texto del turno: la foto es la respuesta, no la ilustración. */
+    photos?: Array<{ url: string; caption?: string }>;
   };
 }
 
@@ -1411,24 +1411,7 @@ export async function executeTool(
           };
         }
         const texto = typeof input.texto === 'string' ? input.texto.trim() : '';
-        /*
-          El flyer del curso va PRIMERO, y por eso viaja marcado.
-
-          Para todo lo demás la foto va después del texto, que es como muestra
-          algo una persona: primero explica, después enseña. Con un curso es al
-          revés, porque el flyer no ilustra la respuesta, ES la respuesta: tiene
-          el día, la hora, el lugar y el precio, escritos y diseñados por el
-          local.
-
-          Salía al revés y se notaba: llegaba una burbuja contando el precio y
-          los turnos, y recién después el flyer con el "hola" adentro. El saludo
-          quedaba segundo.
-        */
-        ctx.effects.photos.push({
-          url: producto.imageUrl,
-          caption: texto || undefined,
-          primero: Boolean(cursoId),
-        });
+        ctx.effects.photos.push({ url: producto.imageUrl, caption: texto || undefined });
 
         return {
           ok: true,

@@ -877,22 +877,27 @@ export class Pipeline {
     }
 
     /*
-      Las fotos van después del texto: primero se explica y después se muestra,
-      que es como manda una foto una persona. El degradado por canal se ocupa
-      del resto — si algún día hay un canal sin imágenes, ahí se convierte en
-      texto con el link, y acá no cambia nada.
+      LAS FOTOS VAN PRIMERO. Siempre.
 
-      La excepción es el flyer de un curso, que viene marcado con `primero`. Ahí
-      la foto no ilustra la respuesta, ES la respuesta, y llegaba segunda: el
-      cliente leía el precio y los turnos en una burbuja, y recién después el
-      flyer con el saludo adentro.
+      Iban después, con el argumento de que una persona primero explica y
+      después muestra. Era falso, y se vio en tres correcciones seguidas del
+      local: el flyer del curso llegaba detrás del precio, la carta llegaba
+      detrás de "ahí la tenés", y las fotos de las minis detrás de "ahí te mando
+      las dos". Cuando la respuesta ES una foto, el texto que la acompaña es un
+      epígrafe o un comentario, nunca un preámbulo — y un preámbulo que habla de
+      una imagen que todavía no llegó se lee al revés.
+
+      Con la foto adelante, el "ahí la tenés" deja de ser mentira. Igual el
+      prompt pide que no se anuncie: la foto se explica sola.
+
+      `unshift` con spread y no en un for, que invertiría el orden entre dos
+      fotos: cuando manda la matilda y la oreo, tienen que llegar en ese orden.
     */
     const fotos = toolContext.effects.photos ?? [];
-    for (const photo of fotos.filter((f) => f.primero)) {
-      contents.unshift({ kind: 'image', url: photo.url, caption: photo.caption });
-    }
-    for (const photo of fotos.filter((f) => !f.primero)) {
-      contents.push({ kind: 'image', url: photo.url, caption: photo.caption });
+    if (fotos.length) {
+      contents.unshift(
+        ...fotos.map((f) => ({ kind: 'image' as const, url: f.url, caption: f.caption })),
+      );
     }
 
     /*
