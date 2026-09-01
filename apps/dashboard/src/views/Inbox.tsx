@@ -15,6 +15,23 @@ import { CHANNEL_LABEL, Empty, ORDER_STATUS_LABEL, ORDER_STATUS_TONE, Pill, cloc
 import { prepararFoto } from '../imagen';
 import { ComandaPedido } from './Comanda';
 
+/**
+ * En un teléfono, Enter NO manda: hace un salto de línea, y se manda con el botón.
+ *
+ * Es lo que hace WhatsApp en el celular, y es lo que la cabeza de quien escribe
+ * da por hecho. Mandar con Enter es una convención de teclado físico; en una
+ * pantalla táctil la tecla de retorno es "seguir escribiendo abajo", así que
+ * "Enter manda" se siente exactamente como lo describió el local: el mensaje se
+ * va solo mientras la persona todavía está escribiendo.
+ *
+ * `pointer: coarse` mira el puntero PRINCIPAL, así que una notebook con pantalla
+ * táctil sigue mandando con Enter, que es lo que corresponde ahí.
+ */
+const ENTER_NO_ENVIA =
+  typeof window !== 'undefined' &&
+  typeof window.matchMedia === 'function' &&
+  window.matchMedia('(pointer: coarse)').matches;
+
 type Filter = 'todas' | 'sin-leer' | 'consultas' | 'atencion' | 'bot' | 'humano';
 
 const FILTERS: Array<{ id: Filter; label: string }> = [
@@ -403,13 +420,23 @@ export function Inbox({
     if (!text && !fotos.length) return;
 
     /*
-      El borrador se limpia SOLO SI sigue siendo el que se mandó. Entre el envío
-      y la respuesta hay segundos, y en ese rato la operadora suele escribir el
-      mensaje siguiente: limpiarlo a ciegas se lo borraba. Y si cambió de charla,
-      lo borraba en la charla nueva.
+      Del borrador se saca EXACTAMENTE lo que salió, y lo que se haya escrito
+      después se queda.
+
+      Entre el envío y la respuesta hay segundos, y en ese rato la operadora
+      suele escribir el mensaje siguiente: limpiar a ciegas se lo borraba, y si
+      cambió de charla lo borraba en la charla nueva. Pero la versión anterior
+      exigía que el texto no hubiera cambiado NADA, y si había cambiado no
+      limpiaba nada: quedaba en pantalla lo que ya se había mandado, listo para
+      salir dos veces. Eso es la mitad del bug que reportó el local.
+
+      Sacar el prefijo cubre los dos casos: si no escribió nada más, queda
+      vacío; si escribió, queda solo lo nuevo. Y si el texto ya no empieza con
+      lo que se mandó —cambió de charla, o escribió delante del cursor— no se
+      toca, que es la protección que había que conservar.
     */
     const limpiarBorrador = () =>
-      setDraft((actual) => (actual === textoCrudo ? '' : actual));
+      setDraft((actual) => (actual.startsWith(textoCrudo) ? actual.slice(textoCrudo.length) : actual));
 
     if (!fotos.length) {
       setSending(true);
@@ -1007,11 +1034,35 @@ export function Inbox({
                   }
                   value={draft}
                   onChange={(e) => setDraft(e.target.value)}
+                  /*
+                    NO MANDAR MIENTRAS EL TECLADO ESTÁ COMPONIENDO.
+
+                    Este era el bug que el local reportó como "está escribiendo y
+                    se envía solo, y encima no se le limpia el mensaje". Es uno
+                    solo y produce las dos cosas.
+
+                    Cuando el teclado está armando una palabra —corrección
+                    automática del celular, texto predictivo, teclas muertas para
+                    los acentos— el navegador dispara un `keydown` de Enter para
+                    CONFIRMAR esa palabra, no para enviar. Sin este chequeo,
+                    `send()` salía ahí: capturaba el borrador SIN la palabra que
+                    todavía se estaba componiendo y mandaba el mensaje cortado.
+
+                    Y encima el borrador quedaba lleno. `limpiarBorrador` solo
+                    limpia si el texto sigue siendo el que se mandó, y un
+                    instante después la palabra se confirmaba y lo cambiaba: ya
+                    no coincidía, así que no limpiaba nada y quedaba en pantalla
+                    lo que ya había salido, listo para mandarse de nuevo.
+
+                    `keyCode === 229` es el mismo caso en Android, donde varios
+                    teclados no ponen `isComposing`.
+                  */
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && !e.shiftKey) {
-                      e.preventDefault();
-                      void send();
-                    }
+                    if (e.key !== 'Enter' || e.shiftKey) return;
+                    if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
+                    if (ENTER_NO_ENVIA) return;
+                    e.preventDefault();
+                    void send();
                   }}
                   /*
                     Pegar una foto con Ctrl+V, como en WhatsApp Web.
@@ -1052,7 +1103,9 @@ export function Inbox({
                 </button>
               </div>
               <div className="small muted" style={{ marginTop: 5 }}>
-                Enter envía · Shift+Enter salta de línea
+                {ENTER_NO_ENVIA
+                  ? 'Se manda con el botón · Enter salta de línea'
+                  : 'Enter envía · Shift+Enter salta de línea'}
               </div>
             </div>
           </>
