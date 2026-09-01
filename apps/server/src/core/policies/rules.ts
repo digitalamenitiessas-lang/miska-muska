@@ -666,6 +666,11 @@ const ENVIO_PROPIO_SIEMPRE = new Set(['desayunos'].map(claveDeCategoria));
   quedó una clienta esperando unos sorrentinos de lomo al malbec que nadie iba
   a preparar.
 
+  LAS MINI TORTAS NO ESTÁN ACÁ, Y ES A PROPÓSITO. Se preguntó y el local
+  contestó "como está, tortas grandes y desayunos": una mini torta no se
+  encarga para otro día. Parece un olvido y no lo es, así que no la agregues
+  sin volver a preguntar.
+
   Por clave y no por igualdad de texto, por lo mismo que el envío propio: las
   categorías son texto libre desde que el panel las puede crear, y un "Tortas"
   escrito a mano tiene que contar igual que el 'tortas' original.
