@@ -383,6 +383,35 @@ async function callOpenRouter(args: {
         clearTimeout(timer);
         return callOpenRouter(args);
       }
+
+      /*
+        "Provider returned error" no dice nada, y aparece setenta veces por día.
+
+        Ese texto es de OpenRouter, no del proveedor: lo que de verdad pasó está
+        en `error.metadata`, con el nombre del proveedor al que ruteó y su error
+        crudo. Sin eso no hay forma de saber si es el largo del prompt, un tipo
+        de mensaje puntual o un proveedor que está caído, y se termina
+        adivinando.
+
+        Va en una línea aparte y no pegado al mensaje del error porque ese
+        mensaje viaja al panel y a la racha de fallos: acá interesa dejar rastro
+        para leerlo después, no cambiar lo que ve nadie.
+      */
+      const meta = json.error?.metadata;
+      if (meta) {
+        const { provider_name: proveedor, raw } = meta as {
+          provider_name?: string;
+          raw?: unknown;
+        };
+        log(
+          'error',
+          `OpenRouter ${res.status} · modelo ${model} · proveedor ${proveedor ?? '?'} · ` +
+            // El tamaño del pedido: si el prompt fuera el problema, se ve acá.
+            `${Math.round(JSON.stringify(body).length / 1024)} KB en ${messages.length} mensajes · ` +
+            `${typeof raw === 'string' ? raw.slice(0, 400) : JSON.stringify(raw ?? meta).slice(0, 400)}`,
+        );
+      }
+
       throw new Error(`OpenRouter HTTP ${res.status}: ${detail}`);
     }
 
