@@ -335,17 +335,27 @@ export function Inbox({
    * ser otra.
    */
   const send = async () => {
-    if (!selected || sending || subiendoFoto) return;
+    if (!selected || sending || subiendoFoto || preparando) return;
     const charla = selected;
-    const text = draft.trim();
+    const textoCrudo = draft;
+    const text = textoCrudo.trim();
     const fotos = fotosEnEspera;
     if (!text && !fotos.length) return;
+
+    /*
+      El borrador se limpia SOLO SI sigue siendo el que se mandó. Entre el envío
+      y la respuesta hay segundos, y en ese rato la operadora suele escribir el
+      mensaje siguiente: limpiarlo a ciegas se lo borraba. Y si cambió de charla,
+      lo borraba en la charla nueva.
+    */
+    const limpiarBorrador = () =>
+      setDraft((actual) => (actual === textoCrudo ? '' : actual));
 
     if (!fotos.length) {
       setSending(true);
       try {
         await api.sendMessage(charla, text);
-        setDraft('');
+        limpiarBorrador();
         seguirElFinal();
         await loadDetail(charla);
       } catch (err) {
@@ -356,34 +366,52 @@ export function Inbox({
       return;
     }
 
+    /*
+      Las fotos NO se sacan de la lista antes de mandarlas.
+
+      La primera versión las vaciaba de entrada para evitar un doble envío, pero
+      eso ya lo impiden el `return` de arriba y el botón deshabilitado. Lo único
+      que conseguía era que un corte de red se llevara puesto todo: el texto
+      escrito y las tres fotos que alguien acababa de buscar en el disco.
+
+      Ahora se sacan de a una, a medida que salen de verdad. Si falla la
+      segunda, la primera desaparece de la tira y las que faltan siguen ahí para
+      reintentar sin volver a buscarlas.
+    */
     setSubiendoFoto(true);
-    // Se vacían de entrada: ya están capturadas, y así no se pueden mandar dos
-    // veces si alguien vuelve a apretar Enviar mientras suben.
-    setFotosEnEspera([]);
-    setDraft('');
-    let enviadas = 0;
+    const salieron: FotoEnEspera[] = [];
+    let epigrafeSinUsar = true;
     try {
       // El texto acompaña a la PRIMERA foto, como epígrafe. Las demás van solas.
-      let epigrafe = text || undefined;
-      for (const { file } of fotos) {
-        const { url, advertencia } = await api.uploadMedia(file);
+      for (const foto of fotos) {
+        const { url, advertencia } = await api.uploadMedia(foto.file);
         if (advertencia) toast(advertencia);
-        await api.sendPhoto(charla, url, epigrafe);
-        epigrafe = undefined;
-        enviadas += 1;
+        await api.sendPhoto(charla, url, epigrafeSinUsar ? text || undefined : undefined);
+        epigrafeSinUsar = false;
+        salieron.push(foto);
       }
+      if (text) limpiarBorrador();
     } catch (err) {
       const detalle = String(err);
-      const yaSalieron = enviadas ? ` Se mandaron ${enviadas} de ${fotos.length}.` : '';
+      const parcial = salieron.length ? ` Salieron ${salieron.length} de ${fotos.length}.` : '';
       toast(
         (detalle.includes('415')
           ? 'Ese archivo no es una foto que podamos mandar. Probá con una jpg o png.'
           : detalle.includes('413') || detalle.includes('too large')
             ? 'La foto pesa demasiado incluso achicada. Probá con otra.'
-            : `No pude mandar la foto: ${detalle}`) + yaSalieron,
+            : `No pude mandar la foto: ${detalle}`) +
+          parcial +
+          (salieron.length < fotos.length ? ' Las que faltan quedaron listas para reintentar.' : ''),
       );
+      // El epígrafe viajó con la primera: si esa salió, el texto ya no se repite.
+      if (!epigrafeSinUsar && text) limpiarBorrador();
     } finally {
-      for (const f of fotos) URL.revokeObjectURL(f.vista);
+      /*
+        Se saca de la tira exactamente lo que salió, y nada más: si alguien pegó
+        otra foto mientras estas subían, esa se queda.
+      */
+      for (const f of salieron) URL.revokeObjectURL(f.vista);
+      setFotosEnEspera((actual) => actual.filter((f) => !salieron.includes(f)));
       setSubiendoFoto(false);
       seguirElFinal();
       await loadDetail(charla);
@@ -498,19 +526,58 @@ export function Inbox({
     Enviar. Ese momento es también el que consume el texto como epígrafe, así
     que ya no hay una ventana en la que el borrador se limpie solo.
   */
-  const [fotosEnEspera, setFotosEnEspera] = useState<Array<{ file: File; vista: string }>>([]);
+  type FotoEnEspera = { file: File; vista: string };
+  const [fotosEnEspera, setFotosEnEspera] = useState<FotoEnEspera[]>([]);
+  /** Achicar una foto de celular tarda: mientras tanto no se puede enviar. */
+  const [preparando, setPreparando] = useState(false);
+
+  /*
+    Espejo de la lista, para poder liberar las direcciones temporales cuando el
+    componente se desmonta. El efecto de limpieza no puede leer el estado —vería
+    el de cuando se montó—, y sin esto salir de la Bandeja con tres fotos
+    elegidas las deja retenidas en memoria hasta recargar la página.
+  */
+  const fotosRef = useRef<FotoEnEspera[]>([]);
+  fotosRef.current = fotosEnEspera;
+  useEffect(
+    () => () => {
+      for (const f of fotosRef.current) URL.revokeObjectURL(f.vista);
+    },
+    [],
+  );
 
   const agregarFotos = async (files: File[]) => {
     const imagenes = files.filter((f) => f.type.startsWith('image/'));
     if (!imagenes.length) return;
-    const listas = await Promise.all(
-      imagenes.map(async (f) => {
-        const file = await prepararFoto(f);
-        return { file, vista: URL.createObjectURL(file) };
-      }),
-    );
-    setFotosEnEspera((previas) => [...previas, ...listas]);
-    composeRef.current?.focus();
+    /*
+      La charla se captura ANTES de achicar, y se comprueba después.
+
+      Achicar una foto de celular son cientos de milisegundos y la pantalla
+      queda usable mientras tanto, así que da tiempo de sobra a cambiar de
+      conversación. Sin esto, la foto elegida para una clienta aparecía en
+      espera en el chat de otra y salía por WhatsApp a la persona equivocada.
+
+      Es la misma guarda que ya tenía `loadDetail` unas líneas más arriba; acá
+      faltaba.
+    */
+    const charla = selected;
+    setPreparando(true);
+    try {
+      const listas = await Promise.all(
+        imagenes.map(async (f) => {
+          const file = await prepararFoto(f);
+          return { file, vista: URL.createObjectURL(file) };
+        }),
+      );
+      if (seleccionadaRef.current !== charla) {
+        for (const l of listas) URL.revokeObjectURL(l.vista);
+        return;
+      }
+      setFotosEnEspera((previas) => [...previas, ...listas]);
+      composeRef.current?.focus();
+    } finally {
+      setPreparando(false);
+    }
   };
 
   const sacarFoto = (i: number) =>
@@ -528,15 +595,23 @@ export function Inbox({
     });
   }, [selected]);
 
-  /** Una foto del catálogo sale derecho: no hay nada que editarle. */
+  /**
+   * Una foto del catálogo sale derecho: no hay nada que editarle.
+   *
+   * Comparte los mismos cuidados que el envío normal, porque comparte el
+   * borrador: se captura la charla antes del await, y el texto se limpia solo
+   * si sigue siendo el que se mandó.
+   */
   const mandarFoto = async (url: string, label: string) => {
-    if (!selected) return;
+    if (!selected || sending || subiendoFoto || preparando) return;
+    const charla = selected;
+    const textoCrudo = draft;
     setCajonAbierto(false);
     try {
-      await api.sendPhoto(selected, url, draft.trim() || undefined);
-      setDraft('');
+      await api.sendPhoto(charla, url, textoCrudo.trim() || undefined);
+      setDraft((actual) => (actual === textoCrudo ? '' : actual));
       seguirElFinal();
-      await loadDetail(selected);
+      await loadDetail(charla);
     } catch (err) {
       toast(`No se pudo mandar ${label}: ${String(err)}`);
     }
@@ -856,11 +931,11 @@ export function Inbox({
                 />
                 <button
                   className="btn btn-ghost btn-cajon"
-                  disabled={subiendoFoto}
+                  disabled={subiendoFoto || preparando}
                   title="Mandar una foto de esta computadora o del teléfono"
                   onClick={() => archivoRef.current?.click()}
                 >
-                  {subiendoFoto ? '…' : '📎'}
+                  {subiendoFoto || preparando ? '…' : '📎'}
                 </button>
                 <textarea
                   ref={composeRef}
@@ -904,10 +979,16 @@ export function Inbox({
                 />
                 <button
                   className="btn btn-primary"
-                  disabled={sending || subiendoFoto || (!draft.trim() && !fotosEnEspera.length)}
+                  disabled={
+                    sending || subiendoFoto || preparando || (!draft.trim() && !fotosEnEspera.length)
+                  }
                   onClick={() => void send()}
                 >
-                  {sending || subiendoFoto ? '…' : fotosEnEspera.length ? 'Enviar foto' : 'Enviar'}
+                  {sending || subiendoFoto || preparando
+                    ? '…'
+                    : fotosEnEspera.length
+                      ? 'Enviar foto'
+                      : 'Enviar'}
                 </button>
               </div>
               <div className="small muted" style={{ marginTop: 5 }}>
