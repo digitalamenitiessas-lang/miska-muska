@@ -396,6 +396,9 @@ const del = <T>(path: string) => request<T>(path, { method: 'DELETE' });
 export const api = {
   conversations: (params: Record<string, string> = {}) =>
     get<Conversation[]>(`/api/conversations?${new URLSearchParams(params)}`),
+  /** Los contadores de la barra, contra la base entera y no contra lo cargado. */
+  resumenDeCharlas: () =>
+    get<{ atencion: number; sinLeer: number; consultas: number }>('/api/conversations/resumen'),
   conversation: (id: string) => get<ConversationDetail>(`/api/conversations/${id}`),
   markRead: (id: string) => post<{ ok: true }>(`/api/conversations/${id}/read`),
   setMode: (id: string, mode: ConversationMode) =>

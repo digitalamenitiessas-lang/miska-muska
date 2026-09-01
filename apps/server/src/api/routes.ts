@@ -24,6 +24,8 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
       mode: query.mode as ConversationMode | undefined,
       channel: query.channel as ChannelId | undefined,
       needsAttention: query.needsAttention === '1',
+      sinLeer: query.sinLeer === '1',
+      consultaAbierta: query.consulta === '1',
       limit: query.limit ? Number(query.limit) : 100,
       /*
         Dos letras de piso. Con una sola, "a" trae la bandeja entera y le hace
@@ -43,6 +45,14 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
       contact: contactos.get(conversation.contactId) ?? null,
     }));
   });
+
+  /*
+    Los números de la barra, contados contra la base y no contra lo que el panel
+    tenga cargado. Va ANTES de /api/conversations/:id: Fastify resuelve por
+    orden de registro y con la ruta paramétrica delante, "resumen" entraría como
+    un id de conversación.
+  */
+  app.get('/api/conversations/resumen', async () => repos.conversations.contar());
 
   app.get('/api/conversations/:id', async (req, reply) => {
     const { id } = req.params as { id: string };

@@ -94,33 +94,93 @@ export function Inbox({
     cinco conexiones. El `cancelado` es para que una respuesta lenta de hace dos
     teclas no pise a la que corresponde a lo que hay escrito ahora.
   */
+  /*
+    Un pulso lento derivado de `tick`.
+
+    El filtro tiene que reconsultar cuando pasa algo —si no, una charla que deja
+    de necesitar atención se queda en la lista—, pero un turno del bot emite
+    media docena de eventos y reconsultar en cada uno es exactamente la tormenta
+    que ya hubo con Métricas. Esto lo acota a una consulta cada tres segundos
+    como mucho.
+
+    No es un debounce: si los eventos siguen llegando sin parar, un debounce no
+    dispararía nunca. Se programa una sola vez y no se reprograma hasta que
+    corre.
+  */
+  const [pulso, setPulso] = useState(0);
+  const ultimoPulso = useRef(0);
+  const pulsoPendiente = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (pulsoPendiente.current) return;
+    const esperar = Math.max(0, 3000 - (Date.now() - ultimoPulso.current));
+    pulsoPendiente.current = window.setTimeout(() => {
+      pulsoPendiente.current = undefined;
+      ultimoPulso.current = Date.now();
+      setPulso((p) => p + 1);
+    }, esperar);
+  }, [tick]);
+  useEffect(
+    () => () => {
+      if (pulsoPendiente.current) window.clearTimeout(pulsoPendiente.current);
+    },
+    [],
+  );
+
+  /*
+    Buscar y filtrar preguntan al servidor. Los dos, y por el mismo motivo.
+
+    La bandeja trae las últimas cien charlas, y filtrar sobre esas cien es
+    filtrar sobre una ventana: de la ciento uno en adelante, una clienta marcada
+    para atención no aparecía en el filtro "Atención". No se veía lenta, se veía
+    como si no existiera. En un día tranquilo eso no pasa nunca; el segundo día
+    del Día de la Madre pasa seguro.
+
+    "Todas" sigue usando la lista que ya está en memoria: es la vista por
+    defecto y no hace falta pedirla de nuevo.
+  */
   useEffect(() => {
     const texto = busqueda.trim();
-    if (texto.length < 2) {
+    const filtrando = filter !== 'todas';
+    if (texto.length < 2 && !filtrando) {
       setResultados(null);
       setBuscando(false);
       return;
     }
+
+    const params: Record<string, string> = { limit: '300' };
+    if (texto.length >= 2) params.q = texto;
+    if (filter === 'atencion') params.needsAttention = '1';
+    if (filter === 'sin-leer') params.sinLeer = '1';
+    if (filter === 'consultas') params.consulta = '1';
+    if (filter === 'bot') params.mode = 'bot';
+    if (filter === 'humano') params.mode = 'human';
+
     let cancelado = false;
     setBuscando(true);
-    const timer = window.setTimeout(() => {
-      api
-        .conversations({ q: texto, limit: '60' })
-        .then((lista) => {
-          if (!cancelado) setResultados(lista);
-        })
-        .catch(() => {
-          if (!cancelado) setResultados([]);
-        })
-        .finally(() => {
-          if (!cancelado) setBuscando(false);
-        });
-    }, 300);
+    // Sin espera cuando es solo un filtro: no hay nadie tecleando.
+    const timer = window.setTimeout(
+      () => {
+        api
+          .conversations(params)
+          .then((lista) => {
+            if (!cancelado) setResultados(lista);
+          })
+          .catch(() => {
+            if (!cancelado) setResultados([]);
+          })
+          .finally(() => {
+            if (!cancelado) setBuscando(false);
+          });
+      },
+      texto.length >= 2 ? 300 : 0,
+    );
     return () => {
       cancelado = true;
       window.clearTimeout(timer);
     };
-  }, [busqueda]);
+    // `pulso` reconsulta cuando pasa algo: sin eso, una charla que deja de
+    // necesitar atención se queda en la lista del filtro hasta cambiar de vista.
+  }, [busqueda, filter, pulso]);
 
   const visible = useMemo(() => {
     const list = (resultados ?? conversations).filter((c) => {

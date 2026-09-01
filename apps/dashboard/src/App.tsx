@@ -98,6 +98,44 @@ export default function App() {
   const [sonando, setSonando] = useState(sonidoEncendido);
   const toast = useToast();
 
+  /*
+    Los globitos salen de un conteo del servidor, no de la lista cargada.
+
+    Se contaban sobre las cien conversaciones que el panel tiene en memoria, y
+    de la ciento uno en adelante una clienta marcada para atencion no entraba en
+    el numero. El dia que mas importa es justo el dia en que hay mas de cien.
+
+    Se cae con elegancia: si la consulta falla, se usa la cuenta local, que es
+    la de antes. Un numero de menos es mejor que ninguno.
+  */
+  const [resumen, setResumen] = useState<{
+    atencion: number;
+    sinLeer: number;
+    consultas: number;
+  } | null>(null);
+  /*
+    Refresca los contadores, como mucho una vez cada tres segundos.
+
+    Se llama desde el arranque y desde cada evento de conversación, y un turno
+    del bot emite varios: sin el techo esto serían seis consultas por turno solo
+    para tres números. No es un debounce —con eventos continuos no dispararía
+    nunca—: se programa una vez y no se reprograma hasta que corre.
+  */
+  const resumenPendiente = useRef<number | undefined>(undefined);
+  const ultimoResumen = useRef(0);
+  const refrescarResumen = useCallback(() => {
+    if (resumenPendiente.current) return;
+    const esperar = Math.max(0, 3000 - (Date.now() - ultimoResumen.current));
+    resumenPendiente.current = window.setTimeout(() => {
+      resumenPendiente.current = undefined;
+      ultimoResumen.current = Date.now();
+      void api
+        .resumenDeCharlas()
+        .then(setResumen)
+        .catch(() => undefined);
+    }, esperar);
+  }, []);
+
   const loadShell = useCallback(async () => {
     try {
       const [convs, cfg, gastado] = await Promise.all([
@@ -113,6 +151,7 @@ export default function App() {
       setSettings(cfg.settings);
       setChannels(cfg.channels);
       if (gastado) setGasto(gastado);
+      refrescarResumen();
       setAuthError(false);
     } catch (err) {
       if (String(err).includes('401')) setAuthError(true);
@@ -120,7 +159,7 @@ export default function App() {
     }
     // `toast.show` viene de un useCallback sin dependencias: es estable entre
     // renders, así que no hace falta listarlo acá.
-  }, []);
+  }, [refrescarResumen]);
 
   useEffect(() => {
     void loadShell();
@@ -166,6 +205,7 @@ export default function App() {
             se veía: el cliente lo desordenaba de nuevo al llegar.
           */
           setConversations(ordenarPorActividad([merged, ...rest]));
+          refrescarResumen();
           // Un contacto nuevo llega sin ficha: se pide la lista completa una vez.
           if (!existing) void loadShell();
           break;
@@ -185,10 +225,12 @@ export default function App() {
     return close;
   }, [authError, loadShell]);
 
-  const attention = useMemo(
+
+  const localAtencion = useMemo(
     () => conversations.filter((c) => c.needsAttention).length,
     [conversations],
   );
+  const attention = resumen?.atencion ?? localAtencion;
 
   /*
     El sonidito, y el número en la solapa del navegador.
@@ -218,10 +260,11 @@ export default function App() {
   useEffect(() => {
     document.title = attention > 0 ? `(${attention}) Miska Muska` : 'Miska Muska · Panel del bot';
   }, [attention]);
-  const unread = useMemo(
+  const localSinLeer = useMemo(
     () => conversations.reduce((sum, c) => sum + (c.unreadCount > 0 ? 1 : 0), 0),
     [conversations],
   );
+  const unread = resumen?.sinLeer ?? localSinLeer;
 
   const toggleBot = async (next: boolean) => {
     if (!settings) return;

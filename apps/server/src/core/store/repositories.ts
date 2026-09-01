@@ -346,6 +346,10 @@ export function createRepositories() {
         mode?: ConversationMode;
         channel?: ChannelId;
         needsAttention?: boolean;
+        /** Con mensajes sin leer. */
+        sinLeer?: boolean;
+        /** Con una consulta de modificación esperando respuesta. */
+        consultaAbierta?: boolean;
         limit?: number;
         /** Buscador: nombre, teléfono, o una palabra dicha adentro de la charla. */
         q?: string;
@@ -362,6 +366,15 @@ export function createRepositories() {
         where.push(`c.channel = $${args.length}`);
       }
       if (opts.needsAttention) where.push('c.needs_attention');
+      if (opts.sinLeer) where.push('c.unread_count > 0');
+      /*
+        Una consulta ABIERTA es la que todavía no tiene respuesta. El jsonb
+        guarda las contestadas también —el bot las necesita 48 h para retomar
+        con las palabras del equipo—, así que no alcanza con que exista.
+      */
+      if (opts.consultaAbierta) {
+        where.push("c.pending_review IS NOT NULL AND c.pending_review->>'resueltoEn' IS NULL");
+      }
 
       /*
         El buscador. Tres formas de encontrar la misma charla, porque el equipo
@@ -432,6 +445,35 @@ export function createRepositories() {
         args,
       );
       return rows.map(toConversation);
+    },
+
+    /**
+     * Cuántas charlas hay en cada estado, contadas contra la base entera.
+     *
+     * Los globitos de la barra se calculaban sobre las cien conversaciones que
+     * el panel tenía cargadas, y ahí está el problema: de la charla ciento uno
+     * en adelante, una clienta marcada para atención no figuraba en el número
+     * ni aparecía en el filtro. No se veía lento — se veía como si no
+     * existiera, que es el peor final posible.
+     *
+     * Tres COUNT sobre `conversations`, que es una tabla chica: son
+     * milisegundos y no dependen de cuántas filas mire el panel.
+     */
+    async contar(): Promise<{ atencion: number; sinLeer: number; consultas: number }> {
+      const row = await one<{ atencion: string; sin_leer: string; consultas: string }>(
+        `SELECT
+           COUNT(*) FILTER (WHERE needs_attention)::text AS atencion,
+           COUNT(*) FILTER (WHERE unread_count > 0)::text AS sin_leer,
+           COUNT(*) FILTER (
+             WHERE pending_review IS NOT NULL AND pending_review->>'resueltoEn' IS NULL
+           )::text AS consultas
+         FROM conversations`,
+      );
+      return {
+        atencion: Number(row?.atencion ?? 0),
+        sinLeer: Number(row?.sin_leer ?? 0),
+        consultas: Number(row?.consultas ?? 0),
+      };
     },
 
     async markInbound(id: string, preview: string, intent: string | null): Promise<void> {
