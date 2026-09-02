@@ -38,7 +38,6 @@ import {
   comprometeNuestroCadete,
   elLocalHabloDelEnvio,
   prometeEnvioGratis,
-  TEXTO_EL_ENVIO_LO_CONFIRMA_EL_LOCAL,
   TEXTO_ENVIO_SE_COBRA,
   TEXTO_NO_SE_SI_SALIO,
 } from '../policies/envios.js';
@@ -152,6 +151,14 @@ export class Pipeline {
     vuelo no le pise la decisión al operador.
   */
   #devueltaAlBot = new Map<string, number>();
+
+  /*
+    Cuándo ESCRIBIÓ una persona del local, que no es lo mismo que cuándo tomó la
+    charla. El panel deja escribir sin tomarla —lo dice el propio cuadro de
+    texto— y es lo que hacen todo el tiempo: contestan con un mensaje rápido y
+    siguen. Ver el descarte del final del turno.
+  */
+  #contestoUnaPersona = new Map<string, number>();
   /*
     Cuándo una persona TOMÓ cada charla. El espejo de #devueltaAlBot, y hace
     falta por lo mismo: el modo se lee al arrancar el turno, y entre eso y la
@@ -1081,6 +1088,42 @@ export class Pipeline {
       return;
     }
 
+    /*
+      Y TAMPOCO SALE SI UNA PERSONA YA CONTESTÓ MIENTRAS PENSÁBAMOS.
+
+      Mirar solo "tomar yo" no alcanzaba, porque casi nunca lo aprietan: el panel
+      deja escribir con la charla en modo bot —lo dice el propio cuadro de
+      texto— y así trabajan. Entonces contestaban rápido, con un mensaje rápido,
+      y unos segundos después salía encima la respuesta que el bot ya tenía
+      escrita.
+
+      Medido: 18 veces en cuatro días el bot habló justo después de una persona
+      del local, entre 0 y 9 segundos, sin que la clienta dijera nada en el
+      medio. Varias repitiendo lo mismo que la persona acababa de mandar:
+
+        LOCAL: nuestra direccion es Marcos Paz 473, podes pedir el uber envio...
+        BOT:   Nuestra dirección es Marcos Paz 473. Pedís el Uber moto...
+
+      Acá no hay excepción para la escalada, al revés que arriba. La de arriba la
+      necesita porque escalar cambia el modo en ESTE turno y se marcaría sola;
+      un turno nunca escribe con author 'human', así que esto no puede
+      autodispararse. Y si una persona ya contestó, el "ya le paso la consulta"
+      sobra igual.
+
+      Además se marca el entrante como contestado: la respuesta correcta ya la
+      dio la persona, así que el bot se queda callado hasta que la clienta vuelva
+      a escribir. Es exactamente lo que pidió el local.
+    */
+    const contestoUnaPersona = (this.#contestoUnaPersona.get(conversationId) ?? 0) > arrancoEn;
+    if (contestoUnaPersona) {
+      log(
+        'info',
+        `Respuesta descartada (${conversationId}): contestó una persona mientras el bot pensaba.`,
+      );
+      await this.#marcarContestadoPorPersona(conversationId);
+      return;
+    }
+
     await this.#send(conversationId, contents, {
       author: 'bot',
       intent: turn.intent,
@@ -1103,6 +1146,13 @@ export class Pipeline {
     contents: OutboundContent[],
     opts: SendOptions,
   ): Promise<void> {
+    /*
+      Los tres caminos del panel —escribir, mandar una foto, mandar un mensaje
+      rápido— pasan por acá con author 'human'. Marcarlo en este punto y no en
+      cada uno es lo que evita que mañana aparezca un cuarto camino sin marca.
+    */
+    if (opts.author === 'human') this.#contestoUnaPersona.set(conversationId, Date.now());
+
     const conversation = await this.#repos.conversations.get(conversationId);
     if (!conversation) return;
     const adapter = this.#resolve(conversation.channel);
