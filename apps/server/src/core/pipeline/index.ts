@@ -1034,8 +1034,44 @@ export class Pipeline {
     */
     const fotos = toolContext.effects.photos ?? [];
     if (fotos.length) {
+      /*
+        EL EPÍGRAFE NO SALE DOS VECES.
+
+        `mandar_foto` acepta un texto que viaja como epígrafe de la imagen, y su
+        resultado le pide al modelo que además escriba una línea. Nada impedía
+        que fueran la misma frase, y desde que la regla de la carta le fijó las
+        palabras exactas —"Esta es la carta, contame qué producto te gustaría"—
+        pasó a repetirse SIEMPRE. El local lo reportó así: "siempre que manda la
+        carta manda ese mensaje dos veces".
+
+        Se descarta el EPÍGRAFE y no la burbuja, aunque la burbuja llegue después:
+        las burbujas pasan por `normalizeBubbles` —el signo de apertura, el
+        anuncio de la foto, la acotación de guion, el lado del mostrador— y el
+        epígrafe no pasa por ninguna. Entre dos textos iguales, sobrevive el que
+        está revisado.
+
+        Se compara sin tildes, sin signos y sin emojis, porque la misma frase
+        vuelve escrita apenas distinta.
+      */
+      const comparable = (t: string) =>
+        t
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '')
+          .replace(/[^a-z0-9]+/g, ' ')
+          .trim();
+      const dichoEnTexto = new Set(
+        contents.filter((c) => c.kind === 'text').map((c) => comparable(c.text)),
+      );
+
       contents.unshift(
-        ...fotos.map((f) => ({ kind: 'image' as const, url: f.url, caption: f.caption })),
+        ...fotos.map((f) => {
+          const repetido = f.caption && dichoEnTexto.has(comparable(f.caption));
+          if (repetido) {
+            log('info', `Epígrafe repetido descartado (${conversationId}): "${f.caption}"`);
+          }
+          return { kind: 'image' as const, url: f.url, caption: repetido ? undefined : f.caption };
+        }),
       );
     }
 

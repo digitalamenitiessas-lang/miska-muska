@@ -970,7 +970,27 @@ export function datosFaltantes(
     );
   }
   if (!draft.customerPhone) faltan.push('teléfono');
-  if (!draft.deliveryDate) faltan.push('día de retiro o entrega');
+  /*
+    LA FECHA SOLO SE PIDE SI DE VERDAD HAY QUE ELEGIRLA.
+
+    El local pidió que el bot asuma que el pedido es para hoy, y se escribió como
+    regla en el prompt. No alcanzó, y el motivo está acá: esta lista viaja en el
+    resultado de `crear_pedido` diciendo "todavía falta: día de retiro o
+    entrega", y una instrucción pegada al momento de decidir le gana siempre a
+    una regla que está cuatro mil palabras más arriba. El bot seguía preguntando
+    "para qué día", incluso después de haber quedado en que era para ahora.
+
+    Las únicas dos cosas que se producen para una fecha son las tortas y los
+    desayunos —`seEncargaConAnticipacion`, la misma regla que ordena el resto—.
+    Para todo lo demás, si no vino fecha es hoy, y punto.
+  */
+  const paraOtroDia = draft.items.some((i) => {
+    const p = i.productId ? productsById.get(i.productId) : undefined;
+    return p ? seEncargaConAnticipacion(p.category) : false;
+  });
+  if (!draft.deliveryDate && paraOtroDia) {
+    faltan.push('para qué día lo querés (una torta o un desayuno se produce para una fecha)');
+  }
 
   const envioNuestro = draft.deliveryMode === 'cadete-miska';
   if (envioNuestro) {

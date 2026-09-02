@@ -29,6 +29,7 @@ import {
   type OrderDraft,
 } from '../policies/rules.js';
 import { llegoComprobante } from '../policies/comprobantes.js';
+import { localToday } from '../store/db.js';
 import { renderQuickReply } from './persona.js';
 import { esSoloUnSaludo, sinSaludoInicial } from '../policies/writing.js';
 import { bus, log } from '../events/bus.js';
@@ -622,6 +623,38 @@ export async function executeTool(
           };
         }
 
+        /*
+          Y NO SE PIDE EL COMPROBANTE QUE YA MANDÓ.
+
+          El local: "le pasó el comprobante y le siguió pidiendo tres veces más".
+          Salió textual el mismo mensaje rápido —el del alias— después de que la
+          clienta ya había mandado la foto. Para quien está del otro lado eso no
+          es un bot despistado: es que no le tomaron el pago.
+
+          El detector ya existía y ya está probado: es el mismo con el que se
+          arma la alerta de comprobante en el panel. Busca el primer mensaje
+          nuestro que nombra el alias y después cualquier imagen o archivo que
+          haya llegado, que es exactamente "ya te pagué".
+
+          Se frena solo el mensaje que PIDE la transferencia. Si el pago todavía
+          no está confirmado, eso lo dice la alerta y lo mira una persona; lo que
+          no puede pasar es volver a pedirle a alguien algo que ya hizo.
+        */
+        if (qr.body.includes('{{alias}}')) {
+          const charla = await repos.messages.history(ctx.conversation.id, 40);
+          // Los dos alias: un mensaje rápido de cursos cobra en la otra cuenta.
+          if (llegoComprobante(charla, [settings.transferAlias, aliasDeCursos(settings).alias])) {
+            return {
+              ok: false,
+              error:
+                `"${clave}" le pide la transferencia, y ya la mandó: hay un comprobante en la ` +
+                'charla después de que le pasaste el alias. Pedírselo de nuevo le da a entender ' +
+                'que no le tomamos el pago. Decile que ya lo tenés, que lo estás chequeando, y ' +
+                'seguí con lo que falte.',
+            };
+          }
+        }
+
         const products = await repos.products.list();
         await repos.quickReplies.countUse(clave);
         ctx.effects.quickReplyUsed = clave;
@@ -1202,7 +1235,19 @@ export async function executeTool(
           paid: 0,
           status: 'borrador',
           deliveryMode: draft.deliveryMode,
-          deliveryDate: draft.deliveryDate,
+          /*
+            Sin fecha declarada, es HOY.
+
+            La validación ya dejó pasar el pedido, y solo lo deja pasar sin fecha
+            cuando no hay nada que se produzca para un día —una torta o un desayuno
+            sin fecha ni llega hasta acá—. Así que llegar sin fecha significa "para
+            ahora", que es lo que el local pidió que se asuma.
+
+            Va acá y no al armar el borrador a propósito: puesto antes, la fecha
+            existiría para la validación y una torta pasaría sin que nadie pregunte
+            para cuándo, que es exactamente lo contrario de lo que hay que hacer.
+          */
+          deliveryDate: draft.deliveryDate ?? localToday(),
           deliveryTime: draft.deliveryTime,
           address: draft.address,
           recipientName: draft.recipientName,
