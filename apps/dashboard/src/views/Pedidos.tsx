@@ -100,6 +100,36 @@ export function Pedidos({
     [orders],
   );
 
+  /*
+    LA CAJA DEL DÍA: cuánto se cobró HOY.
+
+    Suma por CUÁNDO ENTRÓ LA PLATA, no por cuándo se creó el pedido ni para
+    cuándo es. Son tres fechas distintas y solo una arma una caja: una seña que
+    se cobra hoy por una torta del sábado es plata de hoy, y un pedido de ayer
+    que se termina de pagar hoy también.
+
+    El día se calcula en la hora de Tucumán y no en la de la computadora: el
+    panel se abre desde el celular de cualquiera, y una compu con el reloj en
+    otro huso partiría la caja a una hora que no es. 'en-CA' da YYYY-MM-DD, que
+    es lo que se puede comparar como texto.
+  */
+  const hoyEnTucuman = () =>
+    new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Tucuman' });
+
+  const cobradoHoy = useMemo(() => {
+    const hoy = hoyEnTucuman();
+    const deHoy = orders.filter(
+      (o) =>
+        o.status !== 'cancelado' &&
+        o.paid > 0 &&
+        o.paidAt &&
+        new Date(o.paidAt).toLocaleDateString('en-CA', {
+          timeZone: 'America/Argentina/Tucuman',
+        }) === hoy,
+    );
+    return { monto: deHoy.reduce((s, o) => s + o.paid, 0), cuantos: deHoy.length };
+  }, [orders]);
+
   /** Pedidos que quedaron sin precio. El bot ya no los deja pasar, pero los que
       se cargaron antes siguen en cero y hay que corregirlos a mano. */
   const sinPrecio = useMemo(
@@ -132,6 +162,15 @@ export function Pedidos({
           label="Por cobrar"
           value={money(pendingMoney)}
           note="Total menos lo cobrado, incluidos los entregados"
+        />
+        <Tile
+          label="Cobrado hoy"
+          value={money(cobradoHoy.monto)}
+          note={
+            cobradoHoy.cuantos === 1
+              ? '1 pedido cobrado hoy'
+              : `${cobradoHoy.cuantos} pedidos cobrados hoy`
+          }
         />
         {sinPrecio > 0 ? (
           <Tile label="Sin precio" value={String(sinPrecio)} note="Cargales el total a mano" />

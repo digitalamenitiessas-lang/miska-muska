@@ -146,6 +146,7 @@ function toOrder(r: Row): Order {
     items: (r.items ?? []) as OrderItem[],
     total: Number(r.total ?? 0),
     paid: Number(r.paid ?? 0),
+    paidAt: isoOrNull(r.paid_at),
     status: String(r.status) as OrderStatus,
     deliveryMode: String(r.delivery_mode) as Order['deliveryMode'],
     deliveryDate: dateOnly(r.delivery_date),
@@ -794,14 +795,24 @@ export function createRepositories() {
   };
 
   const orders = {
-    async create(o: Omit<Order, 'id' | 'number' | 'createdAt' | 'updatedAt'>): Promise<Order> {
+    /*
+      `paidAt` no entra: no es un dato que traiga quien crea el pedido, sale de
+      que haya plata. Pedirlo obligaría a los cinco llamadores a mandar null.
+    */
+    async create(
+      o: Omit<Order, 'id' | 'number' | 'createdAt' | 'updatedAt' | 'paidAt'>,
+    ): Promise<Order> {
       // El número lo asigna la SEQUENCE: dos pedidos simultáneos nunca repiten.
       const row = await one(
         `INSERT INTO orders (id, conversation_id, contact_id, customer_name, customer_dni,
            customer_phone, items, total, paid, status, delivery_mode, delivery_date, delivery_time,
-           address, recipient_name, dedication, notes, campaign_id, campaign_sku_id, created_by)
+           address, recipient_name, dedication, notes, campaign_id, campaign_sku_id, created_by,
+           paid_at)
          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17,
-                 $18, $19, $20)
+                 $18, $19, $20,
+                 -- Nace cobrado solo si nace con plata: es el caso del pedido que
+                 -- alguien carga a mano en el mostrador con el pago ya hecho.
+                 CASE WHEN $9 > 0 THEN now() ELSE NULL END)
          RETURNING *`,
         [
           newId('o_'), o.conversationId, o.contactId, o.customerName, o.customerDni,
@@ -871,6 +882,28 @@ export function createRepositories() {
         sets.push(`items = $${args.length}::jsonb`);
       }
       if (!sets.length) return orders.get(id);
+
+      /*
+        LA MARCA DE CUÁNDO SE COBRÓ SE PONE SOLA.
+
+        No es un campo que alguien setee: se deduce de que `paid` pasó de cero a
+        algo. Ponerlo acá y no en cada llamador es lo que evita que la caja del
+        día dependa de que quien escriba el próximo botón se acuerde.
+
+        La condición mira el valor VIEJO de `paid` —en un UPDATE, el lado derecho
+        ve la fila como estaba— así que solo se sella la primera vez y una
+        segunda seña no le corre la fecha. Y si alguien vuelve el pago a cero
+        porque se equivocó, la marca se borra y esa plata sale de la caja.
+      */
+      if (patch.paid !== undefined) {
+        args.push(patch.paid);
+        const p = `$${args.length}`;
+        sets.push(
+          `paid_at = CASE WHEN ${p} > 0 AND paid <= 0 THEN now() ` +
+            `WHEN ${p} <= 0 THEN NULL ELSE paid_at END`,
+        );
+      }
+
       args.push(id);
       const row = await one(
         `UPDATE orders SET ${sets.join(', ')}, updated_at = now()

@@ -132,6 +132,8 @@ export interface Order {
   items: OrderItem[];
   total: number;
   paid: number;
+  /** Cuándo entró el primer peso. Null si todavía no se cobró nada. */
+  paidAt: string | null;
   status: OrderStatus;
   deliveryMode: 'retira-local' | 'uber-cliente' | 'cadete-miska';
   deliveryDate: string | null;

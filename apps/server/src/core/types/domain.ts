@@ -234,6 +234,13 @@ export interface Order {
   total: number;
   /** Monto ya transferido. */
   paid: number;
+  /**
+   * Cuándo entró el primer peso. Null si todavía no se cobró nada.
+   *
+   * Es lo que hace posible la caja del día: `paid` solo dice cuánto, y la fecha
+   * de creación no sirve porque un pedido de ayer se puede cobrar hoy.
+   */
+  paidAt: string | null;
   status: OrderStatus;
   deliveryMode: DeliveryMode;
   /** Fecha de retiro/entrega en formato YYYY-MM-DD. */
