@@ -1182,10 +1182,50 @@ export class Pipeline {
    * borra, el primer tropiezo después de la devolución manda la charla a humano
    * con un motivo viejo y ajeno.
    */
-  marcarCambioDeModo(conversationId: string, mode: ConversationMode): void {
+  async marcarCambioDeModo(conversationId: string, mode: ConversationMode): Promise<void> {
     this.#errorStreak.delete(conversationId);
-    if (mode === 'bot') this.#devueltaAlBot.set(conversationId, Date.now());
-    else this.#tomadaPorPersona.set(conversationId, Date.now());
+    if (mode !== 'bot') {
+      this.#tomadaPorPersona.set(conversationId, Date.now());
+      return;
+    }
+
+    this.#devueltaAlBot.set(conversationId, Date.now());
+
+    /*
+      AL DEVOLVERLA AL BOT, LO DE ANTES YA ESTÁ ATENDIDO.
+
+      El local: "cuando se devuelva al bot, que no agarre esa última interacción
+      a procesar con IA, ya que se supone que la respondió un humano".
+
+      Devolver la charla es decir "de acá en adelante seguí vos", no "leete lo
+      que me perdí". Mientras la atendía una persona pasaron cosas —la clienta
+      escribió, alguien contestó, quedó un turno a medio programar— y cualquiera
+      de esas puede terminar en un turno que conteste algo que ya fue
+      contestado. Se cierra la cuenta acá, de una vez, en vez de tapar cada
+      camino por separado:
+
+        · el temporizador pendiente se cancela;
+        · el permiso de "contestá aunque ya esté contestado" se borra, porque un
+          turno que se saltea temprano —modo humano, bot apagado— lo deja puesto
+          y el siguiente turno lo usa sin que nadie lo haya pedido;
+        · y el último mensaje de la clienta queda marcado como contestado.
+
+      El bot arranca limpio con lo próximo que ella escriba, que es exactamente
+      lo que se espera de apretar ese botón.
+
+      OJO CON EL ORDEN: la ruta que resuelve una consulta llama a esto ANTES de
+      `resumeAfterReview`. Ese es el único caso donde el bot sí tiene que hablar
+      sin que la clienta escriba —le debe la respuesta del local— y funciona
+      porque vuelve a pedir el permiso después de que esto lo borra. Si algún día
+      alguien invierte ese orden, el bot se queda mudo con la clienta esperando.
+    */
+    const pendiente = this.#pending.get(conversationId);
+    if (pendiente) {
+      clearTimeout(pendiente);
+      this.#pending.delete(conversationId);
+    }
+    this.#forzar.delete(conversationId);
+    await this.#marcarContestadoPorPersona(conversationId);
   }
 
   /**
