@@ -364,7 +364,7 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       'cambiar el bizcochuelo, reemplazar algo de un desayuno, otro tamaño, otra presentación. ' +
       'No importa si te parece obvio que se puede o que no se puede: no lo decidís vos. Vale ' +
       'para TODOS los productos y también en fechas especiales. Después de llamarla, contale que ' +
-      'lo estás consultando en cocina y NO sigas con el pedido: la herramienta te dice cómo ' +
+      'lo estás chequeando —sin decir con quién— y NO sigas con el pedido: la herramienta te dice cómo ' +
       'seguir. NO son modificaciones y no van por acá: la cantidad, la fecha, el horario, la ' +
       'modalidad de entrega, la dedicatoria, ni AGREGAR otro producto al pedido — un agregado se ' +
       'suma al principal y se cobra aparte, no lo reemplaza. Si el contexto del día ya dice ' +
@@ -1038,7 +1038,7 @@ export async function executeTool(
                 pendiente_de_validacion: true,
                 instruccion:
                   'No cargues ni modifiques nada y no vuelvas a llamar esta herramienta. ' +
-                  'Decile con naturalidad que lo consultás en cocina y que en un rato le ' +
+                  'Decile con naturalidad que lo estás chequeando y que en un rato le ' +
                   'escribe alguien del local. No confirmes ni rechaces el cambio, no le digas ' +
                   'que quedó reservado y no le pidas el pago todavía.',
               },
@@ -1665,24 +1665,32 @@ export async function executeTool(
           En una pastelería no hay un "equipo" abstracto — hay la cocina y hay la
           encargada, y el cliente entiende perfecto a quién se le está preguntando.
 
-          La plata la decide la encargada; lo que se puede o no se puede hacer con
-          un producto se decide en cocina. Esa es la división real del local y es
-          la que se nombra.
+          Y NO SE NOMBRA A NADIE. El local lo corrigió después: "que en ningún
+          momento diga dónde deriva, el local, la encargada o lo que sea". Nombrar
+          a quién se le pregunta es de las cosas que más lo delatan como bot —
+          nadie que atiende dice "lo consulto con la encargada", dice "ahora lo
+          chequeo".
+
+          Adentro la división sigue existiendo y este mismo `motivo` es el que
+          hace que el aviso llegue a quien corresponde. Lo que cambia es lo único
+          que importa acá: qué escucha el cliente.
         */
         const comoLoCuenta: Record<string, string> = {
-          excepcion_pago: 'que lo estás consultando con la encargada',
-          reclamo: 'que ya se lo pasaste a la encargada y te va a contestar',
-          pedido_grande: 'que lo estás viendo con la encargada para pasarle el presupuesto',
-          pidio_humano: 'que en un rato le escribe alguien del local',
+          excepcion_pago: 'que lo estás chequeando y que en un ratito le confirmás',
+          reclamo: 'que ya lo estás viendo y que le contestás en un rato',
+          pedido_grande: 'que estás armando el presupuesto y se lo pasás en un rato',
+          pidio_humano: 'que en un ratito le contestás',
         };
         return {
           ok: true,
           data: {
             escalado: true,
             instruccion:
-              `Ya avisé al local. Cerrá el turno diciéndole con naturalidad ${
-                comoLoCuenta[motivo] ?? 'que en un rato le escribe alguien del local'
-              }. No digas "el equipo" ni "no lo puedo autorizar yo". No prometas un tiempo exacto.`,
+              `Listo, el aviso ya salió. Cerrá el turno diciéndole con naturalidad ${
+                comoLoCuenta[motivo] ?? 'que en un ratito le contestás'
+              }. NO nombres a nadie ni digas adónde lo estás preguntando: ni "el local", ni "la ` +
+              `encargada", ni "cocina", ni "el equipo". Tampoco "no lo puedo autorizar yo". Y no ` +
+              `prometas un tiempo exacto.`,
           },
         };
       }

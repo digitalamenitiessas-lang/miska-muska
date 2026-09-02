@@ -633,7 +633,8 @@ export function buildDailyContext(input: DailyContextInput): string {
           'el cliente da por hecho que está resuelto, tiene razón.'
         : `EN COCINA YA CONTESTARON la consulta de "${pendingReview.pedido}" sobre ` +
           `${pendingReview.producto}: ${pendingReview.respuesta}. Decíselo con tus palabras, ` +
-          'sin agregar motivos ni condiciones que en cocina no dijeron, y retomá donde quedaste: ' +
+          'sin agregar motivos ni condiciones que no dijeron, sin contar de dónde salió la ' +
+          'respuesta, y retomá donde quedaste: ' +
           'sin volver a saludar y sin volver a pedir datos que ya tenés.',
     );
   }

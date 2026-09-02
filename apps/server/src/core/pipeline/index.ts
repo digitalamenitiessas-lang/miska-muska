@@ -823,23 +823,34 @@ export class Pipeline {
     for (const contenido of contents) {
       if (contenido.kind !== 'text') continue;
       /*
-        El bot no arranca un envío solo. Va ANTES que la del envío gratis porque
-        es la decisión de más arriba: si ni siquiera está decidido que lo
-        llevamos nosotros, discutir si se cobra es discutir sobre algo que no
-        existe todavía.
+        EL CADETE: TERMÓMETRO, NO GUARDA. Y esto es la corrección de un error mío.
 
-        Solo si el local no habló del tema en esta charla. Cuando una persona ya
-        escribió sobre el cadete, está en el asunto y el bot puede seguirla.
+        Salió como guarda que reemplazaba el mensaje y escalaba la charla, y en un
+        día reemplazó TRECE respuestas sobre envíos de noventa. Casi todas estaban
+        bien: la disparaban "hacen envíos?", "hacen envíos de los boxs?", "quiero
+        que me mandes una cookie" — que son justo las que el local quiere que
+        conteste, explicando cómo se maneja el envío acá. Y no atrapó la que sí
+        estaba mal, que prometía el cadete "a las 9:30 por $6.000".
+
+        Probé después una versión más angosta, por hora o por precio, contra los
+        231 mensajes de envíos de dos días: 51 nombran una hora o un precio cerca
+        de una palabra de envío, y casi todos con razón —la hora de retiro, el
+        precio del producto, "en el horario que necesites"—. También dispararía
+        de más.
+
+        La diferencia entre "retiralo a las 19" y "el cadete llega a las 9:30" no
+        la hace un regex: la hace entender la frase. Así que esto vuelve a lo que
+        este código hace con lo que todavía no sabe reemplazar —el termómetro de
+        precios, el de "quedó reservado"—: anota y no toca. Con los casos
+        anotados se podrá escribir la guarda sabiendo, o quedará claro que acá
+        manda el prompt.
       */
       if (comprometeNuestroCadete(contenido.text) && !elLocalHabloDelEnvio(history)) {
-        log('warn', `Guarda: el bot iba a comprometer nuestro cadete (${conversationId}).`);
-        contenido.text = TEXTO_EL_ENVIO_LO_CONFIRMA_EL_LOCAL;
-        guardaEscalo = true;
-        alertaDeGuarda = true;
-        motivoGuarda =
-          '[envio_sin_autorizar] El bot estaba por decir que se lo llevamos con nuestro ' +
-          'cadete, sin que nadie lo autorice. Decidilo vos: si va, con qué costo y cuándo.';
-        continue;
+        log(
+          'warn',
+          `COMPROMETIÓ EL CADETE SIN AUTORIZAR (${conversationId}): ` +
+            `"${contenido.text.slice(0, 140)}"`,
+        );
       }
 
       if (prometeEnvioGratis(contenido.text)) {
