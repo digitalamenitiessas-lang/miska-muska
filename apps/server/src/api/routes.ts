@@ -337,10 +337,26 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
 
   // --- Pedidos ------------------------------------------------------------
 
+  /*
+    Va ANTES de cualquier ruta con parámetro, si algún día se agrega
+    /api/orders/:id: Fastify toma la primera que matchea y "resumen" entraría
+    como un id. Es el mismo cuidado que ya se tuvo con conversations/resumen.
+  */
+  app.get('/api/orders/resumen', async () => repos.orders.resumen());
+
   app.get('/api/orders', async (req) => {
     const query = req.query as Record<string, string | undefined>;
+    /*
+      Las fechas se validan por forma antes de tocar la base. Van a un cast
+      ::date parametrizado —no hay concatenación— así que no hay inyección
+      posible; esto es para que un parámetro tipeado a mano devuelva una lista
+      vacía en vez de un error 500.
+    */
+    const fecha = (v: string | undefined) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
     return repos.orders.list({
       status: query.status as OrderStatus | undefined,
+      desde: fecha(query.desde),
+      hasta: fecha(query.hasta),
       limit: query.limit ? Number(query.limit) : 200,
     });
   });

@@ -28,11 +28,13 @@ import type {
   InboundMessage,
   OutboundContent,
 } from '../types/message.js';
-import { isOutsideBusinessHours, nombreDeWhatsApp } from '../policies/rules.js';
+import { aliasDeCursos, isOutsideBusinessHours, nombreDeWhatsApp } from '../policies/rules.js';
 import { pideElNombre, yaSePidioElNombre } from '../policies/nombres.js';
 import { localToday } from '../store/db.js';
 import { agotadosConPrecio, preciosQueNoCoinciden } from '../policies/precios.js';
-import { diceQueQuedoReservado } from '../policies/comprobantes.js';
+import { diceQueQuedoReservado, llegoComprobante } from '../policies/comprobantes.js';
+import { yaLoDijo } from '../policies/repeticion.js';
+import { avisaQueLlego, AVISO_DE_LLEGADA } from '../policies/llegadas.js';
 import {
   afirmaQueYaSalio,
   comprometeNuestroCadete,
@@ -210,6 +212,7 @@ export class Pipeline {
     */
     void this.#guardarAdjunto(conversation, stored);
     void this.#avisarSiEsComprobante(conversation, stored);
+    void this.#avisarSiLlego(conversation, stored);
     // `payload` viene de una columna jsonb: ya es un objeto, no hay que parsearlo.
     const content = (stored.payload ?? { kind: 'text', text: '' }) as InboundContent;
     const decision = await route({ repos: this.#repos, conversation, content });
@@ -267,6 +270,40 @@ export class Pipeline {
    * No toca el modo: el bot sigue atendiendo. Lo único que hace es prender la
    * marca de atención, que es lo que ordena la bandeja.
    */
+  /**
+   * Alguien está esperando en la puerta AHORA.
+   *
+   * Va aparte del turno del bot y no espera a que termine: el bot puede tardar
+   * quince segundos en contestar, y son quince segundos de un chofer parado. La
+   * alerta tiene que estar en el panel antes que la respuesta.
+   *
+   * NO le saca la charla al bot ni le pisa el mensaje: el bot contesta lo suyo y
+   * además queda encendida la alerta, que es lo único que hace que alguien mire.
+   *
+   * Ver core/policies/llegadas.ts para los patrones y la medición.
+   */
+  async #avisarSiLlego(conversation: Conversation, stored: StoredMessage): Promise<void> {
+    if (stored.contentKind !== 'text' || !avisaQueLlego(stored.text)) return;
+    try {
+      /*
+        No se pisa una alerta que ya está encendida por otra cosa: si hay una
+        consulta abierta o un comprobante sin confirmar, ese motivo importa
+        igual y reemplazarlo perdería información. La charla ya está marcada, que
+        es lo que hace falta para que alguien la mire.
+      */
+      const actual = await this.#repos.conversations.get(conversation.id);
+      if (actual?.needsAttention) return;
+
+      await this.#repos.conversations.setAttention(conversation.id, true, AVISO_DE_LLEGADA);
+      const refrescada = await this.#repos.conversations.get(conversation.id);
+      if (refrescada) bus.emit({ type: 'conversation', conversation: refrescada });
+      log('info', `Avisan que llegaron (${conversation.id}): "${stored.text.slice(0, 80)}"`);
+    } catch (err) {
+      // Un aviso que no sale no puede tumbar el mensaje entrante.
+      log('warn', `No pude marcar la llegada (${conversation.id})`, String(err));
+    }
+  }
+
   async #avisarSiEsComprobante(
     conversation: Conversation,
     stored: StoredMessage,
@@ -282,7 +319,7 @@ export class Pipeline {
         a nadie, y avisar por todas es la forma de que dejen de mirar los avisos.
       */
       const [pedidos, inscripciones] = await Promise.all([
-        this.#repos.orders.list({ conversationId: conversation.id, limit: 5 }),
+        this.#repos.orders.list({ conversationId: conversation.id, vigentes: true, limit: 5 }),
         this.#repos.courses.pendientesDePagoEn(conversation.id),
       ]);
 
@@ -320,14 +357,15 @@ export class Pipeline {
       }
 
       const motivo = pedidoSinCobrar
-        ? `[comprobante] Mandó una foto y el pedido ${pedidoSinCobrar.number} está sin cobrar ` +
-          `(${pedidoSinCobrar.paid} de ${pedidoSinCobrar.total}). Miralo y confirmá el pago.`
+        ? `[comprobante] Mirá la transferencia y confirmá el pago del pedido ` +
+          `#${pedidoSinCobrar.number}. Está en ${pedidoSinCobrar.paid} de ${pedidoSinCobrar.total}, ` +
+          'y hasta que no lo confirmes ella queda esperando.'
         : inscripcion
-          ? `[comprobante] Mandó una foto y la inscripción de ${inscripcion.fullName} está ` +
-            'pendiente de pago. Miralo y confirmá la inscripción.'
-          : '[comprobante] Mandó una foto después de que le pasamos el alias, y esta charla NO ' +
-            'tiene ningún pedido cargado. Revisala: si la venta se cerró, cargala con el botón ' +
-            'de la ficha, que si no queda cobrada y sin registrar en ningún lado.';
+          ? `[comprobante] Mirá la transferencia y confirmá la inscripción de ` +
+            `${inscripcion.fullName}, que está pendiente de pago.`
+          : '[comprobante] Cargá este pedido con el botón de la ficha: mandó la transferencia ' +
+            'y no hay ningún pedido cargado en esta charla. Si no, queda cobrado y sin ' +
+            'registrar en ningún lado.';
 
       await this.#repos.conversations.setAttention(conversation.id, true, motivo);
       const refrescada = await this.#repos.conversations.get(conversation.id);
@@ -573,7 +611,7 @@ export class Pipeline {
         repos.products.list(),
         repos.quickReplies.list(),
         repos.campaigns.listActive(),
-        repos.orders.list({ conversationId, limit: 5 }),
+        repos.orders.list({ conversationId, vigentes: true, limit: 5 }),
         repos.courses.list({ onlyActive: true }),
       ]);
 
@@ -776,7 +814,19 @@ export class Pipeline {
       retira"). La burbuja que iba a dar la dirección se cambia por la que
       corresponde a esta altura de la conversación, que es pedir la plata.
     */
-    const abiertos = await repos.orders.list({ conversationId, limit: 5 });
+    /*
+      Las tres banderas de las guardas viven acá arriba porque la primera que las
+      usa es la de la dirección, que está antes que el resto. `alertaDeGuarda`
+      marca la charla en la bandeja y `guardaEscalo` además se la saca al bot:
+      son dos cosas distintas y mezclarlas hacía que un aviso —"mirá este
+      envío"— le arrancara la charla al bot en el medio de una venta que venía
+      bien.
+    */
+    let alertaDeGuarda = false;
+    let guardaEscalo = false;
+    let motivoGuarda = '';
+
+    const abiertos = await repos.orders.list({ conversationId, vigentes: true, limit: 5 });
     const sinCobrar = abiertos.find(
       (o) =>
         o.status !== 'cancelado' &&
@@ -789,16 +839,53 @@ export class Pipeline {
       // La calle sola alcanza para detectarla: el modelo escribe la dirección
       // completa o los primeros términos, no la ciudad suelta.
       const calle = direccion.split(',')[0].trim();
+      /*
+        SI YA MANDÓ EL COMPROBANTE, NO SE LO VOLVEMOS A PEDIR.
+
+        Esto es la corrección de un bucle que generaba esta misma guarda, y que
+        salió carísimo en la charla: la clienta mandó el comprobante, el pedido
+        quedó en 0 de 4.500 porque nadie del local lo confirmó, y cada vez que el
+        bot intentaba pasar la dirección la guarda le reemplazaba el mensaje por
+        "te paso el alias y apenas me mandes el comprobante...". Ella contestaba
+        "ya te lo mandé", el bot lo intentaba de nuevo, y salía otra vez el mismo
+        texto. Seis veces, hasta un "es joda?".
+
+        Por eso salía idéntico byte a byte: no lo escribía el modelo, lo escribía
+        esta línea.
+
+        La guarda sigue siendo correcta —la dirección no sale antes de la plata—
+        pero lo que falta cuando el comprobante YA llegó no es la clienta: es que
+        alguien del local lo confirme. Así que se lo decimos así, y se marca la
+        charla para que alguien lo mire, que es lo único que destraba esto.
+      */
+      const yaPago = llegoComprobante(history, [
+        settings.transferAlias,
+        aliasDeCursos(settings).alias,
+      ]);
+
       for (const contenido of contents) {
         if (contenido.kind !== 'text') continue;
         if (!contenido.text.toLowerCase().includes(calle)) continue;
         log(
           'warn',
-          `Guarda: el bot iba a dar la dirección con el pedido ${sinCobrar.number} sin cobrar.`,
+          `Guarda: el bot iba a dar la dirección con el pedido ${sinCobrar.number} sin cobrar` +
+            `${yaPago ? ', con el comprobante ya recibido' : ''}.`,
         );
-        contenido.text =
-          `Te paso el alias y apenas me mandes el comprobante te doy la dirección, así ya ` +
-          `pedís el Uber 🫶🏻\n${settings.transferAlias} (${settings.transferHolder})`;
+        if (yaPago) {
+          contenido.text =
+            'Ya tengo tu comprobante 🙌🏼 lo estamos confirmando y apenas esté listo te paso la ' +
+            'dirección para que mandes el Uber. Es un minuto 🙏🏻';
+          alertaDeGuarda = true;
+          guardaEscalo = true;
+          motivoGuarda =
+            `[confirmá el pago] Confirmá la transferencia del pedido #${sinCobrar.number} ` +
+            `(${sinCobrar.paid} de ${sinCobrar.total}). Ya mandó el comprobante y está esperando ` +
+            'la dirección para pedir el Uber: hasta que no lo confirmes, el bot no puede seguir.';
+        } else {
+          contenido.text =
+            `Te paso el alias y apenas me mandes el comprobante te doy la dirección, así ya ` +
+            `pedís el Uber 🫶🏻\n${settings.transferAlias} (${settings.transferHolder})`;
+        }
       }
     }
 
@@ -824,11 +911,44 @@ export class Pipeline {
       Mezclarlas hacía que un aviso —"mirá este envío"— le arrancara la charla al
       bot en el medio de una venta que venía bien.
     */
-    let alertaDeGuarda = false;
-    let guardaEscalo = false;
-    let motivoGuarda = '';
     for (const contenido of contents) {
       if (contenido.kind !== 'text') continue;
+
+      /*
+        SI YA LO DIJO HACE UN RATO, NO LO REPITE: SE LO PASA A UNA PERSONA.
+
+        Una clienta recibió SEIS veces el mismo mensaje palabra por palabra
+        mientras contestaba "ya te lo mandé" y "es joda?". La causa de fondo era
+        otra —un pedido viejo en el contexto— y se arregló aparte, pero el bucle
+        necesita su propia red: si el contexto no cambia, el modelo vuelve a
+        escribir exactamente lo mismo, y cada repetición le confirma a la persona
+        que no la están leyendo.
+
+        Escala en vez de solo callarse. Que el bot repita algo textual significa
+        que se quedó trabado: callarlo deja a alguien esperando en silencio, que
+        es la otra forma de perder la venta. Escalar pone el caso donde hay
+        alguien que puede desatascarlo.
+
+        Ver core/policies/repeticion.ts para el largo mínimo y la ventana, que
+        son las dos cosas que evitan que esto se coma un "dale, cualquier cosa
+        avisame" repetido con toda razón.
+      */
+      if (yaLoDijo(contenido.text, history)) {
+        log(
+          'warn',
+          `Guarda: el bot iba a repetir textual algo que ya dijo (${conversationId}): ` +
+            `"${contenido.text.slice(0, 120)}"`,
+        );
+        contenido.text =
+          'Perdón, dejame que reviso bien esto y te contesto en un ratito 🙏🏻';
+        guardaEscalo = true;
+        alertaDeGuarda = true;
+        motivoGuarda =
+          '[repetido] Entrá vos a esta charla: se trabó. Fijate qué le está pidiendo, porque ' +
+          'lo más probable es que la clienta ya se lo haya mandado.';
+        continue;
+      }
+
       /*
         EL CADETE: TERMÓMETRO, NO GUARDA. Y esto es la corrección de un error mío.
 
@@ -866,8 +986,8 @@ export class Pipeline {
         guardaEscalo = true;
         alertaDeGuarda = true;
         motivoGuarda =
-          '[envio_gratis] El bot estaba por decir que el envío no se cobra. Pasale vos el ' +
-          'costo, que depende de la zona.';
+          '[envio_gratis] Pasale vos cuánto sale el envío a su zona. Es plata que si no ' +
+          'nadie le cobra.';
         continue;
       }
       /*
@@ -882,8 +1002,7 @@ export class Pipeline {
         guardaEscalo = true;
         alertaDeGuarda = true;
         motivoGuarda =
-          '[envio_en_camino] El bot estaba por decir que el pedido ya salió o va en camino. ' +
-          'Confirmale vos cómo viene la entrega.';
+          '[envio_en_camino] Confirmale vos si el pedido salió y en cuánto llega. Está esperando esa respuesta y solo la sabe alguien del local.';
       }
     }
 
@@ -1038,39 +1157,38 @@ export class Pipeline {
         EL EPÍGRAFE NO SALE DOS VECES.
 
         `mandar_foto` acepta un texto que viaja como epígrafe de la imagen, y su
-        resultado le pide al modelo que además escriba una línea. Nada impedía
-        que fueran la misma frase, y desde que la regla de la carta le fijó las
-        palabras exactas —"Esta es la carta, contame qué producto te gustaría"—
-        pasó a repetirse SIEMPRE. El local lo reportó así: "siempre que manda la
-        carta manda ese mensaje dos veces".
+        resultado le pide al modelo que además escriba una línea. El modelo llena
+        los dos, y a la clienta le llegan dos textos diciendo lo mismo con
+        distintas palabras:
 
-        Se descarta el EPÍGRAFE y no la burbuja, aunque la burbuja llegue después:
-        las burbujas pasan por `normalizeBubbles` —el signo de apertura, el
-        anuncio de la foto, la acotación de guion, el lado del mostrador— y el
-        epígrafe no pasa por ninguna. Entre dos textos iguales, sobrevive el que
-        está revisado.
+          [carta]  "Hola! Te paso la carta con los precios"
+                   "Esta es la carta, contame qué producto te gustaría"
 
-        Se compara sin tildes, sin signos y sin emojis, porque la misma frase
-        vuelve escrita apenas distinta.
+        La primera versión de esto comparaba los textos y descartaba el epígrafe
+        solo si eran IDÉNTICOS. No alcanzó: casi nunca lo son, y el local lo
+        volvió a reportar igual.
+
+        La regla buena no es comparar, es de diseño: en este bot LA FOTO SALE
+        ANTES QUE EL TEXTO, y el texto que va abajo ES el epígrafe. Así que si el
+        turno trae texto, la imagen va sin leyenda; el epígrafe se queda solo
+        cuando la foto viaja sola, para que no salga muda.
+
+        Y el que sobrevive es el texto, no la leyenda: las burbujas pasan por
+        `normalizeBubbles` —el signo de apertura, el anuncio de la foto, la
+        acotación de guion, el lado del mostrador— y el epígrafe no pasa por
+        ninguna. Entre dos textos, el revisado.
       */
-      const comparable = (t: string) =>
-        t
-          .toLowerCase()
-          .normalize('NFD')
-          .replace(/[\u0300-\u036f]/g, '')
-          .replace(/[^a-z0-9]+/g, ' ')
-          .trim();
-      const dichoEnTexto = new Set(
-        contents.filter((c) => c.kind === 'text').map((c) => comparable(c.text)),
-      );
-
+      const hayTexto = contents.some((c) => c.kind === 'text' && c.text.trim());
       contents.unshift(
         ...fotos.map((f) => {
-          const repetido = f.caption && dichoEnTexto.has(comparable(f.caption));
-          if (repetido) {
-            log('info', `Epígrafe repetido descartado (${conversationId}): "${f.caption}"`);
+          if (hayTexto && f.caption) {
+            log('info', `Epígrafe descartado (${conversationId}): "${f.caption.slice(0, 70)}"`);
           }
-          return { kind: 'image' as const, url: f.url, caption: repetido ? undefined : f.caption };
+          return {
+            kind: 'image' as const,
+            url: f.url,
+            caption: hayTexto ? undefined : f.caption,
+          };
         }),
       );
     }

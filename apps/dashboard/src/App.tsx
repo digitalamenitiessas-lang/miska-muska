@@ -91,6 +91,19 @@ export default function App() {
     id, la segunda vez el valor no cambia y el efecto de la bandeja no corre.
   */
   const [salto, setSalto] = useState<{ id: string; n: number } | null>(null);
+
+  /*
+    El cartel de "necesitan atención" lleva a verlas.
+
+    El local: "a veces no deslizan y ha quedado uno abajo que necesita atención y
+    no lo ven". La bandeja se ordena por última actividad, así que una charla
+    marcada hace media hora se va al fondo justo mientras alguien espera.
+  */
+  const [filtroPedido, setFiltroPedido] = useState<{ filtro: string; n: number } | null>(null);
+  const verLasDeAtencion = () => {
+    setView('bandeja');
+    setFiltroPedido((p) => ({ filtro: 'atencion', n: (p?.n ?? 0) + 1 }));
+  };
   const irAlChat = (conversationId: string) => {
     setSalto((previo) => ({ id: conversationId, n: (previo?.n ?? 0) + 1 }));
     setView('bandeja');
@@ -392,7 +405,15 @@ export default function App() {
           <h1>{TITLES[view]}</h1>
           <span className="spacer" />
           {attention > 0 ? (
-            <Pill tone="danger">{attention} necesita atención</Pill>
+            <button
+              className="btn-pill"
+              onClick={verLasDeAtencion}
+              title="Ver solo las charlas que necesitan una mano"
+            >
+              <Pill tone="danger">
+                {attention} {attention === 1 ? 'necesita' : 'necesitan'} atención
+              </Pill>
+            </button>
           ) : (
             <Pill tone="ok">todo al día</Pill>
           )}
@@ -407,6 +428,7 @@ export default function App() {
             tick={tick}
             onConversationsChanged={loadShell}
             salto={salto}
+            filtroPedido={filtroPedido}
             toast={toast.show}
           />
         ) : (

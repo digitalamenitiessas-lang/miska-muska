@@ -1779,3 +1779,27 @@ table.grid tbody tr:hover {
   color: var(--danger);
   font-size: 12.5px;
 }
+
+/*
+  El cartel de "necesitan atención" es un botón, y tiene que seguir
+  pareciendo el cartel que ya era. Se le saca todo lo de botón y solo se le
+  deja lo que dice "esto se toca": el cursor y un realce al pasar por arriba.
+
+  El foco SÍ se ve, y con `focus-visible` para que aparezca cuando se llega
+  con el teclado y no cada vez que alguien lo hace clic con el mouse.
+*/
+.btn-pill {
+  all: unset;
+  cursor: pointer;
+  display: inline-flex;
+  border-radius: 999px;
+}
+
+.btn-pill:hover {
+  filter: brightness(0.96);
+}
+
+.btn-pill:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 2px;
+}

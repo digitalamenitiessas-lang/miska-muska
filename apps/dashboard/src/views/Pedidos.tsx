@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { api, type Order, type OrderStatus } from '../api';
+import { api, type Order, type OrderStatus, type ResumenPedidos } from '../api';
 import { ComandaPedido } from './Comanda';
 import {
   DELIVERY_LABEL,
@@ -51,18 +51,59 @@ export function Pedidos({
   */
   const ultimaCarga = useRef(0);
 
+  /*
+    QUÉ DÍA SE ESTÁ MIRANDO.
+
+    El local trabaja por fecha de ENTREGA, no por cuándo se cargó el pedido: la
+    pregunta real es "qué hay que tener listo el sábado". Un pedido tomado hoy
+    para el 13 pertenece al 13.
+
+    Arranca en 'todos', que es lo que se veía hasta ahora. Poner "hoy" por
+    defecto sonaba tentador y es justo lo que haría perder de vista la torta del
+    sábado que hay que empezar el jueves.
+  */
+  const [dia, setDia] = useState<{ tipo: 'todos' | 'dia' | 'mes'; fecha: string }>({
+    tipo: 'todos',
+    fecha: '',
+  });
+
+  /** Hoy en Tucumán, no en el reloj de la computadora. Ver la caja del día. */
+  const hoyISO = () =>
+    new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Tucuman' });
+
+  const sumarDias = (iso: string, n: number) => {
+    const d = new Date(iso + 'T12:00:00');
+    d.setDate(d.getDate() + n);
+    return d.toLocaleDateString('en-CA');
+  };
+
+  /** El rango que se le pide al servidor, con los dos extremos incluidos. */
+  const rango = useMemo(() => {
+    if (dia.tipo === 'todos' || !dia.fecha) return {};
+    if (dia.tipo === 'dia') return { desde: dia.fecha, hasta: dia.fecha };
+    const [a, m] = dia.fecha.split('-');
+    const ultimo = new Date(Number(a), Number(m), 0).getDate();
+    return { desde: `${a}-${m}-01`, hasta: `${a}-${m}-${String(ultimo).padStart(2, '0')}` };
+  }, [dia]);
+
+  const [resumen, setResumen] = useState<ResumenPedidos | null>(null);
+
   const load = useCallback(async () => {
     const mia = ++ultimaCarga.current;
     try {
-      const lista = await api.orders();
+      const [lista, nums] = await Promise.all([
+        api.orders(rango as Record<string, string>),
+        api.resumenPedidos(),
+      ]);
       if (mia !== ultimaCarga.current) return; // llegó tarde: ya hay una más nueva
       setOrders(lista);
+      setResumen(nums);
     } catch (err) {
       if (mia === ultimaCarga.current) toast(`No pude cargar los pedidos: ${String(err)}`);
     } finally {
       setLoading(false);
     }
-  }, [toast]);
+  }, [toast, rango]);
 
   useEffect(() => {
     void load();
@@ -150,30 +191,106 @@ export function Pedidos({
 
   return (
     <>
+      {/*
+        Las tarjetas NO salen de la lista de abajo, y esa es la única forma de
+        que digan la verdad: la lista se filtra por día, así que mirar el sábado
+        haría que "cobrado hoy" contara la plata del sábado. Y además la lista
+        trae como mucho 200 filas, con lo cual "por cobrar" se iba a quedar corto
+        en cuanto el local acumulara más pedidos que eso.
+
+        Se calculan en el servidor sobre toda la tabla. Mientras no llegan se
+        muestran los de la lista, para que no parpadeen en cero.
+      */}
       <div className="tiles">
-        <Tile label="Pedidos totales" value={String(orders.length)} />
+        <Tile
+          label="Para hoy"
+          value={String(resumen?.paraHoy ?? 0)}
+          note={
+            (resumen?.masAdelante ?? 0) > 0
+              ? `${resumen?.masAdelante} más adelante`
+              : 'Sin entregar todavía'
+          }
+        />
         <Tile
           label="Sin comprobante"
-          value={String(sinCobrar)}
+          value={String(resumen?.sinComprobante ?? sinCobrar)}
           note="No se registró ni un peso todavía"
         />
-        <Tile label="Por entregar" value={String((counts.get('confirmado') ?? 0) + (counts.get('en-preparacion') ?? 0) + (counts.get('listo') ?? 0))} />
         <Tile
           label="Por cobrar"
-          value={money(pendingMoney)}
+          value={money(resumen?.porCobrar ?? pendingMoney)}
           note="Total menos lo cobrado, incluidos los entregados"
         />
         <Tile
           label="Cobrado hoy"
-          value={money(cobradoHoy.monto)}
+          value={money(resumen?.cobradoHoy ?? cobradoHoy.monto)}
           note={
-            cobradoHoy.cuantos === 1
+            (resumen?.cobradosHoy ?? cobradoHoy.cuantos) === 1
               ? '1 pedido cobrado hoy'
-              : `${cobradoHoy.cuantos} pedidos cobrados hoy`
+              : `${resumen?.cobradosHoy ?? cobradoHoy.cuantos} pedidos cobrados hoy`
           }
         />
-        {sinPrecio > 0 ? (
-          <Tile label="Sin precio" value={String(sinPrecio)} note="Cargales el total a mano" />
+        {(resumen?.sinPrecio ?? sinPrecio) > 0 ? (
+          <Tile
+            label="Sin precio"
+            value={String(resumen?.sinPrecio ?? sinPrecio)}
+            note="Cargales el total a mano"
+          />
+        ) : null}
+      </div>
+
+      {/*
+        POR FECHA DE ENTREGA, no por cuándo se cargó el pedido. La pregunta del
+        local es "qué hay que tener listo el sábado", y un pedido tomado hoy para
+        el 13 pertenece al 13.
+      */}
+      <div className="row wrap" style={{ marginBottom: 10, gap: 6, alignItems: 'center' }}>
+        <span className="small muted">Entrega:</span>
+        <button
+          className="chip"
+          aria-pressed={dia.tipo === 'todos'}
+          onClick={() => setDia({ tipo: 'todos', fecha: '' })}
+        >
+          Todas
+        </button>
+        <button
+          className="chip"
+          aria-pressed={dia.tipo === 'dia' && dia.fecha === hoyISO()}
+          onClick={() => setDia({ tipo: 'dia', fecha: hoyISO() })}
+        >
+          Hoy
+        </button>
+        <button
+          className="chip"
+          aria-pressed={dia.tipo === 'dia' && dia.fecha === sumarDias(hoyISO(), 1)}
+          onClick={() => setDia({ tipo: 'dia', fecha: sumarDias(hoyISO(), 1) })}
+        >
+          Mañana
+        </button>
+        <input
+          type="date"
+          value={dia.fecha}
+          onChange={(e) =>
+            setDia(e.target.value ? { tipo: 'dia', fecha: e.target.value } : { tipo: 'todos', fecha: '' })
+          }
+          title="Ver los pedidos de un día puntual"
+          style={{ width: 'auto' }}
+        />
+        <button
+          className="chip"
+          aria-pressed={dia.tipo === 'mes'}
+          disabled={!dia.fecha}
+          title={dia.fecha ? 'Ver todo el mes de esa fecha' : 'Elegí una fecha primero'}
+          onClick={() => setDia((d) => ({ tipo: 'mes', fecha: d.fecha }))}
+        >
+          Todo el mes
+        </button>
+        {dia.tipo !== 'todos' && dia.fecha ? (
+          <span className="small muted">
+            {dia.tipo === 'mes'
+              ? `${orders.length} en el mes`
+              : `${orders.length} para el ${dia.fecha.split('-').reverse().slice(0, 2).join('/')}`}
+          </span>
         ) : null}
       </div>
 

@@ -289,6 +289,16 @@ export interface MetricPoint {
   costUsd: number;
 }
 
+export interface ResumenPedidos {
+  cobradoHoy: number;
+  cobradosHoy: number;
+  porCobrar: number;
+  sinComprobante: number;
+  sinPrecio: number;
+  paraHoy: number;
+  masAdelante: number;
+}
+
 export interface Metrics {
   summary: {
     conversations: number;
@@ -432,6 +442,12 @@ export const api = {
 
   orders: (params: Record<string, string> = {}) =>
     get<Order[]>(`/api/orders?${new URLSearchParams(params)}`),
+  /**
+   * Los números de las tarjetas. Van aparte de la lista a propósito: la lista se
+   * filtra por día y las tarjetas no tienen que moverse por eso. Ver el porqué
+   * en `orders.resumen()` del servidor.
+   */
+  resumenPedidos: () => get<ResumenPedidos>('/api/orders/resumen'),
   updateOrder: (id: string, body: Partial<Order>) => patch<Order>(`/api/orders/${id}`, body),
   /**
    * Cargar un pedido a mano, desde la charla.

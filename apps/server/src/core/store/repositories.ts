@@ -839,6 +839,18 @@ export function createRepositories() {
         status?: OrderStatus;
         contactId?: string;
         conversationId?: string;
+        /**
+         * Solo lo que todavía está en juego. Ver el porqué abajo.
+         */
+        vigentes?: boolean;
+        /**
+         * Rango de FECHA DE ENTREGA, en YYYY-MM-DD y con los dos extremos
+         * incluidos. Es la fecha para la que es el pedido, no la de cuándo se
+         * cargó: el local trabaja mirando "qué hay que tener listo el sábado",
+         * y un pedido de hoy para el 13 pertenece al 13.
+         */
+        desde?: string;
+        hasta?: string;
         limit?: number;
       } = {},
     ): Promise<Order[]> {
@@ -851,6 +863,33 @@ export function createRepositories() {
       if (opts.status) put('status = ?', opts.status);
       if (opts.contactId) put('contact_id = ?', opts.contactId);
       if (opts.conversationId) put('conversation_id = ?', opts.conversationId);
+      /*
+        LO QUE SIGUE EN JUEGO, QUE NO ES LO MISMO QUE LO RECIENTE.
+
+        Una charla de WhatsApp no termina nunca: es la misma con la misma persona
+        para siempre. Sin este filtro, "los pedidos de esta charla" incluían el
+        que se entregó hace tres días, y el contexto del día se lo pasaba al
+        modelo con la instrucción "NO llames crear_pedido con estos ítems".
+
+        Y ahí se perdió una venta, textual: una clienta pidió "2 cookies de oreo
+        con nutella, como la vez pasada", mandó el comprobante, y el bot nunca
+        cargó el pedido — porque el pedido de la semana pasada tenía esos mismos
+        ítems y la instrucción le decía que no. Terminó pidiéndole seis veces el
+        comprobante que ya había mandado, hasta que ella escribió "es joda?".
+
+        No alcanza con filtrar por fecha: una torta encargada el lunes para el
+        sábado sigue viva el miércoles. Lo que define es el ESTADO: sigue en
+        juego lo que no está entregado ni cancelado, y además lo que se cerró
+        HOY, porque de eso todavía se habla.
+      */
+      if (opts.desde) put('delivery_date >= ?::date', opts.desde);
+      if (opts.hasta) put('delivery_date <= ?::date', opts.hasta);
+      if (opts.vigentes) {
+        where.push(
+          `(status NOT IN ('entregado', 'cancelado')` +
+            ` OR (created_at AT TIME ZONE '${TIMEZONE}')::date = (now() AT TIME ZONE '${TIMEZONE}')::date)`,
+        );
+      }
       args.push(opts.limit ?? 200);
       const rows = await q(
         `SELECT * FROM orders ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
@@ -858,6 +897,64 @@ export function createRepositories() {
         args,
       );
       return rows.map(toOrder);
+    },
+
+    /**
+     * Los números de las tarjetas de Pedidos.
+     *
+     * Van por separado de la lista y a propósito, por dos motivos. Uno: la lista
+     * se filtra por día, y si las tarjetas salieran de ahí, mirar el sábado
+     * haría que "cobrado hoy" contara la plata del sábado. Dos: la lista trae
+     * como mucho 200 filas, así que "por cobrar" se quedaba corto en cuanto el
+     * local acumulara más pedidos que eso.
+     *
+     * Se calcula sobre TODA la tabla y en una sola consulta.
+     */
+    async resumen(): Promise<{
+      cobradoHoy: number;
+      cobradosHoy: number;
+      porCobrar: number;
+      sinComprobante: number;
+      sinPrecio: number;
+      paraHoy: number;
+      masAdelante: number;
+    }> {
+      const row = await one<Record<string, string>>(
+        `SELECT
+           COALESCE(SUM(paid) FILTER (
+             WHERE status <> 'cancelado' AND paid > 0
+               AND (paid_at AT TIME ZONE $1)::date = (now() AT TIME ZONE $1)::date
+           ), 0)::text AS cobrado_hoy,
+           COUNT(*) FILTER (
+             WHERE status <> 'cancelado' AND paid > 0
+               AND (paid_at AT TIME ZONE $1)::date = (now() AT TIME ZONE $1)::date
+           )::text AS cobrados_hoy,
+           COALESCE(SUM(GREATEST(0, total - paid)) FILTER (WHERE status <> 'cancelado'), 0)::text
+             AS por_cobrar,
+           COUNT(*) FILTER (WHERE status <> 'cancelado' AND total > 0 AND paid <= 0)::text
+             AS sin_comprobante,
+           COUNT(*) FILTER (WHERE status <> 'cancelado' AND total <= 0)::text AS sin_precio,
+           COUNT(*) FILTER (
+             WHERE status NOT IN ('cancelado', 'entregado')
+               AND delivery_date = (now() AT TIME ZONE $1)::date
+           )::text AS para_hoy,
+           COUNT(*) FILTER (
+             WHERE status NOT IN ('cancelado', 'entregado')
+               AND delivery_date > (now() AT TIME ZONE $1)::date
+           )::text AS mas_adelante
+         FROM orders`,
+        [TIMEZONE],
+      );
+      const n = (k: string) => Number(row?.[k] ?? 0);
+      return {
+        cobradoHoy: n('cobrado_hoy'),
+        cobradosHoy: n('cobrados_hoy'),
+        porCobrar: n('por_cobrar'),
+        sinComprobante: n('sin_comprobante'),
+        sinPrecio: n('sin_precio'),
+        paraHoy: n('para_hoy'),
+        masAdelante: n('mas_adelante'),
+      };
     },
 
     async update(id: string, patch: Partial<Order>): Promise<Order | null> {

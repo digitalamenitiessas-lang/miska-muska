@@ -49,6 +49,7 @@ export function Inbox({
   tick,
   onConversationsChanged,
   salto,
+  filtroPedido,
   toast,
 }: {
   conversations: Conversation[];
@@ -57,6 +58,14 @@ export function Inbox({
   onConversationsChanged: () => void;
   /** Charla que hay que abrir porque la pidieron desde Pedidos o Cursos. */
   salto: { id: string; n: number } | null;
+  /**
+   * Un filtro pedido desde afuera, del cartel de "necesitan atención".
+   *
+   * Lleva un contador por lo mismo que `salto`: si ya estás en ese filtro y
+   * volvés a tocar el cartel, el pedido tiene que valer igual —querés que te
+   * lleve arriba de todo— y sin el contador React no ve ningún cambio.
+   */
+  filtroPedido: { filtro: string; n: number } | null;
   toast: (text: string) => void;
 }) {
   const [filter, setFilter] = useState<Filter>('todas');
@@ -241,6 +250,21 @@ export function Inbox({
     setPanelMovil('chat');
     setBusqueda('');
   }, [salto?.n, salto?.id]);
+
+  /*
+    El cartel de arriba pidió ver las que necesitan atención.
+
+    Se limpia la búsqueda además de poner el filtro: si había algo tipeado, el
+    filtro solo no alcanzaría y el cartel parecería no hacer nada. Y en pantalla
+    angosta se vuelve a la lista, porque si estabas leyendo un chat el filtro se
+    aplicaría atrás y no lo verías.
+  */
+  useEffect(() => {
+    if (!filtroPedido) return;
+    setFilter(filtroPedido.filtro as Filter);
+    setBusqueda('');
+    setPanelMovil('lista');
+  }, [filtroPedido?.n, filtroPedido?.filtro]);
 
   /*
     Lo que se muestra es el detalle SI Y SOLO SI es el de la charla elegida.
@@ -1586,6 +1610,12 @@ interface LineaNueva {
   description: string;
   quantity: number;
   unitPrice: number;
+  /**
+   * Lo que hay tipeado en el buscador mientras todavía no coincide con ningún
+   * producto. Sin esto el campo se vacía en cada tecla: es controlado, y hasta
+   * que no hay coincidencia no hay nada que mostrar.
+   */
+  busqueda?: string;
 }
 
 /**
@@ -1636,20 +1666,57 @@ function CargarPedido({
       .catch(() => undefined);
   }, []);
 
+  /*
+    EL CATÁLOGO, ALFABÉTICO.
+
+    El local: "si cuando cargan el producto a mano pueden estar ordenados
+    alfabéticamente y si pueden tener un buscador, porque se demoraban". Venía en
+    el orden del catálogo —por categoría y por el orden que le da el panel—, que
+    sirve para administrarlo y no para encontrar una cookie entre noventa
+    productos con alguien esperando del otro lado del mostrador.
+
+    `localeCompare` con 'es' y no un < a secas: sin eso la eñe y las tildes caen
+    al final del abecedario.
+  */
+  const catalogo = useMemo(
+    () => [...productos].sort((a, b) => a.name.localeCompare(b.name, 'es')),
+    [productos],
+  );
+
+  /*
+    Lo que se ve y se tipea es una sola cadena, y es también la que identifica al
+    producto cuando lo eligen. Con el precio adentro, dos productos de nombre
+    parecido se distinguen sin abrir nada.
+  */
+  const comoSeVe = (p: Product) => `${p.name} — $${p.price.toLocaleString('es-AR')}`;
+
   const total = lineas.reduce((suma, l) => suma + l.quantity * l.unitPrice, 0);
   const listo = nombre.trim().length >= 3 && total > 0;
 
   const cambiar = (i: number, patch: Partial<LineaNueva>) =>
     setLineas((prev) => prev.map((l, n) => (n === i ? { ...l, ...patch } : l)));
 
-  /** Elegir del catálogo llena descripción y precio; después se pueden editar. */
-  const elegirProducto = (i: number, id: string) => {
-    const p = productos.find((x) => x.id === id);
+  /**
+   * Elegir del catálogo llena descripción y precio; después se pueden editar.
+   *
+   * Entra el TEXTO del campo, no un id: el buscador es un input con datalist, así
+   * que puede venir un producto elegido de la lista o algo tipeado a mano. Si no
+   * coincide con nada, es "otro" y se respeta tal cual — que es el mismo camino
+   * que antes tenía la opción "otro…" del desplegable.
+   */
+  const elegirProducto = (i: number, texto: string) => {
+    const p = catalogo.find((x) => comoSeVe(x) === texto);
     if (!p) {
-      cambiar(i, { productId: null });
+      /*
+        Todavía no coincide con nada: puede estar a mitad de tipear, o puede ser
+        un producto que no está en el catálogo. Se guarda lo tipeado y se deja la
+        línea sin producto — el precio y la descripción se cargan a mano abajo,
+        que es lo que antes hacía la opción "otro…".
+      */
+      cambiar(i, { productId: null, busqueda: texto });
       return;
     }
-    cambiar(i, { productId: p.id, description: p.name, unitPrice: p.price });
+    cambiar(i, { productId: p.id, description: p.name, unitPrice: p.price, busqueda: undefined });
   };
 
   const guardar = async () => {
@@ -1717,20 +1784,31 @@ function CargarPedido({
         </div>
 
         <h4 style={{ margin: '14px 0 6px' }}>Qué lleva</h4>
+        {/* Uno solo para todas las líneas: el navegador lo comparte por el id. */}
+        <datalist id="catalogo-pedido">
+          {catalogo.map((p) => (
+            <option key={p.id} value={comoSeVe(p)} />
+          ))}
+        </datalist>
         {lineas.map((l, i) => (
           <div key={i} className="linea-pedido">
-            <select
-              value={l.productId ?? ''}
+            {/*
+              Un input con datalist y no un desplegable: escribís "dubai" y
+              aparece la cookie, sin recorrer noventa productos. La búsqueda la
+              hace el navegador, así que no hay nada nuestro que se pueda romper
+              y funciona igual en la compu del mostrador y en el celular.
+            */}
+            <input
+              list="catalogo-pedido"
+              value={
+                l.productId
+                  ? (catalogo.find((p) => p.id === l.productId)?.name ?? l.description)
+                  : (l.busqueda ?? '')
+              }
+              placeholder="Buscá un producto…"
+              title="Escribí para buscar, o dejalo en blanco y cargalo a mano abajo"
               onChange={(e) => elegirProducto(i, e.target.value)}
-              title="Elegí del catálogo, o dejá 'otro' y escribilo a mano"
-            >
-              <option value="">otro…</option>
-              {productos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} — ${p.price.toLocaleString('es-AR')}
-                </option>
-              ))}
-            </select>
+            />
             <input
               className="grow"
               placeholder="Qué es"
