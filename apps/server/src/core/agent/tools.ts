@@ -20,7 +20,9 @@ import type {
 import {
   aliasDeCursos,
   claveDeCategoria,
-  DESAYUNO_NO_SALE_ANTES_DE,
+  desayunoNoSaleAntesDe,
+  DOMINGO_ABRE,
+  esDomingo,
   MARGEN_MINIMO_DESAYUNO,
   esDesayunoOBox,
   primeraHora,
@@ -981,20 +983,56 @@ export async function executeTool(
           return p ? esDesayunoOBox(p.category) : false;
         });
         const arranca = primeraHora(draft.deliveryTime);
-        if (
-          llevaDesayuno &&
-          modalidad === 'cadete-miska' &&
-          arranca !== null &&
-          arranca < DESAYUNO_NO_SALE_ANTES_DE
-        ) {
+        const entrega = draft.deliveryDate ?? localToday();
+        const domingo = esDomingo(entrega);
+
+        /*
+          EL DOMINGO A LA MAÑANA NO HAY NADIE. Ni para armar, ni para entregar,
+          ni para abrir la puerta.
+
+          No es una regla de desayunos y por eso va primero y suelta: el caso
+          que la destapó fue una torta kinder de $50.000 que el bot tomó para
+          RETIRAR un domingo de 12 a 13. La clienta iba a llegar a un local
+          cerrado con la plata ya transferida.
+        */
+        if (domingo && arranca !== null && arranca < DOMINGO_ABRE) {
           return {
             ok: false,
             error:
-              'Un desayuno o un box no lo podemos mandar antes de las 9 de la mañana: el local ' +
-              'abre a las 8 y se arma en el momento. NO cargues el pedido con esa hora. ' +
-              'Decíselo así, sin vueltas y sin pedir disculpas de más —"los desayunos salen a ' +
-              'partir de las 9"— y preguntale si le sirve de 9 en adelante. Cuando te diga la ' +
-              'hora nueva, reintentá.',
+              'Ese día es DOMINGO y los domingos abrimos a las 14: a esa hora no hay nadie en ' +
+              'el local, ni para entregar ni para que pase a retirar. NO cargues el pedido con ' +
+              'esa hora. Decíselo derecho —"los domingos abrimos a las 14"— y preguntale si le ' +
+              'sirve de la tarde, o si prefiere el sábado. Cuando te diga la hora nueva, ' +
+              'reintentá.',
+          };
+        }
+
+        /*
+          Y el desayuno necesita además que lo armen. De lunes a sábado eso solo
+          frena los envíos nuestros —el local abre a las 8 y a las 8 se puede
+          retirar—; el domingo frena todo, porque media hora después de abrir es
+          lo antes que puede estar listo.
+        */
+        const desde = desayunoNoSaleAntesDe(entrega);
+        if (
+          llevaDesayuno &&
+          (domingo || modalidad === 'cadete-miska') &&
+          arranca !== null &&
+          arranca < desde
+        ) {
+          return {
+            ok: false,
+            error: domingo
+              ? 'Es un desayuno o un box para un DOMINGO, y los domingos salen a partir de las ' +
+                '14:30 (abrimos a las 14 y se arman en el momento). NO cargues el pedido con ' +
+                'esa hora. Decíselo derecho —"los domingos los desayunos los mandamos a partir ' +
+                'de las 14:30"— y preguntale si le sirve de ahí en adelante. Cuando te diga la ' +
+                'hora nueva, reintentá.'
+              : 'Un desayuno o un box no lo podemos mandar antes de las 9 de la mañana: el ' +
+                'local abre a las 8 y se arma en el momento. NO cargues el pedido con esa ' +
+                'hora. Decíselo así, sin vueltas y sin pedir disculpas de más —"los desayunos ' +
+                'salen a partir de las 9"— y preguntale si le sirve de 9 en adelante. Cuando ' +
+                'te diga la hora nueva, reintentá.',
           };
         }
 

@@ -40,4 +40,34 @@ for (const [texto, esperado] of casos) {
   console.log(`  ${ok ? 'ok  ' : 'MAL '} ${JSON.stringify(texto).slice(0, 62).padEnd(64)} ${fmt(dio).padEnd(6)} ${ok ? '' : '(esperaba ' + fmt(esperado) + ')'}`);
 }
 console.log(`\n  ${casos.length - mal}/${casos.length} bien`);
-process.exit(mal ? 1 : 0);
+/* ------------------------------------------------------------------------- */
+/* Y desde qué hora sale un desayuno, según el día.                          */
+/* ------------------------------------------------------------------------- */
+import { desayunoNoSaleAntesDe, DESAYUNO_DOMINGO_DESDE, DESAYUNO_NO_SALE_ANTES_DE } from '../src/core/policies/rules.js';
+
+const DIAS = ['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado'];
+const dias: Array<[string, number]> = [
+  ['2026-09-06', DESAYUNO_DOMINGO_DESDE],   // domingo
+  ['2026-09-07', DESAYUNO_NO_SALE_ANTES_DE], // lunes
+  ['2026-09-12', DESAYUNO_NO_SALE_ANTES_DE], // sábado
+  ['2026-09-13', DESAYUNO_DOMINGO_DESDE],   // domingo
+  ['2026-01-04', DESAYUNO_DOMINGO_DESDE],   // domingo, con la fecha en enero
+  ['2026-12-27', DESAYUNO_DOMINGO_DESDE],   // domingo, fin de año
+  ['fecha-rota', DESAYUNO_NO_SALE_ANTES_DE], // no se entiende: no se inventa nada
+];
+
+console.log('\n=== desde qué hora sale un desayuno ===\n');
+let malDias = 0;
+for (const [fecha, esperado] of dias) {
+  const dio = desayunoNoSaleAntesDe(fecha);
+  const ok = dio === esperado;
+  if (!ok) malDias++;
+  const [a, m, d] = fecha.split('-').map(Number);
+  const nombre = a && m && d ? DIAS[new Date(a, m - 1, d).getDay()] : '—';
+  console.log(
+    `  ${ok ? 'ok  ' : 'MAL '} ${fecha.padEnd(12)} ${nombre.padEnd(10)} ` +
+      `${String(Math.floor(dio / 60)).padStart(2, '0')}:${String(dio % 60).padStart(2, '0')}`,
+  );
+}
+console.log(`\n  ${dias.length - malDias}/${dias.length} bien`);
+process.exit(mal || malDias ? 1 : 0);

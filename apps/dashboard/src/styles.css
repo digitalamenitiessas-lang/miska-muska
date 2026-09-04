@@ -1809,3 +1809,7 @@ table.grid tbody tr:hover {
    el texto: lo que importa leer es el motivo, no el botón. */
 .aviso-atencion { color: var(--danger); margin-top: 3px; gap: 6px; }
 .aviso-atencion .btn { flex: 0 0 auto; color: var(--danger); }
+
+/* El buscador de pedidos. Ancho fijo y no flexible: en la misma fila estan los
+   chips de fecha, y si crece se los come en pantalla angosta. */
+.buscador-pedidos { width: min(280px, 100%); }

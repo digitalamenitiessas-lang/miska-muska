@@ -912,9 +912,20 @@ export class Pipeline {
             `${yaPago ? ', con el comprobante ya recibido' : ''}.`,
         );
         if (yaPago) {
+          /*
+            El "es un minuto" se fue a propósito. Prometía que lo único que
+            faltaba era mirar una captura, y después la clienta escribía a los
+            veinticinco minutos preguntando por qué todavía no se lo habían
+            chequeado. El local: "es porque estamos preparando el pedido".
+
+            El texto nuevo dice las dos cosas —se chequea Y se arma— y explica
+            por qué conviene esperar para mandar el Uber. Ver EL COMPROBANTE NO
+            ES EL FINAL en las reglas.
+          */
           contenido.text =
-            'Ya tengo tu comprobante 🙌🏼 lo estamos confirmando y apenas esté listo te paso la ' +
-            'dirección para que mandes el Uber. Es un minuto 🙏🏻';
+            'Ya tengo tu comprobante 🙌🏼 lo estamos chequeando y ya nos ponemos a armar tu ' +
+            'pedido. Apenas esté listo te avisamos y ahí sí mandás el Uber, así no llega ' +
+            'antes que el pedido 🩷';
           alertaDeGuarda = true;
           guardaEscalo = true;
           motivoGuarda =

@@ -34,6 +34,12 @@ export function Pedidos({
 }) {
   const [orders, setOrders] = useState<Order[]>([]);
   const [filter, setFilter] = useState<OrderStatus | 'todos'>('todos');
+  /*
+    El buscador de pedidos. Lo pidieron los chicos del mostrador: con el filtro
+    por día ya saben qué hay que tener listo el sábado, pero cuando alguien
+    llama preguntando por SU pedido lo que hace falta es encontrarlo por nombre.
+  */
+  const [busqueda, setBusqueda] = useState('');
   const [loading, setLoading] = useState(true);
   /*
     Pedido abierto en la comanda. Se guarda el id y no el objeto: mientras la
@@ -109,10 +115,44 @@ export function Pedidos({
     void load();
   }, [load, tick]);
 
-  const visible = useMemo(
-    () => (filter === 'todos' ? orders : orders.filter((o) => o.status === filter)),
-    [orders, filter],
-  );
+  /*
+    Sin tildes y en minúscula de los dos lados: nadie escribe "Nicolás" con
+    tilde cuando está apurado, y el pedido está cargado con ella.
+  */
+  const pelado = (s: string) =>
+    s.normalize('NFD').replace(/\p{Diacritic}/gu, '').toLowerCase();
+
+  /**
+   * Todo lo que se puede escribir para encontrar un pedido: el número, quien lo
+   * hizo, el teléfono, qué lleva, a dónde va y para quién.
+   *
+   * La dedicatoria entra a propósito: más de una vez lo que recuerdan del
+   * pedido es el nombre de la persona a la que va dedicado, no el de quien pagó.
+   */
+  const buscables = (o: Order) =>
+    pelado(
+      [
+        String(o.number),
+        o.customerName,
+        o.customerPhone ?? '',
+        o.address ?? '',
+        o.recipientName ?? '',
+        o.dedication ?? '',
+        o.items.map((i) => i.description).join(' '),
+      ].join(' '),
+    );
+
+  const visible = useMemo(() => {
+    const porEstado = filter === 'todos' ? orders : orders.filter((o) => o.status === filter);
+    const q = pelado(busqueda.trim());
+    if (!q) return porEstado;
+    // Todas las palabras, en cualquier orden: "rossana torta" encuentra igual.
+    const partes = q.split(/\s+/);
+    return porEstado.filter((o) => {
+      const texto = buscables(o);
+      return partes.every((p) => texto.includes(p));
+    });
+  }, [orders, filter, busqueda]);
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
@@ -245,6 +285,28 @@ export function Pedidos({
         el 13 pertenece al 13.
       */}
       <div className="row wrap" style={{ marginBottom: 10, gap: 6, alignItems: 'center' }}>
+        {/*
+          Buscar apaga el filtro por día, y es a propósito: quien busca a
+          "Rossana" la quiere encontrar sea para el día que sea. Si el filtro
+          quedara puesto, el buscador parecería no andar justo cuando el pedido
+          es de mañana. Los chips de arriba muestran el cambio, así que no se
+          oculta nada.
+        */}
+        <input
+          className="buscador-pedidos"
+          value={busqueda}
+          onChange={(e) => {
+            setBusqueda(e.target.value);
+            if (e.target.value.trim()) setDia({ tipo: 'todos', fecha: '' });
+          }}
+          placeholder="Buscar por nombre, teléfono, N° o producto"
+          aria-label="Buscar un pedido"
+        />
+        {busqueda ? (
+          <button className="chip" onClick={() => setBusqueda('')} title="Borrar la búsqueda">
+            ✕ {visible.length} {visible.length === 1 ? 'pedido' : 'pedidos'}
+          </button>
+        ) : null}
         <span className="small muted">Entrega:</span>
         <button
           className="chip"
@@ -310,7 +372,9 @@ export function Pedidos({
           <Empty glyph="⏳">Cargando…</Empty>
         ) : visible.length === 0 ? (
           <Empty glyph="🧾">
-            No hay pedidos con este filtro. Los que tome el bot aparecen acá automáticamente.
+            {busqueda.trim()
+              ? `Ningún pedido coincide con "${busqueda.trim()}". Probá con el apellido, el teléfono o el número de pedido.`
+              : 'No hay pedidos con este filtro. Los que tome el bot aparecen acá automáticamente.'}
           </Empty>
         ) : (
           <div className="scroll-x">
