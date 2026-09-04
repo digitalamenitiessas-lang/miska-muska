@@ -74,6 +74,14 @@ export interface Conversation {
   /** Marcada por el bot al escalar, o por un operador. */
   needsAttention: boolean;
   attentionReason: string | null;
+  /**
+   * Cuándo una persona apagó la alerta, y con qué motivo estaba prendida.
+   *
+   * Sirve para no volver a encenderla por lo mismo dos minutos después. Ver la
+   * migración 11 y `#avisarSiEsComprobante` en el pipeline.
+   */
+  attentionClearedAt: string | null;
+  attentionClearedReason: string | null;
   /** Consulta de modificación abierta o recién contestada. null si no hay. */
   pendingReview: PendingReview | null;
   createdAt: string;

@@ -420,6 +420,26 @@ UPDATE orders SET paid_at = updated_at WHERE paid > 0 AND paid_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_orders_paid_at ON orders (paid_at DESC) WHERE paid_at IS NOT NULL;
 `,
   },
+  {
+    id: 11,
+    name: 'alerta-ya-atendida',
+    sql: `
+-- Cuándo, y por qué motivo, una persona apagó la alerta de esta charla.
+--
+-- El local: "cuando ponemos devolver al bot sigue apareciendo que necesita
+-- humano, como que no se destraba". No era el botón: era que el aviso del
+-- comprobante se vuelve a encender con CADA foto que manda el cliente. Mientras
+-- no haya un pedido cargado en la charla la condición sigue siendo cierta, así
+-- que la apagaban, llegaba otra imagen y volvía sola. Medido sobre tres días:
+-- 155 avisos sobre 116 charlas, y 32 charlas lo recibieron más de una vez.
+--
+-- Con esto, el aviso que ya apagaron no vuelve por lo mismo. Si el motivo cambia
+-- —apareció un pedido, ahora hay que confirmar un pago— es información nueva y
+-- sí vuelve a sonar.
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS attention_cleared_at timestamptz;
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS attention_cleared_reason text;
+`,
+  },
 ];
 
 /**

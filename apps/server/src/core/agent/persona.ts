@@ -401,13 +401,22 @@ export function buildDailyContext(input: DailyContextInput): string {
   */
   if (!sePuedenTomarPedidos(settings, now)) {
     parts.push(
-      `AHORA NO SE TOMAN PEDIDOS. Los pedidos se toman de ${settings.pedidosDesde} a ` +
-        `${settings.pedidosHasta}, y estamos fuera de esa franja. Seguí atendiendo normalmente: ` +
-        'contestá precios, contá qué hay, sacá todas las dudas y dejá la charla lista. Pero NO ' +
-        'cargues el pedido y NO le digas que quedó anotado, ni que se lo reservás. Decile que ' +
-        `apenas abran a las ${settings.pedidosDesde} alguien del local se lo toma y le ` +
-        'confirma. Es importante que quede claro que todavía no está tomado: si cree que sí, a ' +
-        'la mañana temprano viene a retirar algo que nadie preparó.',
+      `AHORA NO SE TOMAN PEDIDOS. Se toman de ${settings.pedidosDesde} a ` +
+        `${settings.pedidosHasta}, y estamos fuera de esa franja.\n` +
+        'Seguí atendiendo con toda naturalidad: precios, qué trae cada cosa, cómo funciona el ' +
+        'envío, cuánto sale. Todo eso se contesta igual.\n' +
+        'Lo que NO va, y es lo que hay que cuidar:\n' +
+        '- No cargues el pedido ni digas que quedó anotado o reservado.\n' +
+        '- No confirmes NINGUNA hora ni ningún día de entrega. Ni "mañana a las 10", ni ' +
+        '"te llega temprano", ni "sí, se puede para esa hora".\n' +
+        '- Y no le pidas los datos del pedido de a uno —nombre, dirección, quién recibe, ' +
+        'franja, dedicatoria— como si lo estuvieras tomando. Pedir todo eso ES tomar el ' +
+        'pedido para el que está del otro lado, aunque vos no lo cargues. Si ya te los dio, ' +
+        'perfecto, quedan en la charla; pero no salgas a buscarlos.\n' +
+        `Lo que sí: decile que a las ${settings.pedidosDesde} alguien del local se lo toma y ` +
+        'le confirma. Pasó de verdad: fue el día de la secretaria, entraron pedidos con el ' +
+        'local cerrado, se confirmaron horarios de ese mismo día y a la mañana no había nada ' +
+        'preparado. El local: "hemos tenido un quilombo con los clientes".',
     );
   } else if (outsideHours) {
     parts.push(

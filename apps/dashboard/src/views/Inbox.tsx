@@ -586,6 +586,28 @@ export function Inbox({
     }
   };
 
+  /*
+    APAGAR LA ALERTA, SIN TENER QUE TOCAR EL MODO.
+
+    Hasta acá la única forma de bajar el "necesita atención" era devolver la
+    charla al bot, y eso solo aparece si la charla está en modo humano. Las
+    alertas que el bot prende sin llevarse la charla —el comprobante, el envío
+    de hoy, la llegada del cadete— quedaban en pantalla sin ningún botón que las
+    apagara. El local lo dijo así: "como que no se destraba".
+
+    Es un clic y no toca nada más: la charla sigue donde está y con quien esté.
+  */
+  const apagarAlerta = async () => {
+    if (!selected) return;
+    try {
+      await api.setAttention(selected, false);
+      await loadDetail(selected);
+      onConversationsChanged();
+    } catch (err) {
+      toast(`No pude apagar el aviso: ${String(err)}`);
+    }
+  };
+
   const setMode = async (mode: 'bot' | 'human' | 'muted') => {
     if (!selected) return;
     try {
@@ -901,9 +923,21 @@ export function Inbox({
                   </Pill>
                   {detail.contact?.isReturning ? <Pill tone="mint">cliente de años</Pill> : null}
                 </div>
-                {detail.conversation.needsAttention && detail.conversation.attentionReason ? (
-                  <div className="small" style={{ color: 'var(--danger)', marginTop: 3 }}>
-                    ⚠ {detail.conversation.attentionReason}
+                {/* Se muestra por needsAttention y no por el motivo: una alerta sin
+                    texto igual tiene que poder apagarse, que era justamente el caso
+                    sin salida. */}
+                {detail.conversation.needsAttention ? (
+                  <div className="row aviso-atencion">
+                    <span className="small grow">
+                      ⚠ {detail.conversation.attentionReason ?? 'Esta charla necesita una mano'}
+                    </span>
+                    <button
+                      className="btn btn-sm btn-ghost"
+                      title="Bajar el aviso: ya lo atendiste"
+                      onClick={() => void apagarAlerta()}
+                    >
+                      Listo
+                    </button>
                   </div>
                 ) : null}
               </div>

@@ -82,6 +82,8 @@ function toConversation(r: Row): Conversation {
     unreadCount: Number(r.unread_count ?? 0),
     needsAttention: Boolean(r.needs_attention),
     attentionReason: str(r.attention_reason),
+    attentionClearedAt: isoOrNull(r.attention_cleared_at),
+    attentionClearedReason: str(r.attention_cleared_reason),
     // jsonb vuelve ya parseado, pero la columna no tiene CHECK: se comprueba la
     // forma antes de confiar. Sin esto, cualquier valor truthy sin las claves
     // esperadas (un {} escrito a mano) dejaba la charla con una consulta abierta
@@ -500,9 +502,28 @@ export function createRepositories() {
       await exec('UPDATE conversations SET mode = $2, updated_at = now() WHERE id = $1', [id, mode]);
     },
 
+    /**
+     * Prende o apaga la alerta de la charla.
+     *
+     * Al APAGARLA se anota qué motivo tenía y cuándo. Es lo que después permite
+     * no volver a encenderla por exactamente lo mismo: sin esto, el aviso del
+     * comprobante revivía con la siguiente foto y desde el local se veía como que
+     * el botón de devolver al bot no hacía nada.
+     *
+     * Las dos columnas nuevas se calculan en el mismo UPDATE que pisa
+     * `attention_reason`, y eso está bien a propósito: en Postgres el lado
+     * derecho de un SET ve la fila VIEJA, así que `attention_reason` de acá abajo
+     * es el motivo que estaba, no el que se está escribiendo.
+     */
     async setAttention(id: string, needs: boolean, reason: string | null): Promise<void> {
       await exec(
-        `UPDATE conversations SET needs_attention = $2, attention_reason = $3, updated_at = now()
+        `UPDATE conversations SET
+           needs_attention = $2,
+           attention_cleared_at = CASE WHEN $2 THEN attention_cleared_at ELSE now() END,
+           attention_cleared_reason =
+             CASE WHEN $2 THEN attention_cleared_reason ELSE attention_reason END,
+           attention_reason = $3,
+           updated_at = now()
          WHERE id = $1`,
         [id, needs, reason],
       );
@@ -1628,7 +1649,10 @@ export const DEFAULT_SETTINGS: BotSettings = {
   openHour: 8,
   closeHour: 22,
   // El local cierra 21:30. De ahi a las 8 el bot atiende pero no toma pedidos.
-  pedidosDesde: '08:00',
+  // 08:30 y no 08:00: abren a las 8, pero hasta que las chicas entran y revisan
+  // el stock no se puede confirmar nada. El local: "a veces cierran sin stock y
+  // abren con otro stock".
+  pedidosDesde: '08:30',
   pedidosHasta: '21:30',
   address: 'Marcos Paz 473, San Miguel de Tucumán',
   transferAlias: 'MISKATUC',

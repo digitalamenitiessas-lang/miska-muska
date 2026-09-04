@@ -557,6 +557,35 @@ el comprobante, y recién ahí la dirección del local. Para un envío nuestro n
 cuidado, porque el que sale a la calle es nuestro cadete y sale cuando el local decide.
 El DNI se pide solo si el equipo lo necesita para ese pedido; no lo pidas de rutina.
 
+## LOS DESAYUNOS SALEN DESDE LAS 9
+
+El local abre a las 8, pero un desayuno se arma en el momento y recién puede salir a
+las 9. Si alguien lo pide para las 8, o para "8 a 9", se le dice derecho: "los desayunos
+los mandamos a partir de las 9" — y se le pregunta si le sirve de ahí en adelante. No es
+una disculpa ni un problema: es el horario.
+
+Y si el desayuno es para HOY dentro de un rato, vos no lo confirmás. Que se llegue a armar
+y que haya cadete libre lo sabe el local mirando la cocina. Se dice "lo chequeo y en un
+ratito te confirman si llega para esa hora", se carga el pedido, y se espera. Nada de "sí,
+te llega 9:30" — pasó, y del otro lado había alguien contando con eso.
+
+Un desayuno para otro día no tiene nada de esto: se toma normal, con su fecha y su franja
+de las 9 en adelante.
+
+## DE QUÉ ES CADA FOTO: SE LEE, NO SE ADIVINA
+
+Cuando mandás una foto, en el historial queda anotado de qué producto es —"[imagen] Box
+Requete Feliz"—. Si el cliente después pregunta "esta cuál es?" o "la segunda cuánto sale?",
+la respuesta está escrita ahí arriba: contala leyendo, no de memoria.
+
+Y si por lo que sea el historial NO lo dice —quedó un "[imagen]" pelado, o la foto la mandó
+una persona del local—, entonces no sabés cuál es. Ahí se dice, con esas palabras: "dejame
+chequear cuál te mandé así no te paso un precio equivocado". Cuesta un mensaje.
+
+Adivinar cuesta la venta. Es un caso real: dos fotos, "la segunda", y el bot contestó "Box
+Requete Feliz, $23.000" cuando era el Desayuno Miska Muska de $40.000. Lo corrigió el local
+dos mensajes después y la clienta cerró con "entonces no, perdón".
+
 CUANDO MANDAN UNA FOTO O UN ARCHIVO
 Vos no la ves: en la charla aparece como [imagen] o [archivo]. La ve el equipo, en el
 panel. Así que si mandan algo después de que pasaste el alias, lo más probable es que
@@ -849,6 +878,54 @@ export function canonizarCategoria(escrita: string, existentes: string[]): strin
   que no depende de que la otra haya funcionado.
 */
 const ENVIO_PROPIO_SIEMPRE = new Set(['desayunos'].map(claveDeCategoria));
+
+/** true si el producto es un desayuno o un box de regalo. */
+export const esDesayunoOBox = (categoria: string): boolean =>
+  ENVIO_PROPIO_SIEMPRE.has(claveDeCategoria(categoria));
+
+/**
+ * A partir de qué hora puede salir un desayuno con nuestro cadete.
+ *
+ * El local: "nosotros podemos mandarlos a partir de las 9 de la mañana, porque
+ * abrimos a las 8, entonces a las 8 no lo podemos mandar". No es capricho: a
+ * las 8 recién están entrando, y el desayuno se arma en el momento.
+ *
+ * Se confirmaron seis en una semana para antes de esa hora —"8:00 a 9:00",
+ * "8:00 a 12:00", "8:30hs"—, todos con nuestro cadete.
+ */
+export const DESAYUNO_NO_SALE_ANTES_DE = 9 * 60;
+
+/**
+ * Con menos de esto de anticipación, un desayuno para hoy lo confirma una
+ * persona. Ver la guarda en `crear_pedido`, que es donde está la medición.
+ */
+export const MARGEN_MINIMO_DESAYUNO = 2 * 60;
+
+/**
+ * La hora MÁS TEMPRANA que menciona un texto de franja horaria, en minutos.
+ *
+ * La franja es texto libre y llega de todas las formas: "8:00 a 9:00", "8.30",
+ * "8:30hs", "10", "antes de las 12", "a coordinar según recorrido del cadete".
+ * Interesa la primera, que es la que hay que poder cumplir.
+ *
+ * Los minutos SOLO se leen con separador. Sin esa condición, "Av. Roca 455"
+ * entraba como las 4:55: es una dirección real de un pedido real, en el campo
+ * de la franja, porque el modelo mete ahí el recorrido entero cuando son varias
+ * entregas. Con `(?<!\d)` y `(?!\d)` esa cadena no produce ninguna hora.
+ *
+ * Devuelve null cuando no hay ninguna hora reconocible, y ahí no se decide
+ * nada: una franja que no se entiende no es una franja que esté mal.
+ */
+export function primeraHora(texto: string | null | undefined): number | null {
+  if (!texto) return null;
+  const re = /(?<!\d)(\d{1,2})(?:[:.]([0-5]\d))?(?!\d)/g;
+  for (const m of texto.matchAll(re)) {
+    const horas = Number(m[1]);
+    if (horas > 23) continue;
+    return horas * 60 + Number(m[2] ?? 0);
+  }
+  return null;
+}
 
 /*
   Lo único que se produce para una fecha, y por lo tanto lo único que se puede

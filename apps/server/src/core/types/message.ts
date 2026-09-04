@@ -139,7 +139,23 @@ export interface ListSection {
 
 export type OutboundContent =
   | { kind: 'text'; text: string; previewUrl?: boolean }
-  | { kind: 'image'; url?: string; caption?: string }
+  /**
+   * `caption` es lo que el cliente lee debajo de la foto. `alt` es qué se ve,
+   * y NO se manda al canal: queda en el registro y es lo que el modelo relee
+   * en el próximo turno.
+   *
+   * Existen los dos porque son cosas distintas. Mandar tres fotos con el
+   * nombre escrito en cada una queda horrible, así que el epígrafe casi
+   * siempre va vacío; pero entonces en el historial quedan tres `[imagen]`
+   * idénticas y el modelo no tiene forma de saber cuál mandó primero.
+   *
+   * Pasó, y costó una venta. El bot mandó dos fotos, la clienta preguntó "esta
+   * cuál es?", él repreguntó "la primera o la segunda?", ella dijo "la
+   * segunda" — y el bot contestó "el Box Requete Feliz, $23.000" cuando la
+   * segunda era el Desayuno Miska Muska de $40.000. Tuvo que corregirlo el
+   * local y la clienta se fue: "entonces no, perdón".
+   */
+  | { kind: 'image'; url?: string; caption?: string; alt?: string }
   | { kind: 'document'; url?: string; filename?: string; caption?: string }
   | { kind: 'buttons'; text: string; buttons: QuickReplyButton[]; footer?: string }
   | { kind: 'list'; text: string; buttonLabel: string; sections: ListSection[]; footer?: string }
@@ -216,8 +232,12 @@ export function describeOutbound(content: OutboundContent): string {
   switch (content.kind) {
     case 'text':
       return content.text;
-    case 'image':
-      return content.caption ? `[imagen] ${content.caption}` : '[imagen]';
+    case 'image': {
+      // El epígrafe si lo hubo; si no, el rótulo interno. Lo que no puede
+      // quedar es un "[imagen]" pelado: es lo que hace que el modelo adivine.
+      const rotulo = content.caption ?? content.alt;
+      return rotulo ? `[imagen] ${rotulo}` : '[imagen]';
+    }
     case 'document':
       return `[archivo${content.filename ? ` ${content.filename}` : ''}]`;
     case 'buttons':

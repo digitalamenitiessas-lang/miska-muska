@@ -20,6 +20,10 @@ import type {
 import {
   aliasDeCursos,
   claveDeCategoria,
+  DESAYUNO_NO_SALE_ANTES_DE,
+  MARGEN_MINIMO_DESAYUNO,
+  esDesayunoOBox,
+  primeraHora,
   itemsQueTocanLaConsulta,
   nombreDeWhatsApp,
   normalizarNombre,
@@ -29,7 +33,7 @@ import {
   type OrderDraft,
 } from '../policies/rules.js';
 import { llegoComprobante } from '../policies/comprobantes.js';
-import { localToday } from '../store/db.js';
+import { localMinutes, localToday } from '../store/db.js';
 import { renderQuickReply } from './persona.js';
 import { esSoloUnSaludo, sinSaludoInicial } from '../policies/writing.js';
 import { bus, log } from '../events/bus.js';
@@ -75,7 +79,7 @@ export interface ToolContext {
      * solo ahí, sin tocar nada de esto.
      */
     /** Salen ANTES del texto del turno: la foto es la respuesta, no la ilustración. */
-    photos?: Array<{ url: string; caption?: string }>;
+    photos?: Array<{ url: string; caption?: string; alt?: string }>;
   };
 }
 
@@ -688,12 +692,11 @@ export async function executeTool(
           return {
             ok: false,
             error:
-              `Ahora el local está cerrado y los pedidos se toman de ${settings.pedidosDesde} ` +
-              `a ${settings.pedidosHasta}. NO cargues este pedido y NO le digas que quedó ` +
-              'anotado. Contestale todo lo que pregunte, dejá la charla lista —qué quiere, ' +
-              'para cuándo, cómo lo recibe— y decile que apenas abran a la mañana alguien del ' +
-              `local se lo toma y le confirma. Que no se quede pensando que puede pasar a ` +
-              'retirarlo temprano, que es lo que estaba pasando.',
+              `Ahora no se toman pedidos: se toman de ${settings.pedidosDesde} a ` +
+              `${settings.pedidosHasta}. NO lo cargues, NO le digas que quedó anotado y NO le ` +
+              'confirmes ningún horario de entrega ni de retiro. Contestale lo que pregunte ' +
+              `—precios, qué hay, cómo funciona— y decile que a las ${settings.pedidosDesde} ` +
+              'alguien del local le confirma. Que quede clarísimo que todavía NO está tomado.',
           };
         }
 
@@ -957,6 +960,69 @@ export async function executeTool(
               '\nExplicale al cliente con tus palabras y resolvé lo que falta antes de reintentar.',
           };
         }
+
+        /*
+          LOS DESAYUNOS NO SALEN ANTES DE LAS NUEVE.
+
+          El local abre a las 8 y el desayuno se arma en el momento, así que
+          antes de las 9 no hay nada que mandar. Textual: "podemos mandarlos a
+          partir de las 9 de la mañana, porque nosotros abrimos a las 8,
+          entonces a las 8 no lo podemos mandar".
+
+          Esto sí lo puede decir el bot solo —es un dato nuestro, no depende de
+          nadie—, así que rebota y se lo explica al cliente en vez de escalar.
+
+          Medido sobre 30 días: habría rechazado 4 pedidos, los 4 mal
+          ("7:00 a 8:00", "8:00 a 9:00", "8:00 a 12:00", "8:30hs"), y ni uno de
+          los que no son desayuno.
+        */
+        const llevaDesayuno = items.some((i) => {
+          const p = i.productId ? productsById.get(i.productId) : undefined;
+          return p ? esDesayunoOBox(p.category) : false;
+        });
+        const arranca = primeraHora(draft.deliveryTime);
+        if (
+          llevaDesayuno &&
+          modalidad === 'cadete-miska' &&
+          arranca !== null &&
+          arranca < DESAYUNO_NO_SALE_ANTES_DE
+        ) {
+          return {
+            ok: false,
+            error:
+              'Un desayuno o un box no lo podemos mandar antes de las 9 de la mañana: el local ' +
+              'abre a las 8 y se arma en el momento. NO cargues el pedido con esa hora. ' +
+              'Decíselo así, sin vueltas y sin pedir disculpas de más —"los desayunos salen a ' +
+              'partir de las 9"— y preguntale si le sirve de 9 en adelante. Cuando te diga la ' +
+              'hora nueva, reintentá.',
+          };
+        }
+
+        /*
+          UN DESAYUNO PARA DENTRO DE UN RATO LO CONFIRMA UNA PERSONA.
+
+          El caso del local, tal cual: "decían '¿pueden mandarme un desayuno a
+          las 9:30?' y él sí le confirmaba. Era dentro de media hora que quería
+          que le llegue". Si hay cadete libre y si se llega a armar no lo sabe
+          el bot; lo sabe el local, mirando la cocina.
+
+          El pedido SÍ se carga. Un pedido que no queda en ninguna fila es el
+          otro problema que ya costó plata —ventas cobradas y sin registrar—.
+          Lo que cambia es lo que el bot dice: chequea, no confirma.
+
+          Dos horas, y no "el mismo día". Medido sobre 30 días de pedidos
+          reales: con "mismo día" se derivaban 13, y varios tenían horas de
+          sobra (uno a las 15:11 para las 20:00). Con dos horas se derivan 9,
+          uno cada tres días, y entran los que de verdad no cierran: tres de
+          ellos tenían la franja YA EMPEZADA cuando el bot los tomó —"09:00 a
+          11:00" pedido 09:37—.
+
+          Sin hora también entra: en un desayuno para hoy, "lo antes posible"
+          quiere decir ahora.
+        */
+        const paraHoy = (draft.deliveryDate ?? localToday()) === localToday();
+        const margen = arranca === null ? -1 : arranca - localMinutes();
+        const apuradoParaHoy = llevaDesayuno && paraHoy && margen < MARGEN_MINIMO_DESAYUNO;
 
         /** Cierre común a los dos caminos de escritura. */
         const cerrarPedido = async (): Promise<void> => {
@@ -1263,10 +1329,40 @@ export async function executeTool(
         bus.emit({ type: 'order', order });
         log('info', `Pedido ${order.number} creado por el bot`, { total, items: items.length });
 
+        if (apuradoParaHoy) {
+          /*
+            Solo avisa: la charla se queda con el bot, que tiene que seguir
+            atendiendo mientras el local mira si llega. Y si además es con
+            nuestro cadete, la guarda de envío para hoy del pipeline pisa este
+            motivo con uno más preciso; por eso no se duplica desde acá.
+          */
+          ctx.effects.escalate = {
+            reason: 'desayuno_para_hoy',
+            summary:
+              `El bot tomó el pedido ${order.number} con un desayuno para HOY ` +
+              `${draft.deliveryTime ? `(${draft.deliveryTime})` : 'lo antes posible'}. ` +
+              'Confirmá si llegamos a armarlo y mandarlo. NO se lo confirmé.',
+            soloAvisar: true,
+          };
+          log('info', `Desayuno para hoy en el pedido ${order.number}: lo confirma el local.`);
+        }
+
         return {
           ok: true,
           data: {
             ...orderView(order),
+            ...(apuradoParaHoy
+              ? {
+                  pendiente_de_confirmacion: true,
+                  instruccion_desayuno:
+                    'ESTE DESAYUNO ES PARA DENTRO DE UN RATO Y NO SE LO CONFIRMES. Que llegue ' +
+                    'a tiempo depende de la cocina y del cadete, y eso lo sabe el local, no ' +
+                    'vos. Ya le avisé. Decile que lo estás chequeando y que en un ratito le ' +
+                    'confirman si llega para esa hora. No le digas que sí, no le des una hora ' +
+                    'de entrega y no le pidas la transferencia todavía: si después no llega, ' +
+                    'la que queda mal es la clienta que ya pagó.',
+                }
+              : {}),
             /*
               El texto es largo a propósito y va acá y no solo en el prompt: es
               el momento exacto en el que el modelo se equivoca, y una regla
@@ -1492,6 +1588,9 @@ export async function executeTool(
           ctx.effects.photos.push({
             url,
             caption: typeof input.texto === 'string' ? input.texto.trim() || undefined : undefined,
+            // Hay dos cartas y no son la misma. Sin el rótulo, en el historial
+            // quedan las dos como "[imagen]" y el turno siguiente no sabe cuál mandó.
+            alt: nombre,
           });
 
           return {
@@ -1589,7 +1688,13 @@ export async function executeTool(
           };
         }
         const texto = typeof input.texto === 'string' ? input.texto.trim() : '';
-        ctx.effects.photos.push({ url: producto.imageUrl, caption: texto || undefined });
+        // El `alt` no lo ve el cliente: es para que en el próximo turno el
+        // historial diga cuál foto fue esta y el modelo no tenga que adivinar.
+        ctx.effects.photos.push({
+          url: producto.imageUrl,
+          caption: texto || undefined,
+          alt: producto.name,
+        });
 
         return {
           ok: true,

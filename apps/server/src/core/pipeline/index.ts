@@ -94,6 +94,16 @@ const MAX_ADJUNTOS_POR_CHARLA_DIA = 20 * 1024 * 1024;
 */
 const MAX_DESCARGAS_A_LA_VEZ = 3;
 
+/**
+ * Cuánto se queda callada una alerta que una persona apagó a mano.
+ *
+ * Doce horas: cubre el día de trabajo entero (abren 8, cierran 21:30), así que
+ * un comprobante que apagaron a la mañana no vuelve a la tarde por lo mismo.
+ * Y no cubre el día siguiente, que es cuando una transferencia nueva sí tiene
+ * que avisar aunque el texto del motivo sea idéntico.
+ */
+const SILENCIO_TRAS_APAGARLA_MS = 12 * 60 * 60 * 1000;
+
 /*
   Tipos que se guardan tal cual. Cualquier otra cosa queda como binario a secas.
 
@@ -366,6 +376,36 @@ export class Pipeline {
           : '[comprobante] Cargá este pedido con el botón de la ficha: mandó la transferencia ' +
             'y no hay ningún pedido cargado en esta charla. Si no, queda cobrado y sin ' +
             'registrar en ningún lado.';
+
+      /*
+        LA MISMA ALERTA, APAGADA A MANO, NO VUELVE SOLA.
+
+        El local: "cuando ponemos devolver al bot sigue apareciendo que necesita
+        humano, como que no se destraba". El botón funcionaba; lo que pasaba es
+        que esta alerta se vuelve a encender con cada imagen que manda el
+        cliente, y `ventaSinFila` sigue siendo cierto mientras nadie cargue el
+        pedido. La apagaban, llegaba la segunda foto —el comprobante de vuelta,
+        una captura del pedido, la foto de la puerta— y volvía idéntica.
+
+        Medido sobre tres días de producción: 155 avisos en 116 charlas, y 32 de
+        esas charlas lo recibieron dos veces o más. Una lo recibió cinco.
+
+        Se compara el motivo COMPLETO, no solo que esté apagada. Si aparece un
+        pedido y ahora hay que confirmar un pago, el texto cambia y eso sí es
+        información nueva: vuelve a sonar. Y se acota a doce horas para que el
+        comprobante de pasado mañana no herede el silencio de hoy.
+      */
+      const alDia = await this.#repos.conversations.get(conversation.id);
+      const apagadaHace = alDia?.attentionClearedAt
+        ? Date.now() - Date.parse(alDia.attentionClearedAt)
+        : Infinity;
+      if (alDia?.attentionClearedReason === motivo && apagadaHace < SILENCIO_TRAS_APAGARLA_MS) {
+        log(
+          'info',
+          `Comprobante repetido (${conversation.id}): ya apagaron este aviso, no insisto.`,
+        );
+        return;
+      }
 
       await this.#repos.conversations.setAttention(conversation.id, true, motivo);
       const refrescada = await this.#repos.conversations.get(conversation.id);
@@ -1188,6 +1228,14 @@ export class Pipeline {
             kind: 'image' as const,
             url: f.url,
             caption: hayTexto ? undefined : f.caption,
+            /*
+              El rótulo va SIEMPRE, se caiga o no el epígrafe. No sale al canal
+              —la clienta ve la foto sola, como corresponde— pero queda en el
+              texto del mensaje guardado, que es lo que el modelo relee después.
+              Esta línea es la que evita el "la segunda es el Box Requete Feliz"
+              cuando la segunda era un desayuno de $40.000.
+            */
+            alt: f.alt,
           };
         }),
       );
