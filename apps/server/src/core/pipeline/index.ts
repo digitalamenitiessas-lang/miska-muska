@@ -34,7 +34,8 @@ import { localToday } from '../store/db.js';
 import { agotadosConPrecio, preciosQueNoCoinciden } from '../policies/precios.js';
 import { diceQueQuedoReservado, llegoComprobante } from '../policies/comprobantes.js';
 import { yaLoDijo } from '../policies/repeticion.js';
-import { avisaQueLlego, AVISO_DE_LLEGADA } from '../policies/llegadas.js';
+import { avisaQueLlego, AVISO_DE_LLEGADA, RESPUESTA_A_LA_LLEGADA } from '../policies/llegadas.js';
+import { yaDijeronQueEstaListo } from '../policies/listo.js';
 import {
   afirmaQueYaSalio,
   comprometeNuestroCadete,
@@ -866,13 +867,41 @@ export class Pipeline {
     let guardaEscalo = false;
     let motivoGuarda = '';
 
+    /*
+      SI UNA PERSONA DEL LOCAL YA DIJO QUE ESTÁ LISTO, ACÁ NO HAY NADA QUE HACER.
+
+      La guarda de abajo mira la BASE: si el pedido figura en 0 de $37.000,
+      asume que falta cobrar. Pero el pago lo confirma una persona apretando un
+      botón, y cuando la venta se cierra a mano en el chat ese botón muchas
+      veces no se aprieta. El pedido queda impago en el sistema y entregado en
+      la realidad.
+
+      Entonces pasaba esto: alguien escribía "listo sofi para retirar!", la
+      clienta avisaba "ya está llegando el Uber", y el bot le contestaba "lo
+      estamos chequeando y ya nos ponemos a armar tu pedido". El local:
+      "tendría que tener coherencia ahí y entender que si ya le hemos dicho que
+      ya retira, no contestarle nada".
+
+      Entre lo que dice la base y lo que dijo una persona mirando el pedido,
+      manda la persona. Ver core/policies/listo.ts para los patrones y la
+      medición.
+
+      VA ATADO A LA FECHA DEL PEDIDO, y no alcanza con que en algún momento
+      alguien haya dicho "listo". Hay clientas que compran dos veces el mismo
+      día: un "ya lo entregamos" de la compra de la mañana no puede desactivar
+      la guarda sobre el pedido nuevo, sin pagar, de la tarde. Solo cuenta lo
+      que se dijo DESPUÉS de que ese pedido se cargó.
+    */
+    const cerroLaVentaEn = yaDijeronQueEstaListo(history);
+
     const abiertos = await repos.orders.list({ conversationId, vigentes: true, limit: 5 });
     const sinCobrar = abiertos.find(
       (o) =>
         o.status !== 'cancelado' &&
         o.total > 0 &&
         o.paid <= 0 &&
-        (o.deliveryMode === 'uber-cliente' || o.deliveryMode === 'retira-local'),
+        (o.deliveryMode === 'uber-cliente' || o.deliveryMode === 'retira-local') &&
+        !(cerroLaVentaEn && Date.parse(cerroLaVentaEn) >= Date.parse(o.createdAt)),
     );
     if (sinCobrar && settings.address.trim()) {
       const direccion = settings.address.trim().toLowerCase();
@@ -984,6 +1013,33 @@ export class Pipeline {
         son las dos cosas que evitan que esto se coma un "dale, cualquier cosa
         avisame" repetido con toda razón.
       */
+      /*
+        "ESTÁ AFUERA" TIENE UNA SOLA RESPUESTA BUENA, Y NO LA ESCRIBE EL MODELO.
+
+        Contestaba "Perfecto, ya le avisamos que está esperando 🙌", y el local
+        preguntó "¿a quién le avisa?". Es un acuse de recibo que no le sirve a
+        nadie: quien escribe tiene un chofer parado en la vereda y lo que
+        necesita es algo para hacer.
+
+        Se reemplaza en vez de pedírselo al prompt porque la situación es
+        siempre la misma y la respuesta también, y porque son los treinta
+        segundos en que menos se puede improvisar. La alerta del panel ya salió
+        antes, apenas entró el mensaje: ver #avisarSiLlego.
+
+        Solo cuando el mensaje entrante es CORTO. "Está afuera" es un aviso y se
+        contesta así; un mensaje largo que además menciona que llegó el Uber
+        puede traer una pregunta de verdad, y esa la contesta el modelo.
+      */
+      if (
+        ultimoEntrante.contentKind === 'text' &&
+        ultimoEntrante.text.trim().length <= 120 &&
+        avisaQueLlego(ultimoEntrante.text)
+      ) {
+        log('info', `Avisaron que llegó el chofer (${conversationId}): respuesta fija.`);
+        contenido.text = RESPUESTA_A_LA_LLEGADA;
+        continue;
+      }
+
       if (yaLoDijo(contenido.text, history)) {
         log(
           'warn',

@@ -37,6 +37,17 @@ const ESTA_ESPERANDO: RegExp[] = [
   /\b(el|la|un|una) (uber|didi|cadete|chofer|conductor|moto|remis|delivery)\b[^.?!]{0,25}\b(esta|llego|afuera|en la puerta|ahi|esperando)\b/,
   /\b(ya )?lleg(o|aron)\b[^.?!]{0,20}\b(uber|didi|cadete|chofer|moto|remis)\b/,
   /\bya (esta|llego) (el|la) (uber|didi|cadete|chofer|moto|remis)\b/,
+  /*
+    "Ya está llegando el Uber" es un aviso igual de urgente, y además el mejor:
+    llega un minuto ANTES de que el chofer frene en la puerta, que es justo el
+    minuto que hace falta para salir con el paquete.
+
+    Se agregó después de medirlo: sobre 7.707 mensajes entrantes de veinticinco
+    días suma 8 casos, los 8 de verdad, sin ningún falso positivo. Los "me está
+    llegando" —la clienta contando que YA lo recibió— los saca NO_ES.
+  */
+  /\b(ya )?(esta|estan) (llegando|por llegar)\b/,
+  /\bya (viene|sale|salio) (el|la|un|una) (uber|didi|cadete|chofer|moto|remis)\b/,
 ];
 
 /*
@@ -59,6 +70,31 @@ const NO_ES: RegExp[] = [
   /\bcuando\b/,
   /\bsi puedo\b/,
 ];
+
+/**
+ * Lo que se le contesta a quien avisa que el chofer llegó.
+ *
+ * El bot contestaba "Perfecto, ya le avisamos que está esperando 🙌" y el local
+ * preguntó lo obvio: "¿a quién le avisa?". Del otro lado eso no significa nada.
+ *
+ * Lo que pidió el local, con sus palabras: "cuando digan que el Uber está
+ * fuera, que responda: perfecto, ya se lo entregamos, si podés avisale que se
+ * acerque hasta la ventanita de Miska Muska con tu nombre. A veces hay Ubers
+ * que son re piolas y se acercan, y ahí nos salvaría".
+ *
+ * El segundo renglón es el que trabaja: le da al cliente algo para hacer que
+ * de verdad ayuda —que el chofer se acerque y pregunte por su nombre— en vez de
+ * un acuse de recibo que no le sirve a nadie.
+ *
+ * El primero se dice en presente y no en pasado ("ya salimos a entregárselo",
+ * no "ya se lo entregamos"): el bot no sabe si alguien llegó al mostrador
+ * todavía, y afirmar una entrega que no pasó es la misma clase de mentira que
+ * ya frena `afirmaQueYaSalio`.
+ */
+export const RESPUESTA_A_LA_LLEGADA =
+  'Perfecto! Ya salimos a entregárselo 🙌🏼\n\n' +
+  'Si podés, avisale que se acerque a la ventanita de Miska Muska y pregunte por tu ' +
+  'nombre, así lo tiene enseguida 🩷';
 
 /** ¿Este mensaje avisa que hay alguien esperando en la puerta? */
 export function avisaQueLlego(texto: string): boolean {
