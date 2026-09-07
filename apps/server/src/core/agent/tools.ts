@@ -24,6 +24,7 @@ import {
   DOMINGO_ABRE,
   esDomingo,
   MARGEN_MINIMO_DESAYUNO,
+  NOCHE_DESDE,
   esDesayunoOBox,
   primeraHora,
   itemsQueTocanLaConsulta,
@@ -1081,6 +1082,80 @@ export async function executeTool(
                 'hora. Decíselo así, sin vueltas y sin pedir disculpas de más —"los desayunos ' +
                 'salen a partir de las 9"— y preguntale si le sirve de 9 en adelante. Cuando ' +
                 'te diga la hora nueva, reintentá.',
+          };
+        }
+
+        /*
+          UN BOX O DESAYUNO AGOTADO, PARA HOY, LO CONFIRMA UNA PERSONA.
+
+          El local: "si quiere un box/desayuno para el mismo día o 'ya para ya'
+          y figura sin stock, NO confirmar disponibilidad: derivar a una persona
+          del local para que confirme".
+
+          Es distinto de rechazarlo. Que el panel diga que no hay no significa
+          que no se pueda armar: significa que no hay uno hecho. Eso lo sabe
+          quien está en la cocina, no el bot.
+        */
+        const agotadosParaHoy = entrega === localToday()
+          ? items.filter((i) => {
+              const p = i.productId ? productsById.get(i.productId) : undefined;
+              return p ? esDesayunoOBox(p.category) && !p.availableToday : false;
+            })
+          : [];
+        if (agotadosParaHoy.length) {
+          ctx.effects.escalate = {
+            reason: 'desayuno_sin_stock_hoy',
+            summary:
+              `Quiere ${agotadosParaHoy.map((i) => `${i.quantity}x ${i.description}`).join(', ')} ` +
+              'para HOY y en el panel figuran sin stock. Confirmá si se puede armar. No se lo confirmé.',
+            soloAvisar: true,
+          };
+          log('info', `Box/desayuno sin stock para hoy derivado (${ctx.conversation.id})`);
+          return {
+            ok: true,
+            data: {
+              pendiente_de_validacion: true,
+              instruccion:
+                'Eso hoy figura sin stock, pero eso NO quiere decir que no se pueda: quiere ' +
+                'decir que no hay uno hecho, y si se llega a armar lo sabe la cocina. No ' +
+                'cargues el pedido y no vuelvas a llamar esta herramienta. Decile que lo estás ' +
+                'chequeando y que en un ratito le confirman. No le digas que no hay, no le ' +
+                'confirmes que sí, y no le pidas la transferencia. Ya avisé al local.',
+            },
+          };
+        }
+
+        /*
+          Y DE NOCHE, UN DESAYUNO PARA MAÑANA TAMPOCO SE CONFIRMA SOLO.
+
+          El local: "si el cliente escribe a la noche, desde las 20 hs en
+          adelante, para encargar un desayuno para el día siguiente, también
+          derivar a una persona para que confirme a la mañana". A esa hora ya
+          nadie está mirando la producción del día siguiente, y confirmarlo es
+          comprometer a quien entra a las 8.
+        */
+        const manana = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', {
+          timeZone: 'America/Argentina/Tucuman',
+        });
+        if (llevaDesayuno && entrega === manana && localMinutes() >= NOCHE_DESDE) {
+          ctx.effects.escalate = {
+            reason: 'desayuno_de_noche_para_manana',
+            summary:
+              `Encargó ${items.map((i) => `${i.quantity}x ${i.description}`).join(', ')} para ` +
+              'MAÑANA, y ya es de noche. Confirmalo a la mañana. No se lo confirmé.',
+            soloAvisar: true,
+          };
+          log('info', `Desayuno de noche para mañana derivado (${ctx.conversation.id})`);
+          return {
+            ok: true,
+            data: {
+              pendiente_de_validacion: true,
+              instruccion:
+                'Es de noche y esto es para mañana: no lo confirmes vos. No cargues el pedido ' +
+                'y no vuelvas a llamar esta herramienta. Decile que a la mañana temprano se lo ' +
+                'confirman y que ahí le pasan todo. No le pidas la transferencia todavía. Ya ' +
+                'avisé al local.',
+            },
           };
         }
 

@@ -1044,6 +1044,15 @@ export function desayunoNoSaleAntesDe(fechaISO: string): number {
 export const MARGEN_MINIMO_DESAYUNO = 2 * 60;
 
 /**
+ * A partir de qué hora un desayuno para mañana ya no lo confirma el bot.
+ *
+ * El local: "si el cliente escribe a la noche, desde las 20 hs en adelante,
+ * para encargar un desayuno para el día siguiente, también derivar a una
+ * persona para que confirme a la mañana".
+ */
+export const NOCHE_DESDE = 20 * 60;
+
+/**
  * La hora MÁS TEMPRANA que menciona un texto de franja horaria, en minutos.
  *
  * La franja es texto libre y llega de todas las formas: "8:00 a 9:00", "8.30",
@@ -1348,15 +1357,38 @@ export function validateOrder(
     });
   }
 
+  /*
+    EL STOCK APAGADO FRENA LO DE HOY, NO LO DE LA SEMANA QUE VIENE.
+
+    Antes esto rechazaba cualquier producto apagado, mirara o no la fecha. Con
+    55 de 89 productos apagados un lunes cualquiera, eso quería decir que un
+    desayuno para el sábado se caía porque hoy no quedaba ninguno — y un
+    desayuno para el sábado se ARMA el sábado.
+
+    El local lo definió así: "el stock sirve para saber qué se puede entregar en
+    el momento, pero no para decidir qué desayunos/box ofrecer para encargos
+    futuros. Que estén apagados no significa que el bot deje de ofrecerlos; lo
+    que cambia es si puede confirmar el pedido o necesita validación humana".
+
+    La excepción son las cosas que NO se producen para una fecha —cookies,
+    brownies, alfajores, sorrentinos—: ahí el stock lo maneja el local durante
+    el día y nadie sabe cuándo vuelve a haber, así que tomarlas para el sábado
+    es prometer algo que nadie va a preparar. Esas se rechazan igual.
+  */
+  const paraHoy = (draft.deliveryDate ?? localToday()) === localToday();
   const unavailable = draft.items
     .map((i) => (i.productId ? productsById.get(i.productId) : undefined))
-    .filter((p): p is Product => Boolean(p && !p.availableToday));
+    .filter((p): p is Product => Boolean(p && !p.availableToday))
+    .filter((p) => paraHoy || !seEncargaConAnticipacion(p.category));
   if (unavailable.length) {
     problems.push({
       code: 'no_disponible',
-      message:
-        `Hoy no hay ${unavailable.map((p) => p.name).join(', ')}. ` +
-        'Hay que avisarle y ofrecerle algo parecido de lo que sí tenemos.',
+      message: paraHoy
+        ? `Hoy no hay ${unavailable.map((p) => p.name).join(', ')}. ` +
+          'Hay que avisarle y ofrecerle algo parecido de lo que sí tenemos.'
+        : `${unavailable.map((p) => p.name).join(', ')} no se produce para una fecha: el ` +
+          'stock lo maneja el local durante el día y nadie sabe cuándo vuelve a haber. No lo ' +
+          'tomes para otro día; ofrecele algo de lo que sí hay hoy.',
     });
   }
 
