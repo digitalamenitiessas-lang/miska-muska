@@ -1825,3 +1825,15 @@ table.grid tbody tr:hover {
   content: ""; flex: 1; height: 1px; background: var(--line);
 }
 .dia-separador span { white-space: nowrap; }
+
+/* El recordatorio de la lista "para anotar". Ambar y no rojo: no es un error,
+   es una tarea pendiente que alguien tiene que hacer. */
+.aviso-anotar {
+  margin: 8px 12px 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--danger) 9%, transparent);
+  border: 1px solid color-mix(in srgb, var(--danger) 26%, transparent);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
