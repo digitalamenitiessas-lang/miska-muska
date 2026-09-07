@@ -20,10 +20,18 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
 
   app.get('/api/conversations', async (req) => {
     const query = req.query as Record<string, string | undefined>;
+    /*
+      El alias solo se lee cuando lo piden: la lista "sin anotar" lo necesita
+      para saber donde se estaba por cobrar, y la bandeja normal no.
+    */
+    const alias =
+      query.sinAnotar === '1' ? (await repos.settings.read()).transferAlias.trim() : undefined;
     const list = await repos.conversations.list({
       mode: query.mode as ConversationMode | undefined,
       channel: query.channel as ChannelId | undefined,
       needsAttention: query.needsAttention === '1',
+      fijadas: query.fijadas === '1',
+      sinAnotar: alias || undefined,
       sinLeer: query.sinLeer === '1',
       consultaAbierta: query.consulta === '1',
       limit: query.limit ? Number(query.limit) : 100,
@@ -159,6 +167,16 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
       eso el botón del panel dice "Descartar y sigo yo".
     */
     await repos.conversations.setAttention(id, false, null);
+    const conversation = await repos.conversations.get(id);
+    if (conversation) bus.emit({ type: 'conversation', conversation });
+    return { ok: true };
+  });
+
+  /** Fijar o soltar una charla. */
+  app.post('/api/conversations/:id/pinned', async (req) => {
+    const { id } = req.params as { id: string };
+    const { pinned } = req.body as { pinned: boolean };
+    await repos.conversations.setPinned(id, Boolean(pinned));
     const conversation = await repos.conversations.get(id);
     if (conversation) bus.emit({ type: 'conversation', conversation });
     return { ok: true };

@@ -82,6 +82,8 @@ export interface Conversation {
    */
   attentionClearedAt: string | null;
   attentionClearedReason: string | null;
+  /** Fijada arriba de la bandeja por alguien del equipo. */
+  pinned: boolean;
   /** Consulta de modificación abierta o recién contestada. null si no hay. */
   pendingReview: PendingReview | null;
   createdAt: string;

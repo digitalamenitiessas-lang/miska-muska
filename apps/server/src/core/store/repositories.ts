@@ -84,6 +84,7 @@ function toConversation(r: Row): Conversation {
     attentionReason: str(r.attention_reason),
     attentionClearedAt: isoOrNull(r.attention_cleared_at),
     attentionClearedReason: str(r.attention_cleared_reason),
+    pinned: Boolean(r.pinned),
     // jsonb vuelve ya parseado, pero la columna no tiene CHECK: se comprueba la
     // forma antes de confiar. Sin esto, cualquier valor truthy sin las claves
     // esperadas (un {} escrito a mano) dejaba la charla con una consulta abierta
@@ -349,6 +350,13 @@ export function createRepositories() {
         mode?: ConversationMode;
         channel?: ChannelId;
         needsAttention?: boolean;
+        fijadas?: boolean;
+        /**
+         * El alias de transferencia. Con él, la lista trae las charlas donde se
+         * pasó el alias y NO quedó ningún pedido cargado: la venta se cerró a
+         * mano y no está anotada en ningún lado.
+         */
+        sinAnotar?: string;
         /** Con mensajes sin leer. */
         sinLeer?: boolean;
         /** Con una consulta de modificación esperando respuesta. */
@@ -370,6 +378,55 @@ export function createRepositories() {
       }
       if (opts.needsAttention) where.push('c.needs_attention');
       if (opts.sinLeer) where.push('c.unread_count > 0');
+      if (opts.fijadas) where.push('c.pinned');
+      /*
+        SIN ANOTAR: se cerró una venta acá y no hay ningún pedido cargado.
+
+        El local: "los chicos se hacen un quilombo porque entran tantos pedidos
+        más rápido ahora que algunos se olvidan de anotar, sobre todo cuando
+        ellos intervienen y el bot no toma el pedido".
+
+        La señal es la misma que usa el aviso del comprobante: si en esta charla
+        se pasó el alias, alguien estaba por cobrar. Si además no hay ninguna
+        fila de pedido, esa venta no está en ningún lado. La diferencia con el
+        aviso es que ese salta una vez y este NO SE VA hasta que la anoten, que
+        es lo que hacía falta.
+
+        Se acota a siete días para que la lista sea una tarea y no un archivo.
+      */
+      if (opts.sinAnotar) {
+        args.push(`%${opts.sinAnotar}%`);
+        const alias = `$${args.length}`;
+        /*
+          NO ALCANZA CON QUE SE HAYA PASADO EL ALIAS.
+
+          Medido: con solo el alias salían 86 charlas de siete días, y ahí
+          adentro está toda la gente que pidió el precio, recibió el alias y
+          nunca transfirió. Una lista de 86 no es una tarea, es un cementerio, y
+          la dejan de mirar el primer día.
+
+          Lo que de verdad hay que anotar es donde ALGUIEN PAGÓ: se pasó el
+          alias y después llegó una foto o un archivo, que es como llega un
+          comprobante. Es la misma señal que usa el aviso del comprobante; la
+          diferencia es que ese salta una vez y esta lista no se va hasta que
+          carguen el pedido.
+        */
+        where.push(`NOT EXISTS (SELECT 1 FROM orders o WHERE o.conversation_id = c.id)
+          AND EXISTS (
+            SELECT 1 FROM messages alias_msg
+            WHERE alias_msg.conversation_id = c.id
+              AND alias_msg.direction = 'out'
+              AND alias_msg.created_at > now() - interval '7 days'
+              AND alias_msg.text ILIKE ${alias}
+              AND EXISTS (
+                SELECT 1 FROM messages captura
+                WHERE captura.conversation_id = c.id
+                  AND captura.direction = 'in'
+                  AND captura.content_kind IN ('image', 'document')
+                  AND captura.created_at > alias_msg.created_at
+              )
+          )`);
+      }
       /*
         Una consulta ABIERTA es la que todavía no tiene respuesta. El jsonb
         guarda las contestadas también —el bot las necesita 48 h para retomar
@@ -440,7 +497,7 @@ export function createRepositories() {
         `SELECT c.* FROM conversations c
          LEFT JOIN contacts ct ON ct.id = c.contact_id
          ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
-         ORDER BY GREATEST(
+         ORDER BY c.pinned DESC, GREATEST(
            COALESCE(c.last_inbound_at, c.created_at),
            COALESCE(c.last_outbound_at, c.created_at)
          ) DESC
@@ -515,6 +572,14 @@ export function createRepositories() {
      * derecho de un SET ve la fila VIEJA, así que `attention_reason` de acá abajo
      * es el motivo que estaba, no el que se está escribiendo.
      */
+    /** Fija o suelta una charla en la bandeja. */
+    async setPinned(id: string, pinned: boolean): Promise<void> {
+      await exec('UPDATE conversations SET pinned = $2, updated_at = now() WHERE id = $1', [
+        id,
+        pinned,
+      ]);
+    },
+
     async setAttention(id: string, needs: boolean, reason: string | null): Promise<void> {
       await exec(
         `UPDATE conversations SET

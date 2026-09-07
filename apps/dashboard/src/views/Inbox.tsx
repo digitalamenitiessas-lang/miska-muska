@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   api,
   type CajonDeRespuestas,
@@ -32,13 +32,31 @@ const ENTER_NO_ENVIA =
   typeof window.matchMedia === 'function' &&
   window.matchMedia('(pointer: coarse)').matches;
 
-type Filter = 'todas' | 'sin-leer' | 'consultas' | 'atencion' | 'bot' | 'humano';
+type Filter =
+  | 'todas'
+  | 'sin-leer'
+  | 'consultas'
+  | 'atencion'
+  | 'anotar'
+  | 'guardadas'
+  | 'bot'
+  | 'humano';
 
 const FILTERS: Array<{ id: Filter; label: string }> = [
   { id: 'todas', label: 'Todas' },
   { id: 'sin-leer', label: 'Sin leer' },
   { id: 'consultas', label: 'Consultas' },
   { id: 'atencion', label: 'Atención' },
+  /*
+    "Para anotar": se pasó el alias en la charla y no hay ningún pedido cargado.
+    O sea, alguien cerró una venta a mano y no quedó registrada.
+
+    El local: "los chicos se olvidan de anotar cuando ellos intervienen y el bot
+    no toma el pedido". La diferencia con la alerta del comprobante es que esa
+    salta una vez y esta NO SE VA hasta que carguen el pedido.
+  */
+  { id: 'anotar', label: '📝 Para anotar' },
+  { id: 'guardadas', label: '📌 Guardadas' },
   { id: 'bot', label: 'Bot' },
   { id: 'humano', label: 'Humano' },
 ];
@@ -176,6 +194,8 @@ export function Inbox({
     const params: Record<string, string> = { limit: '300' };
     if (texto.length >= 2) params.q = texto;
     if (filter === 'atencion') params.needsAttention = '1';
+    if (filter === 'anotar') params.sinAnotar = '1';
+    if (filter === 'guardadas') params.fijadas = '1';
     if (filter === 'sin-leer') params.sinLeer = '1';
     if (filter === 'consultas') params.consulta = '1';
     if (filter === 'bot') params.mode = 'bot';
@@ -217,6 +237,16 @@ export function Inbox({
           return Boolean(c.pendingReview && !c.pendingReview.resueltoEn);
         case 'atencion':
           return c.needsAttention;
+        case 'guardadas':
+          return c.pinned;
+        /*
+          "Para anotar" lo resuelve el servidor, que es el único que sabe si hay
+          un pedido cargado. Acá no se puede recalcular, así que se deja pasar
+          lo que vino: filtrarlo de nuevo con datos que el panel no tiene lo
+          vaciaría.
+        */
+        case 'anotar':
+          return true;
         case 'bot':
           return c.mode === 'bot';
         case 'humano':
@@ -259,6 +289,13 @@ export function Inbox({
     angosta se vuelve a la lista, porque si estabas leyendo un chat el filtro se
     aplicaría atrás y no lo verías.
   */
+  /* El recordatorio de la lista de "para anotar", que es una tarea y no un estado. */
+  const avisoDeAnotar =
+    filter === 'anotar'
+      ? 'Acá está lo que se cobró y NO quedó anotado: se pasó el alias y no hay ningún ' +
+        'pedido cargado en la charla. Cargalo con el botón de la ficha y la charla se va sola de esta lista.'
+      : null;
+
   useEffect(() => {
     if (!filtroPedido) return;
     setFilter(filtroPedido.filtro as Filter);
@@ -608,6 +645,24 @@ export function Inbox({
     }
   };
 
+  /*
+    Fijar la charla arriba de la bandeja.
+
+    Va al servidor y no al navegador: la bandeja la miran desde el mostrador y
+    desde el celular, y una charla guardada tiene que estar guardada para todos.
+  */
+  const fijar = async () => {
+    if (!selected || !detail) return;
+    try {
+      await api.setPinned(selected, !detail.conversation.pinned);
+      await loadDetail(selected);
+      onConversationsChanged();
+      toast(detail.conversation.pinned ? 'La solté' : 'Guardada arriba de todo');
+    } catch (err) {
+      toast(`No pude guardarla: ${String(err)}`);
+    }
+  };
+
   const setMode = async (mode: 'bot' | 'human' | 'muted') => {
     if (!selected) return;
     try {
@@ -839,6 +894,8 @@ export function Inbox({
           </div>
         ) : null}
 
+        {avisoDeAnotar ? <div className="aviso-anotar">{avisoDeAnotar}</div> : null}
+
         {visible.length === 0 ? (
           <Empty glyph={resultados ? '🔍' : '💬'}>
             {resultados
@@ -875,6 +932,7 @@ export function Inbox({
                 {c.mode === 'human' ? <Pill tone="rose">humano</Pill> : null}
                 {c.mode === 'muted' ? <Pill tone="grey">silenciada</Pill> : null}
                 {c.needsAttention ? <Pill tone="danger">atención</Pill> : null}
+                {c.pinned ? <span title="Guardada">📌</span> : null}
                 {c.pendingReview && !c.pendingReview.resueltoEn ? (
                   <Pill tone="warn">consulta</Pill>
                 ) : null}
@@ -959,6 +1017,14 @@ export function Inbox({
                 {detail.conversation.mode === 'muted' ? '🔔' : '🔕'}
               </button>
               <button
+                className="btn btn-sm btn-ghost"
+                title={detail.conversation.pinned ? 'Soltarla' : 'Guardarla arriba de la bandeja'}
+                aria-pressed={detail.conversation.pinned}
+                onClick={() => void fijar()}
+              >
+                {detail.conversation.pinned ? '📌' : '📍'}
+              </button>
+              <button
                 className="btn btn-sm btn-ficha"
                 onClick={() => setFichaAbierta(true)}
                 aria-expanded={fichaAbierta}
@@ -1020,9 +1086,18 @@ export function Inbox({
             ) : null}
 
             <div className="chat-body" ref={bodyRef} onScroll={alScrollear}>
-              {detail.messages.map((m) => (
-                <Bubble key={m.id} message={m} />
-              ))}
+              {detail.messages.map((m, i) => {
+                // Un separador cada vez que cambia el día, y también antes del
+                // primero: así el arranque de la charla también queda fechado.
+                const dia = diaDe(m.createdAt);
+                const previo = i > 0 ? diaDe(detail.messages[i - 1].createdAt) : null;
+                return (
+                  <Fragment key={m.id}>
+                    {dia !== previo ? <SeparadorDeDia dia={dia} /> : null}
+                    <Bubble message={m} />
+                  </Fragment>
+                );
+              })}
               {typing ? <div className="typing">el bot está escribiendo…</div> : null}
             </div>
 
@@ -1440,6 +1515,53 @@ function Adjunto({ message }: { message: Message }) {
  */
 export const sinEtiquetaDeAdjunto = (text: string) =>
   text.replace(/^\[(imagen|archivo[^\]]*|audio|mensaje de voz|ubicación[^\]]*)\]\s*/i, '');
+
+/**
+   El día al que pertenece un mensaje, en Tucumán.
+
+   Se compara por el string 'AAAA-MM-DD' y no por objetos Date: comparar fechas
+   con getDate() falla cruzando el mes, y el bot atiende hasta las 21:30 con el
+   servidor en UTC, donde a esa hora ya es el día siguiente.
+*/
+function diaDe(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Tucuman' });
+}
+
+/**
+ * Cómo se lee ese día: "Hoy", "Ayer", o la fecha.
+ *
+ * El local: "estoy viendo un chat y no puedo ver de cuándo son. ¿Viste que en
+ * WhatsApp te dice hoy, hace 3 días, te dice la fecha?". Sin esto, una charla
+ * de la semana pasada y una de esta mañana se leen igual, y alguien contesta
+ * "ahí te lo mando" a un pedido de hace cuatro días.
+ */
+function rotuloDeDia(dia: string): string {
+  const hoy = diaDe(new Date().toISOString());
+  if (dia === hoy) return 'Hoy';
+  const ayer = new Date();
+  ayer.setDate(ayer.getDate() - 1);
+  if (dia === diaDe(ayer.toISOString())) return 'Ayer';
+
+  const [a, m, d] = dia.split('-').map(Number);
+  const fecha = new Date(a, m - 1, d);
+  const dias = Math.round((Date.now() - fecha.getTime()) / 86_400_000);
+  const escrita = fecha.toLocaleDateString('es-AR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
+  // Dentro de la semana se agrega "hace N días", que es lo que de verdad se
+  // quiere saber; más viejo que eso, la fecha sola alcanza.
+  return dias <= 7 ? `${escrita} · hace ${dias} días` : escrita;
+}
+
+function SeparadorDeDia({ dia }: { dia: string }) {
+  return (
+    <div className="dia-separador">
+      <span>{rotuloDeDia(dia)}</span>
+    </div>
+  );
+}
 
 function Bubble({ message }: { message: Message }) {
   const out = message.direction === 'out';

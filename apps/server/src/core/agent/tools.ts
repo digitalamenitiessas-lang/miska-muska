@@ -964,6 +964,54 @@ export async function executeTool(
         }
 
         /*
+          UNA TORTA GRANDE NO LA TOMA EL BOT.
+
+          El local, después de un domingo malo: "lo de tortas ya definitivamente
+          mejor le contestemos nosotros". El caso que lo decidió: encargaron una
+          torta a las 21:30, cuando ya estaban apagando la computadora, para las
+          9 de la mañana siguiente. Nadie lo vio hasta que fue tarde.
+
+          Una torta es lo más caro que venden —nueve pedidos en la última semana,
+          $418.500— y lo único que hay que producir sí o sí para una fecha. Que
+          el bot la anote y nadie la mire es la peor combinación posible.
+
+          NO se carga el pedido: se avisa y se corta. Es lo que pidieron, con
+          estas palabras: "cuando digan que quieren encargar una torta,
+          'perfecto, ahora te confirmo la disponibilidad', y ahí que lo derive".
+          La contra es que si nadie contesta, la venta se cae en silencio; por
+          eso escala, que es lo que la pone arriba en la bandeja el mismo minuto.
+        */
+        const tortas = items.filter((i) => {
+          const p = i.productId ? productsById.get(i.productId) : undefined;
+          return p ? claveDeCategoria(p.category) === 'tortas' : false;
+        });
+        if (tortas.length) {
+          ctx.effects.escalate = {
+            reason: 'torta',
+            summary:
+              `Quiere encargar ${tortas.map((t) => `${t.quantity}x ${t.description}`).join(', ')}` +
+              `${draft.deliveryDate ? ` para el ${draft.deliveryDate}` : ''}` +
+              `${draft.deliveryTime ? ` (${draft.deliveryTime})` : ''}. ` +
+              'No le confirmé nada: las tortas las toma una persona.',
+            soloAvisar: true,
+          };
+          log('info', `Torta derivada a una persona (${ctx.conversation.id})`);
+          return {
+            ok: true,
+            data: {
+              pendiente_de_validacion: true,
+              instruccion:
+                'LAS TORTAS LAS CONFIRMA UNA PERSONA DEL LOCAL, no vos. No cargues el pedido y ' +
+                'no vuelvas a llamar esta herramienta en este turno. Decile algo como "perfecto, ' +
+                'ahora te confirmo la disponibilidad y te aviso" y nada más: no le confirmes la ' +
+                'fecha, no le pases el alias y no le pidas la transferencia. Ya avisé al local. ' +
+                'Si en el mismo pedido hay OTRAS cosas que no son torta, tampoco las cargues ' +
+                'ahora: se resuelve todo junto cuando conteste el local.',
+            },
+          };
+        }
+
+        /*
           LOS DESAYUNOS NO SALEN ANTES DE LAS NUEVE.
 
           El local abre a las 8 y el desayuno se arma en el momento, así que

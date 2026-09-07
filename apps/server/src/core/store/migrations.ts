@@ -440,6 +440,23 @@ ALTER TABLE conversations ADD COLUMN IF NOT EXISTS attention_cleared_at timestam
 ALTER TABLE conversations ADD COLUMN IF NOT EXISTS attention_cleared_reason text;
 `,
   },
+  {
+    id: 12,
+    name: 'charlas-fijadas',
+    sql: `
+-- Charlas que el equipo deja fijadas arriba de la bandeja.
+--
+-- El local: "¿se puede hacer que ellos fijen chat? Así como en WhatsApp, que te
+-- quedan arriba, algo que sea guardar chat, entonces ellos vayan ahí y sepan
+-- que han guardado ese chat por algo específico".
+--
+-- Va en la base y no en el navegador a propósito: la bandeja la miran desde la
+-- computadora del mostrador y desde el celular, y una charla fijada tiene que
+-- estar fijada para todos. En localStorage cada uno vería la suya.
+ALTER TABLE conversations ADD COLUMN IF NOT EXISTS pinned boolean NOT NULL DEFAULT false;
+CREATE INDEX IF NOT EXISTS idx_conversations_pinned ON conversations (pinned) WHERE pinned;
+`,
+  },
 ];
 
 /**

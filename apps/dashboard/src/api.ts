@@ -45,6 +45,7 @@ export interface Conversation {
   unreadCount: number;
   needsAttention: boolean;
   attentionReason: string | null;
+  pinned: boolean;
   pendingReview: PendingReview | null;
   createdAt: string;
   updatedAt: string;
@@ -415,6 +416,8 @@ export const api = {
   markRead: (id: string) => post<{ ok: true }>(`/api/conversations/${id}/read`),
   setMode: (id: string, mode: ConversationMode) =>
     post<{ ok: true }>(`/api/conversations/${id}/mode`, { mode }),
+  setPinned: (id: string, pinned: boolean) =>
+    post<{ ok: true }>(`/api/conversations/${id}/pinned`, { pinned }),
   setAttention: (id: string, needsAttention: boolean, reason?: string) =>
     post<{ ok: true }>(`/api/conversations/${id}/attention`, { needsAttention, reason }),
   answerReview: (id: string, respuesta: string, devolverAlBot = true) =>

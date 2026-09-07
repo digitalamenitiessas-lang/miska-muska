@@ -1813,3 +1813,15 @@ table.grid tbody tr:hover {
 /* El buscador de pedidos. Ancho fijo y no flexible: en la misma fila estan los
    chips de fecha, y si crece se los come en pantalla angosta. */
 .buscador-pedidos { width: min(280px, 100%); }
+
+/* El separador de día del chat. La fecha va centrada sobre una línea, que es
+   como se lee sin ocupar lugar. */
+.dia-separador {
+  display: flex; align-items: center; gap: 10px;
+  margin: 14px 4px 10px; color: var(--muted); font-size: 11px;
+  text-transform: uppercase; letter-spacing: .04em;
+}
+.dia-separador::before, .dia-separador::after {
+  content: ""; flex: 1; height: 1px; background: var(--line);
+}
+.dia-separador span { white-space: nowrap; }

@@ -36,6 +36,7 @@ import { diceQueQuedoReservado, llegoComprobante } from '../policies/comprobante
 import { yaLoDijo } from '../policies/repeticion.js';
 import { avisaQueLlego, AVISO_DE_LLEGADA, RESPUESTA_A_LA_LLEGADA } from '../policies/llegadas.js';
 import { yaDijeronQueEstaListo } from '../policies/listo.js';
+import { ofreceLoQueNoHay, vaACobrar } from '../policies/stock.js';
 import {
   afirmaQueYaSalio,
   comprometeNuestroCadete,
@@ -951,10 +952,17 @@ export class Pipeline {
             por qué conviene esperar para mandar el Uber. Ver EL COMPROBANTE NO
             ES EL FINAL en las reglas.
           */
+          /*
+            Ya no dice "lo estamos chequeando". El local: "no que diga vamos a
+            chequear el comprobante, porque dicen 'ay, tanto tiempo se demoran
+            en chequear el comprobante'". Lo que demora no es mirar la captura:
+            es armar el pedido, y eso hay que decirlo con todas las letras,
+            incluido que son MINUTOS.
+          */
           contenido.text =
-            'Ya tengo tu comprobante 🙌🏼 lo estamos chequeando y ya nos ponemos a armar tu ' +
-            'pedido. Apenas esté listo te avisamos y ahí sí mandás el Uber, así no llega ' +
-            'antes que el pedido 🩷';
+            'Recibido 🙌🏼 Ya nos ponemos a armar tu pedido. Puede demorar unos minutos: ' +
+            'apenas esté listo te avisamos para que mandes el Uber, así no llega antes que ' +
+            'el pedido 🩷';
           alertaDeGuarda = true;
           guardaEscalo = true;
           motivoGuarda =
@@ -1152,6 +1160,43 @@ export class Pipeline {
       await repos.conversations.setMode(conversationId, 'human');
       const marcada = await repos.conversations.get(conversationId);
       if (marcada) bus.emit({ type: 'conversation', conversation: marcada });
+    }
+
+    /*
+      EL TERMÓMETRO DEL STOCK. SOLO ANOTA.
+
+      El domingo el Box de Cookies Edición Limitada estuvo apagado todo el día y
+      el bot lo ofreció igual 32 veces. Una clienta pagó, no había, hubo que
+      devolverle la plata y llamó al local insultando.
+
+      La causa era una contradicción de la ficha ("ofrecer SIEMPRE el Box de
+      Cookies Edición Limitada" contra la lista de HOY NO HAY) y ya está
+      arreglada ahí. `crear_pedido` además nunca deja cargar un agotado: lo
+      valida `validateOrder`. Lo que quedaba abierto es que el bot PIDA LA PLATA
+      igual, sin cargar nada, que es exactamente lo que pasó.
+
+      POR QUÉ NO REEMPLAZA EL MENSAJE TODAVÍA, y esto es lo importante: no se
+      puede medir. La disponibilidad es un booleano que el local prende y apaga
+      durante el día y no guardamos su historia, así que probar los mensajes de
+      ayer contra el stock de hoy da basura —marca "Cookie nutella" en un mensaje
+      que decía "cookie nutella $5000" porque ayer sí había—. Una guarda que
+      reescribe sin medir ya rompió trece respuestas correctas una vez.
+
+      Así que anota, con el estado del stock DE ESE MOMENTO, que es el dato que
+      falta. Con unos días de esto se puede decidir con números.
+    */
+    for (const contenido of contents) {
+      if (contenido.kind !== 'text') continue;
+      const agotados = products.filter((p) => !p.availableToday);
+      const ofrecidos = ofreceLoQueNoHay(contenido.text, agotados);
+      if (!ofrecidos.length) continue;
+      const cobrando = vaACobrar(contenido.text);
+      log(
+        cobrando ? 'warn' : 'info',
+        `STOCK: ofrecio algo que hoy no hay (${conversationId})` +
+          `${cobrando ? ' Y ESTABA POR COBRARLO' : ''}: ` +
+          `${ofrecidos.map((o) => o.name).join(', ')} — "${ofrecidos[0].oracion.slice(0, 90)}"`,
+      );
     }
 
     /*
