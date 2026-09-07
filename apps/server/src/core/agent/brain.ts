@@ -133,14 +133,54 @@ const CIERRE_SIN_CLIENTE =
   'Seguí vos la conversación desde acá.';
 
 /** Exportada para `scripts/probar-cierre-del-chat.mts`. */
+/** El día de un mensaje en Tucumán, como 'AAAA-MM-DD'. */
+function diaDe(iso: string): string {
+  return new Date(iso).toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Tucuman' });
+}
+
+/**
+ * Cómo se anuncia un día en el historial: "hoy", "ayer", o la fecha.
+ *
+ * SIN ESTO EL MODELO LEE SU PROPIO "HOY" DE AYER. Pasó tal cual: el 6 a la
+ * noche el bot le dijo a una clienta "el Box de Cookies Edición Limitada HOY no
+ * nos queda". Al otro día el local lo prendió a las 11:46, ella volvió a
+ * preguntar a las 18:05, y el bot contestó "ese hoy no nos queda" — leyendo su
+ * mensaje del día anterior, que en el historial venía sin ninguna fecha. Una
+ * persona del local lo tuvo que corregir: "perdón, acaban de salir".
+ *
+ * Le pasó solo a ella. A las otras seis clientas que preguntaron ese mismo día
+ * el bot les dijo bien que sí había: la lista del día estaba perfecta. Lo que
+ * fallaba era que no podía distinguir su memoria de la realidad de hoy.
+ */
+function rotuloDeDia(dia: string, hoy: string): string {
+  if (dia === hoy) return 'hoy';
+  const ayer = new Date(`${hoy}T12:00:00Z`);
+  ayer.setUTCDate(ayer.getUTCDate() - 1);
+  if (dia === ayer.toISOString().slice(0, 10)) return 'ayer';
+  const [a, m, d] = dia.split('-');
+  return `el ${Number(d)}/${Number(m)}/${a}`;
+}
+
 export function toApiMessages(history: StoredMessage[]): ChatMessage[] {
   const messages: ChatMessage[] = [];
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Tucuman' });
+  let diaAnterior: string | null = null;
   for (const m of history) {
     if (m.author === 'system' || m.contentKind === 'typing') continue;
     const role = m.direction === 'in' ? 'user' : 'assistant';
     const text = m.text.trim();
     if (!text) continue;
-    const prefix = m.direction === 'out' && m.author === 'human' ? '[operador del local] ' : '';
+    /*
+      El marcador de día va PEGADO al primer mensaje de cada día, y no como un
+      mensaje aparte, por dos razones: un mensaje suelto rompería la alternancia
+      de roles que algunos proveedores exigen, y además se fusionaría con el
+      texto de al lado igual que se fusionan los turnos consecutivos.
+    */
+    const dia = diaDe(m.createdAt);
+    const marca = dia !== diaAnterior ? `[${rotuloDeDia(dia, hoy)}]\n` : '';
+    diaAnterior = dia;
+    const prefix =
+      marca + (m.direction === 'out' && m.author === 'human' ? '[operador del local] ' : '');
     const last = messages.at(-1);
     if (last?.role === role && typeof last.content === 'string') {
       // Unir turnos consecutivos del mismo rol deja el historial más limpio y
