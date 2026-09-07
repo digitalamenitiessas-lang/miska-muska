@@ -1837,3 +1837,15 @@ table.grid tbody tr:hover {
   font-size: 12.5px;
   line-height: 1.45;
 }
+
+/* Las tarjetas que filtran la lista. Heredan el aspecto de .tile y solo
+   agregan que se note que se pueden apretar. */
+.tile-click {
+  cursor: pointer; text-align: left; font: inherit; width: 100%;
+  transition: border-color .12s ease, transform .12s ease;
+}
+.tile-click:hover { border-color: var(--accent); transform: translateY(-1px); }
+.tile-click[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}

@@ -1062,13 +1062,14 @@ export async function executeTool(
           retirar—; el domingo frena todo, porque media hora después de abrir es
           lo antes que puede estar listo.
         */
+        /*
+          El piso de las 9 vale para TODAS las modalidades, no solo para nuestro
+          cadete. Estaba acotado a cadete-miska pensando que el problema era
+          despachar, y el local aclaró que es antes: el desayuno no está armado.
+          "A veces piden a las 8 y no llegamos, y él confirma".
+        */
         const desde = desayunoNoSaleAntesDe(entrega);
-        if (
-          llevaDesayuno &&
-          (domingo || modalidad === 'cadete-miska') &&
-          arranca !== null &&
-          arranca < desde
-        ) {
+        if (llevaDesayuno && arranca !== null && arranca < desde) {
           return {
             ok: false,
             error: domingo
@@ -1124,6 +1125,36 @@ export async function executeTool(
             },
           };
         }
+
+        /*
+          LA HORA DE UN DESAYUNO LA CONFIRMA UNA PERSONA. Siempre.
+
+          El local: "podríamos sumar que los desayunos se entregan a partir de
+          las 9 de la mañana, y que para confirmar horario de entrega derive un
+          humano. Porque a veces piden a las 8 y no llegamos y él confirma".
+
+          El piso de las 9 es un dato que el bot puede decir solo. Pero que se
+          llegue a esa hora PUNTUAL depende de cuántos desayunos hay para armar
+          esa mañana y de qué cadete está libre, y eso no lo sabe nadie más que
+          el local. El bot toma la franja que le pidan, la anota, y NO la
+          confirma.
+
+          Va después del piso de las 9 a propósito: si la hora es imposible, eso
+          se dice y se corrige sin molestar a nadie. Solo lo posible se consulta.
+        */
+        /*
+          EL PEDIDO SE CARGA IGUAL. Lo que no sale es la confirmación de la hora.
+
+          La primera versión de esto cortaba el turno sin cargar nada, y eso
+          empujaba justo al problema más caro que tienen: una persona toma la
+          venta a mano y se olvida de anotarla. El 21% de las ventas de la
+          semana pasada terminó así.
+
+          Cargándolo, el pedido está en la lista desde el primer minuto con su
+          franja anotada, y lo único que falta es que alguien diga "llegamos" o
+          "no llegamos". Si no llegan, se corrige o se cancela con un clic.
+        */
+        const horaDesayunoAConfirmar = llevaDesayuno && arranca !== null;
 
         /*
           Y DE NOCHE, UN DESAYUNO PARA MAÑANA TAMPOCO SE CONFIRMA SOLO.
@@ -1490,6 +1521,27 @@ export async function executeTool(
         bus.emit({ type: 'order', order });
         log('info', `Pedido ${order.number} creado por el bot`, { total, items: items.length });
 
+        if (horaDesayunoAConfirmar && !apuradoParaHoy) {
+          /*
+            El local: "para confirmar horario de entrega derive un humano.
+            Porque a veces piden a las 8 y no llegamos y él confirma".
+
+            Que salga desde las 9 es un dato nuestro y el bot lo dice solo. Que
+            se llegue a una hora PUNTUAL depende de cuántos desayunos hay para
+            armar esa mañana y de qué cadete está libre: eso lo sabe el local.
+          */
+          ctx.effects.escalate = {
+            reason: 'hora_de_desayuno',
+            summary:
+              `Pedido ${order.number}: ${items.map((i) => `${i.quantity}x ${i.description}`).join(', ')} ` +
+              `para el ${draft.deliveryDate ?? localToday()}` +
+              `${draft.deliveryTime ? ` a las ${draft.deliveryTime}` : ''}. ` +
+              'Confirmá si llegamos a esa hora. No se la confirmé.',
+            soloAvisar: true,
+          };
+          log('info', `Hora de desayuno a confirmar en el pedido ${order.number}`);
+        }
+
         if (apuradoParaHoy) {
           /*
             Solo avisa: la charla se queda con el bot, que tiene que seguir
@@ -1512,6 +1564,18 @@ export async function executeTool(
           ok: true,
           data: {
             ...orderView(order),
+            ...(horaDesayunoAConfirmar && !apuradoParaHoy
+              ? {
+                  hora_pendiente_de_confirmar: true,
+                  instruccion_hora:
+                    'LA HORA NO SE LA CONFIRMES. Que los desayunos salgan desde las 9 sí lo ' +
+                    'podés decir, pero llegar a la hora puntual que te pidió depende de ' +
+                    'cuántos hay para armar esa mañana y de qué cadete está libre, y eso lo ' +
+                    'sabe el local. El pedido quedó anotado con esa franja; decile que se la ' +
+                    'confirman en un rato, algo como "te lo confirmo y te aviso". No le digas ' +
+                    'que sí a esa hora ni que no. Ya avisé al local.',
+                }
+              : {}),
             ...(apuradoParaHoy
               ? {
                   pendiente_de_confirmacion: true,

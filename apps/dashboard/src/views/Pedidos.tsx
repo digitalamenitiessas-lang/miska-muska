@@ -40,6 +40,19 @@ export function Pedidos({
     llama preguntando por SU pedido lo que hace falta es encontrarlo por nombre.
   */
   const [busqueda, setBusqueda] = useState('');
+  /*
+    Filtro por tarjeta: "por cobrar", "sin comprobante", "sin precio".
+    Es aparte del filtro por estado porque son preguntas distintas —uno mira la
+    etapa del pedido, el otro la plata— y mezclarlos haría que elegir uno
+    apagara el otro sin que se entienda por qué.
+  */
+  const [tarjeta, setTarjeta] = useState<'porCobrar' | 'sinComprobante' | 'sinPrecio' | null>(null);
+  const tocarTarjeta = (cual: typeof tarjeta) => {
+    setTarjeta((previa) => (previa === cual ? null : cual));
+    // Buscar y filtrar por plata se pisan: si hay algo tipeado, el filtro
+    // parecería no hacer nada.
+    setBusqueda('');
+  };
   const [loading, setLoading] = useState(true);
   /*
     Pedido abierto en la comanda. Se guarda el id y no el objeto: mientras la
@@ -143,7 +156,17 @@ export function Pedidos({
     );
 
   const visible = useMemo(() => {
-    const porEstado = filter === 'todos' ? orders : orders.filter((o) => o.status === filter);
+    const vivo = (o: Order) => o.status !== 'cancelado';
+    const porTarjeta =
+      tarjeta === 'porCobrar'
+        ? orders.filter((o) => vivo(o) && o.total > o.paid)
+        : tarjeta === 'sinComprobante'
+          ? orders.filter((o) => vivo(o) && o.paid <= 0)
+          : tarjeta === 'sinPrecio'
+            ? orders.filter((o) => vivo(o) && o.total <= 0)
+            : orders;
+    const porEstado =
+      filter === 'todos' ? porTarjeta : porTarjeta.filter((o) => o.status === filter);
     const q = pelado(busqueda.trim());
     if (!q) return porEstado;
     // Todas las palabras, en cualquier orden: "rossana torta" encuentra igual.
@@ -152,7 +175,7 @@ export function Pedidos({
       const texto = buscables(o);
       return partes.every((p) => texto.includes(p));
     });
-  }, [orders, filter, busqueda]);
+  }, [orders, filter, busqueda, tarjeta]);
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
@@ -255,11 +278,15 @@ export function Pedidos({
           label="Sin comprobante"
           value={String(resumen?.sinComprobante ?? sinCobrar)}
           note="No se registró ni un peso todavía"
+          onClick={() => tocarTarjeta('sinComprobante')}
+          activo={tarjeta === 'sinComprobante'}
         />
         <Tile
           label="Por cobrar"
           value={money(resumen?.porCobrar ?? pendingMoney)}
           note="Total menos lo cobrado, incluidos los entregados"
+          onClick={() => tocarTarjeta('porCobrar')}
+          activo={tarjeta === 'porCobrar'}
         />
         <Tile
           label="Cobrado hoy"
@@ -366,6 +393,22 @@ export function Pedidos({
           </button>
         ))}
       </div>
+
+      {tarjeta ? (
+        <div className="row" style={{ marginBottom: 10, gap: 8 }}>
+          <span className="small muted">
+            {tarjeta === 'porCobrar'
+              ? 'Mostrando solo los que tienen saldo pendiente'
+              : tarjeta === 'sinComprobante'
+                ? 'Mostrando solo los que no registraron ni un peso'
+                : 'Mostrando solo los que quedaron sin precio'}
+            {dia.tipo !== 'todos' ? ' del día elegido' : ''}.
+          </span>
+          <button className="chip" onClick={() => setTarjeta(null)}>
+            ✕ ver todos
+          </button>
+        </div>
+      ) : null}
 
       <section className="card">
         {loading ? (
@@ -596,12 +639,46 @@ function Importe({
   );
 }
 
-function Tile({ label, value, note }: { label: string; value: string; note?: string }) {
-  return (
-    <div className="tile">
+/**
+ * Una tarjeta de arriba. Con `onClick` se vuelve un botón y filtra la lista.
+ *
+ * El local: "en pedidos, ¿se puede que cuando haga clic acá en por cobrar se
+ * desplieguen todos los que hay que cobrar?". Tiene sentido: el número dice
+ * cuánto falta cobrar y lo primero que uno quiere es ver de quién.
+ *
+ * Sigue siendo un `div` cuando no hay a dónde ir: un botón que no hace nada
+ * invita a apretarlo.
+ */
+function Tile({
+  label,
+  value,
+  note,
+  onClick,
+  activo,
+}: {
+  label: string;
+  value: string;
+  note?: string;
+  onClick?: () => void;
+  activo?: boolean;
+}) {
+  const adentro = (
+    <>
       <div className="tile-label">{label}</div>
       <div className="tile-value">{value}</div>
       {note ? <div className="tile-note">{note}</div> : null}
-    </div>
+    </>
+  );
+  if (!onClick) return <div className="tile">{adentro}</div>;
+  return (
+    <button
+      type="button"
+      className="tile tile-click"
+      aria-pressed={Boolean(activo)}
+      title={activo ? 'Volver a ver todos' : `Ver solo: ${label.toLowerCase()}`}
+      onClick={onClick}
+    >
+      {adentro}
+    </button>
   );
 }
