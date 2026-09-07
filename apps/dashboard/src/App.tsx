@@ -56,8 +56,22 @@ const TITLES: Record<View, string> = {
   ajustes: 'Ajustes del bot',
 };
 
+/**
+ * El orden de la bandeja: las guardadas arriba, y dentro de cada grupo la de
+ * actividad mas reciente primero.
+ *
+ * TIENE QUE SER EL MISMO QUE EL DEL SERVIDOR (pinned DESC, actividad DESC) o la
+ * lista se desordena sola. Pasaba asi: la carga inicial venia del servidor con
+ * las fijadas arriba, y despues cada mensaje nuevo reordenaba TODO por
+ * actividad, sin mirar el chinche. El resultado era una mezcla de los dos
+ * criterios que no se parecia a ninguno: el local lo vio enseguida —una charla
+ * de "ahora" abajo de una de hace 44 minutos—.
+ */
 const ordenarPorActividad = (lista: Conversation[]): Conversation[] =>
-  [...lista].sort((a, b) => ultimaActividad(b) - ultimaActividad(a));
+  [...lista].sort((a, b) => {
+    if (a.pinned !== b.pinned) return a.pinned ? -1 : 1;
+    return ultimaActividad(b) - ultimaActividad(a);
+  });
 
 export default function App() {
   const [view, setView] = useState<View>('bandeja');
