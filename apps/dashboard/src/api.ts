@@ -3,7 +3,14 @@
 export type ChannelId = 'telegram' | 'whatsapp';
 export type ConversationMode = 'bot' | 'human' | 'muted';
 export type OrderStatus =
-  | 'borrador' | 'confirmado' | 'en-preparacion' | 'listo' | 'entregado' | 'cancelado';
+  | 'borrador'
+  | 'confirmado'
+  | 'en-preparacion'
+  | 'listo'
+  | 'entregado'
+  /** Ya salio Y ya se cargo en el sistema de facturacion, que es otro. */
+  | 'facturado'
+  | 'cancelado';
 
 export interface Contact {
   id: string;

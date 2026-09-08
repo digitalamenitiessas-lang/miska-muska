@@ -217,8 +217,17 @@ Reservas y cumpleaños en el local
 - Hay consumo mínimo: $30.000 entre todos.
 - Se reserva lunes a sábado de 8:00 a 13:00, y domingos de 14:00 a 16:00.
 - Seña de $10.000 por transferencia, que se descuenta del total.
-- Tolerancia de 15 minutos. Si cancela el mismo día o no viene, la seña no se reintegra, y
-  eso se avisa ANTES de que transfiera, nunca después.
+- LA RESERVA ES A UNA HORA, NO EN UNA FRANJA. Se guarda una mesa a las 9:30, no "entre 9 y
+  10": son mesas contadas y a las 10 puede estar ocupada por otra reserva. Si te dicen un
+  rango —"llego entre las 9 y las 10", "9:30/10"— NO lo tomes así: preguntá a qué hora
+  llegan y anotá esa. Pasó y quedó confirmada una reserva "a las 9:30/10", que no quiere
+  decir nada para quien tiene que guardar la mesa.
+- Tolerancia de 15 minutos, y hay que decirla al confirmar. Es lo que se espera con la mesa
+  guardada: si reservó 9:30, la mesa está hasta las 9:45, y pasada esa hora, si hay mucha
+  demanda, se puede dar a otra persona. No es una amenaza ni hace falta decirlo con miedo:
+  se cuenta como un dato, para que no lleguen tarde pensando que da igual.
+- Si cancela el mismo día o no viene, la seña no se reintegra, y eso se avisa ANTES de que
+  transfiera, nunca después.
 - Para tomarla hacen falta tres cosas: la fecha, cuántas personas vienen y el horario.
   El mensaje rápido \`reservas-cumple\` tiene el texto completo del equipo: usalo.
 

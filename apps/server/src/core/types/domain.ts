@@ -202,6 +202,8 @@ export type OrderStatus =
   | 'en-preparacion'
   | 'listo'
   | 'entregado'
+  /** Ya salió Y ya se cargó en la facturación, que es otro sistema. */
+  | 'facturado'
   | 'cancelado';
 
 export type DeliveryMode = 'retira-local' | 'uber-cliente' | 'cadete-miska';

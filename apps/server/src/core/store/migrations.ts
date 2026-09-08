@@ -457,6 +457,25 @@ ALTER TABLE conversations ADD COLUMN IF NOT EXISTS pinned boolean NOT NULL DEFAU
 CREATE INDEX IF NOT EXISTS idx_conversations_pinned ON conversations (pinned) WHERE pinned;
 `,
   },
+  {
+    id: 13,
+    name: 'estado-facturado',
+    sql: `
+-- Un estado más, después de entregado: facturado.
+--
+-- El local: "¿le podés agregar un apartado que diga facturado, para que ellos
+-- sepan cuándo lo han facturado en el sistema o no?". El pedido ya salió y está
+-- en manos del cliente; lo que falta es cargarlo en la facturación, que es otro
+-- sistema y otra persona.
+--
+-- El CHECK se reemplaza porque un CHECK no se amplía: se borra y se vuelve a
+-- crear con la lista nueva.
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE orders ADD CONSTRAINT orders_status_check
+  CHECK (status IN ('borrador', 'confirmado', 'en-preparacion',
+                    'listo', 'entregado', 'facturado', 'cancelado'));
+`,
+  },
 ];
 
 /**

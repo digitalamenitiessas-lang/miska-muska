@@ -11,7 +11,7 @@ import {
 } from '../ui';
 
 const STATUSES: OrderStatus[] = [
-  'borrador', 'confirmado', 'en-preparacion', 'listo', 'entregado', 'cancelado',
+  'borrador', 'confirmado', 'en-preparacion', 'listo', 'entregado', 'facturado', 'cancelado',
 ];
 
 /** Siguiente estado natural, para el botón de avance rápido. */
@@ -20,6 +20,13 @@ const NEXT: Partial<Record<OrderStatus, OrderStatus>> = {
   confirmado: 'en-preparacion',
   'en-preparacion': 'listo',
   listo: 'entregado',
+  /*
+    Y después de entregado, facturado. Es el último paso y no lo da la cocina:
+    lo da quien carga la venta en el sistema de facturación, que es otro sistema
+    y muchas veces otra persona. El local: "que diga facturado, para que ellos
+    sepan cuándo lo han facturado en el sistema o no".
+  */
+  entregado: 'facturado',
 };
 
 export function Pedidos({
@@ -534,6 +541,37 @@ export function Pedidos({
                               Comprobante ✓
                             </button>
                           ) : null}
+                          {/*
+                            COBRAR UN PEDIDO QUE YA SALIÓ.
+
+                            "Comprobante ✓" solo aparecía en borrador, así que un
+                            pedido que se entregó sin que nadie marcara el pago
+                            quedaba en "por cobrar" para siempre y no había forma
+                            de sacarlo de ahí salvo tipear el importe a mano.
+
+                            El local: "ese pedido es del 6/9, se recibió
+                            comprobante y se realizó la entrega, pero quedó
+                            colgado como por cobrar, y así varios". Y el proceso
+                            de ellos es que "por cobrar" cierre en cero todos los
+                            días, así que un pedido colgado les rompe la caja.
+
+                            No toca el estado: el pedido ya está donde tiene que
+                            estar, lo único que falta es la plata.
+                          */}
+                          {o.status !== 'borrador' && o.status !== 'cancelado' && owes > 0 ? (
+                            <button
+                              className="btn btn-sm btn-primary"
+                              disabled={o.total <= 0}
+                              title={
+                                o.total <= 0
+                                  ? 'Primero cargá el total'
+                                  : `Marcar cobrado: ${money(o.total)}`
+                              }
+                              onClick={() => void update(o.id, { paid: o.total })}
+                            >
+                              Cobrado ✓
+                            </button>
+                          ) : null}
                           {next ? (
                             <button
                               className="btn btn-sm"
@@ -549,7 +587,9 @@ export function Pedidos({
                           >
                             Comanda
                           </button>
-                          {o.status !== 'cancelado' && o.status !== 'entregado' ? (
+                          {o.status !== 'cancelado' &&
+                          o.status !== 'entregado' &&
+                          o.status !== 'facturado' ? (
                             <button
                               className="btn btn-sm btn-ghost"
                               title="Cancelar el pedido"
