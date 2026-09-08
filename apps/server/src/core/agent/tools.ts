@@ -1044,6 +1044,32 @@ export async function executeTool(
           RETIRAR un domingo de 12 a 13. La clienta iba a llegar a un local
           cerrado con la plata ya transferida.
         */
+        /*
+          LOS DOMINGOS NO HAY CADETE. La ficha lo decía y no alcanzó.
+
+          El bot cargó un box con nuestro cadete para el domingo 13 y después le
+          discutió a la empleada que ya le había avisado a la clienta que ese día
+          no se envía. Perdió contra la regla del prompt que dice que los boxes
+          van "SIEMPRE con nuestro cadete"; entre una línea de la ficha y una
+          regla del sistema, gana la regla. Ahora las dos dicen lo mismo y además
+          está esta guarda.
+
+          Se rechaza y se ofrece la salida, que existe: retirar, o mandar un Uber
+          —que ese día vale hasta para un box, ver validateOrder—.
+        */
+        if (domingo && modalidad === 'cadete-miska') {
+          return {
+            ok: false,
+            error:
+              'Ese día es DOMINGO y los domingos no tenemos cadete: no hacemos envío a ' +
+              'domicilio, de nada. NO cargues el pedido con cadete-miska. Ofrecele las dos ' +
+              'salidas que sí hay, en positivo: que mande un Uber a retirarlo del local ese ' +
+              'mismo domingo (ese día el Uber vale hasta para un box), o que lo movamos a ' +
+              'otro día para que se lo llevemos nosotros. Cuando elija, reintentá con la ' +
+              'modalidad que corresponda.',
+          };
+        }
+
         if (domingo && arranca !== null && arranca < DOMINGO_ABRE) {
           return {
             ok: false,

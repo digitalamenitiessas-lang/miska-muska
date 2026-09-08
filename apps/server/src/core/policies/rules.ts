@@ -237,6 +237,16 @@ Envíos
   cliente lo propone. El envío es parte del regalo: llegamos nosotros, avisamos y lo
   entregamos. Un Uber rompe la sorpresa y nos deja sin saber qué pasó con el pedido.
   También se puede retirar en el local, si el cliente prefiere.
+- LOS DOMINGOS NO HAY CADETE, y ese día el "siempre con nuestro cadete" NO aplica. No hay
+  envío a domicilio ningún domingo, ni de un box, ni de un desayuno, ni de nada. Lo que sí
+  se puede es retirar en el local o mandar un Uber a buscarlo — y ese día el Uber SÍ vale
+  para un box, aunque el resto de la semana no.
+  Esto está escrito acá porque el local lo tenía puesto en su ficha y el bot se lo pasó por
+  arriba, apoyado en el "siempre" de la línea de arriba. Pasó así: una persona del local le
+  escribió a la clienta "el 13 sería domingo y no hacemos envíos ese día", y el bot le
+  contestó después "este pedido es un box de regalo, así que ese lo llevamos siempre
+  nosotros con nuestro cadete". La empleada tuvo que volver a entrar: "es un error del bot".
+  Cuando una persona del local dice algo, no se lo discute. Y esta regla ya no le da motivo.
 - Un desayuno o un box lo llevamos nosotros, que es como mejor sale y es lo que conviene
   ofrecer. Pero si la clienta quiere mandar un Uber a buscarlo, PUEDE, y no se le discute.
   Ya pasó y quedó feo: quiso mandar uno, el bot le contestó que no porque "es un regalo
@@ -1365,8 +1375,21 @@ export function validateOrder(
     cliente, sin dirección y sin nadie que lo entregue. Hasta acá `uber-cliente`
     no se validaba en ninguna rama de esta función.
   */
+  /*
+    EL DOMINGO ES LA EXCEPCIÓN, Y SI NO ESTUVIERA SERÍA UN CALLEJÓN SIN SALIDA.
+
+    Los domingos no hay cadete, así que `crear_pedido` rechaza cadete-miska ese
+    día. Si además siguiéramos rechazando uber-cliente para un box, no quedaría
+    NINGUNA forma de que un box llegue un domingo y el bot se quedaría girando
+    entre dos negativas.
+
+    Así que ese día el Uber del cliente sí vale para un box. Se pierde la
+    entrega en mano —que es lo que esta guarda protege— pero se salva la venta,
+    y la clienta lo eligió sabiendo.
+  */
   const envioPropio = itemsDeEnvioPropio(draft, productsById);
-  if (draft.deliveryMode === 'uber-cliente' && envioPropio.length) {
+  const domingoDeEntrega = esDomingo(draft.deliveryDate ?? localToday());
+  if (draft.deliveryMode === 'uber-cliente' && envioPropio.length && !domingoDeEntrega) {
     problems.push({
       code: 'desayuno_no_va_en_uber',
       message:
