@@ -368,10 +368,40 @@ export class Pipeline {
         if (!ventaSinFila) return;
       }
 
+      /*
+        EL AVISO DICE CÓMO SALE EL PEDIDO.
+
+        Confirmar el pago es el único momento en que una persona del local mira
+        un pedido que va a salir en el Uber del cliente: la dirección no se pasa
+        hasta que alguien marca la plata, y sin dirección no hay Uber. O sea que
+        este aviso ES el punto de control, aunque no lo pareciera.
+
+        Lo que le faltaba era decirlo. Decía "mirá la transferencia y confirmá el
+        pago" y nada más, así que se confirmaba sin registrar que en veinte
+        minutos iba a haber un chofer en la puerta. El local lo preguntó
+        derecho: "para que los trabajadores no se den con sorpresa de envíos de
+        Ubers que ellos ni se enteran".
+
+        Con nuestro cadete también importa, y por el otro motivo: ahí el que
+        tiene que salir es alguien del local.
+      */
+      const comoSale = (o: { deliveryMode: string; deliveryTime: string | null }): string => {
+        const cuando = o.deliveryTime ? ` (${o.deliveryTime})` : '';
+        if (o.deliveryMode === 'uber-cliente') {
+          return ` SALE EN UN UBER QUE MANDA ELLA${cuando}: apenas confirmes, le pasamos la ` +
+            'dirección y el chofer viene. Tenelo listo.';
+        }
+        if (o.deliveryMode === 'cadete-miska') {
+          return ` VA CON NUESTRO CADETE${cuando}.`;
+        }
+        return ` LO RETIRA ELLA por el local${cuando}.`;
+      };
+
       const motivo = pedidoSinCobrar
         ? `[comprobante] Mirá la transferencia y confirmá el pago del pedido ` +
           `#${pedidoSinCobrar.number}. Está en ${pedidoSinCobrar.paid} de ${pedidoSinCobrar.total}, ` +
-          'y hasta que no lo confirmes ella queda esperando.'
+          'y hasta que no lo confirmes ella queda esperando.' +
+          comoSale(pedidoSinCobrar)
         : inscripcion
           ? `[comprobante] Mirá la transferencia y confirmá la inscripción de ` +
             `${inscripcion.fullName}, que está pendiente de pago.`
