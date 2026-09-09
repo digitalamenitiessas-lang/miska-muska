@@ -8,8 +8,6 @@ export type OrderStatus =
   | 'en-preparacion'
   | 'listo'
   | 'entregado'
-  /** Ya salio Y ya se cargo en el sistema de facturacion, que es otro. */
-  | 'facturado'
   | 'cancelado';
 
 export interface Contact {
@@ -143,6 +141,8 @@ export interface Order {
   /** Cuándo entró el primer peso. Null si todavía no se cobró nada. */
   paidAt: string | null;
   status: OrderStatus;
+  /** Cuándo se cargó en la facturación. Va aparte del estado: son dos ejes. */
+  billedAt: string | null;
   deliveryMode: 'retira-local' | 'uber-cliente' | 'cadete-miska';
   deliveryDate: string | null;
   deliveryTime: string | null;

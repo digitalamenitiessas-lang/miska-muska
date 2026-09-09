@@ -476,6 +476,36 @@ ALTER TABLE orders ADD CONSTRAINT orders_status_check
                     'listo', 'entregado', 'facturado', 'cancelado'));
 `,
   },
+  {
+    id: 14,
+    name: 'facturado-aparte',
+    sql: `
+-- Facturado deja de ser un paso del recorrido y pasa a ser una marca aparte.
+--
+-- Ayer se agregó como estado, después de entregado, y el local lo probó un día
+-- y encontró el problema: "a veces facturan antes o después de prepararlo,
+-- ¿facturado no podrá estar aparte?". Y tiene razón — es otro eje. El recorrido
+-- lo maneja la cocina (se arma, está listo, sale) y la facturación la maneja
+-- otra persona en otro sistema, a veces antes de que salga y a veces después.
+-- Puestos en la misma fila, uno pisa al otro: marcar facturado escondía que el
+-- pedido ya se había entregado.
+--
+-- Los nueve que alcanzaron a marcarse ayer no se pierden: pasan a tener la
+-- marca y vuelven al estado que tenían, que era 'entregado' —el botón solo
+-- aparecía ahí—.
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS billed_at timestamptz;
+
+UPDATE orders SET billed_at = updated_at, status = 'entregado' WHERE status = 'facturado';
+
+ALTER TABLE orders DROP CONSTRAINT IF EXISTS orders_status_check;
+ALTER TABLE orders ADD CONSTRAINT orders_status_check
+  CHECK (status IN ('borrador', 'confirmado', 'en-preparacion',
+                    'listo', 'entregado', 'cancelado'));
+
+CREATE INDEX IF NOT EXISTS idx_orders_sin_facturar
+  ON orders (delivery_date) WHERE billed_at IS NULL;
+`,
+  },
 ];
 
 /**

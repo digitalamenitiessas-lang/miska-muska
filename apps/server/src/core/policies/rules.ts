@@ -1376,32 +1376,30 @@ export function validateOrder(
     no se validaba en ninguna rama de esta función.
   */
   /*
-    EL DOMINGO ES LA EXCEPCIÓN, Y SI NO ESTUVIERA SERÍA UN CALLEJÓN SIN SALIDA.
+    UN DESAYUNO SÍ PUEDE IRSE EN EL UBER DEL CLIENTE. Esta guarda se sacó.
 
-    Los domingos no hay cadete, así que `crear_pedido` rechaza cadete-miska ese
-    día. Si además siguiéramos rechazando uber-cliente para un box, no quedaría
-    NINGUNA forma de que un box llegue un domingo y el bot se quedaría girando
-    entre dos negativas.
+    Nació de un caso caro —un desayuno sorpresa despachado en un Uber, sin
+    dirección y sin nadie que lo entregue— y bloqueaba `uber-cliente` para
+    cualquier box o desayuno. El local la dio de baja con un motivo que no
+    estaba a la vista cuando se escribió:
 
-    Así que ese día el Uber del cliente sí vale para un box. Se pierde la
-    entrega en mano —que es lo que esta guarda protege— pero se salva la venta,
-    y la clienta lo eligió sabiendo.
+      "Que no diga que los desayunos los llevamos con cadete únicamente, porfi.
+       Porque si el cliente quiere mandar Uber, facilita y desocupa un cadete
+       para otro envío que sí o sí necesitamos el cadete."
+
+    O sea: el cadete es el recurso escaso, no la presentación. Cada desayuno que
+    se va en un Uber que el cliente paga libera al cadete para una entrega que
+    no tiene otra forma de salir.
+
+    Se ofrece igual nuestro cadete primero, porque para un regalo llega mejor y
+    es lo que conviene. Pero si el cliente prefiere el Uber, se toma y no se
+    discute — que además ya era lo que decía la prosa, y esta guarda la
+    contradecía en el código.
+
+    La declaración se queda: la usa la guarda de acá abajo, la del tercero que
+    pasa a retirar, que sigue en pie.
   */
   const envioPropio = itemsDeEnvioPropio(draft, productsById);
-  const domingoDeEntrega = esDomingo(draft.deliveryDate ?? localToday());
-  if (draft.deliveryMode === 'uber-cliente' && envioPropio.length && !domingoDeEntrega) {
-    problems.push({
-      code: 'desayuno_no_va_en_uber',
-      message:
-        `${envioPropio.map((i) => i.description).join(', ')}: eso lo llevamos nosotros, con ` +
-        'nuestro cadete. No va en Uber ni con un cadete del cliente, porque el envío es parte ' +
-        'de la sorpresa. Decíselo así, en positivo, no como una negativa. Cargalo con ' +
-        'modalidad cadete-miska y pedile en UN solo mensaje lo que falte. Si el cliente ' +
-        'insiste con mandar un Uber, o si el pedido mezcla esto con una torta que sí sale en ' +
-        'Uber, no decidas vos: decile que lo chequeás —sin decir con quién— y escalá. No cargues dos ' +
-        'pedidos. Y no le expliques tiempos, zonas ni costos de envío: eso no lo tenés.',
-    });
-  }
 
   /*
     El mismo agujero por la otra puerta: retira-local con el nombre de un tercero.

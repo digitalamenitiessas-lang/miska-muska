@@ -151,6 +151,7 @@ function toOrder(r: Row): Order {
     paid: Number(r.paid ?? 0),
     paidAt: isoOrNull(r.paid_at),
     status: String(r.status) as OrderStatus,
+    billedAt: isoOrNull(r.billed_at),
     deliveryMode: String(r.delivery_mode) as Order['deliveryMode'],
     deliveryDate: dateOnly(r.delivery_date),
     deliveryTime: str(r.delivery_time),
@@ -886,7 +887,7 @@ export function createRepositories() {
       que haya plata. Pedirlo obligaría a los cinco llamadores a mandar null.
     */
     async create(
-      o: Omit<Order, 'id' | 'number' | 'createdAt' | 'updatedAt' | 'paidAt'>,
+      o: Omit<Order, 'id' | 'number' | 'createdAt' | 'updatedAt' | 'paidAt' | 'billedAt'>,
     ): Promise<Order> {
       // El número lo asigna la SEQUENCE: dos pedidos simultáneos nunca repiten.
       const row = await one(
@@ -1047,6 +1048,7 @@ export function createRepositories() {
       const columns: Record<string, string> = {
         customerName: 'customer_name', customerDni: 'customer_dni',
         customerPhone: 'customer_phone', total: 'total', paid: 'paid', status: 'status',
+        billedAt: 'billed_at',
         deliveryMode: 'delivery_mode', deliveryDate: 'delivery_date',
         deliveryTime: 'delivery_time', address: 'address', recipientName: 'recipient_name',
         dedication: 'dedication',

@@ -11,7 +11,7 @@ import {
 } from '../ui';
 
 const STATUSES: OrderStatus[] = [
-  'borrador', 'confirmado', 'en-preparacion', 'listo', 'entregado', 'facturado', 'cancelado',
+  'borrador', 'confirmado', 'en-preparacion', 'listo', 'entregado', 'cancelado',
 ];
 
 /** Siguiente estado natural, para el botón de avance rápido. */
@@ -20,13 +20,6 @@ const NEXT: Partial<Record<OrderStatus, OrderStatus>> = {
   confirmado: 'en-preparacion',
   'en-preparacion': 'listo',
   listo: 'entregado',
-  /*
-    Y después de entregado, facturado. Es el último paso y no lo da la cocina:
-    lo da quien carga la venta en el sistema de facturación, que es otro sistema
-    y muchas veces otra persona. El local: "que diga facturado, para que ellos
-    sepan cuándo lo han facturado en el sistema o no".
-  */
-  entregado: 'facturado',
 };
 
 export function Pedidos({
@@ -53,7 +46,9 @@ export function Pedidos({
     etapa del pedido, el otro la plata— y mezclarlos haría que elegir uno
     apagara el otro sin que se entienda por qué.
   */
-  const [tarjeta, setTarjeta] = useState<'porCobrar' | 'sinComprobante' | 'sinPrecio' | null>(null);
+  const [tarjeta, setTarjeta] = useState<
+    'porCobrar' | 'sinComprobante' | 'sinPrecio' | 'sinFacturar' | null
+  >(null);
   const tocarTarjeta = (cual: typeof tarjeta) => {
     setTarjeta((previa) => (previa === cual ? null : cual));
     // Buscar y filtrar por plata se pisan: si hay algo tipeado, el filtro
@@ -171,7 +166,9 @@ export function Pedidos({
           ? orders.filter((o) => vivo(o) && o.paid <= 0)
           : tarjeta === 'sinPrecio'
             ? orders.filter((o) => vivo(o) && o.total <= 0)
-            : orders;
+            : tarjeta === 'sinFacturar'
+              ? orders.filter((o) => vivo(o) && !o.billedAt)
+              : orders;
     const porEstado =
       filter === 'todos' ? porTarjeta : porTarjeta.filter((o) => o.status === filter);
     const q = pelado(busqueda.trim());
@@ -296,6 +293,13 @@ export function Pedidos({
           activo={tarjeta === 'porCobrar'}
         />
         <Tile
+          label="Sin facturar"
+          value={String(orders.filter((o) => o.status !== 'cancelado' && !o.billedAt).length)}
+          note="De los que estás viendo"
+          onClick={() => tocarTarjeta('sinFacturar')}
+          activo={tarjeta === 'sinFacturar'}
+        />
+        <Tile
           label="Cobrado hoy"
           value={money(resumen?.cobradoHoy ?? cobradoHoy.monto)}
           note={
@@ -408,7 +412,9 @@ export function Pedidos({
               ? 'Mostrando solo los que tienen saldo pendiente'
               : tarjeta === 'sinComprobante'
                 ? 'Mostrando solo los que no registraron ni un peso'
-                : 'Mostrando solo los que quedaron sin precio'}
+                : tarjeta === 'sinFacturar'
+                  ? 'Mostrando solo los que todavía no se facturaron'
+                  : 'Mostrando solo los que quedaron sin precio'}
             {dia.tipo !== 'todos' ? ' del día elegido' : ''}.
           </span>
           <button className="chip" onClick={() => setTarjeta(null)}>
@@ -519,6 +525,38 @@ export function Pedidos({
                       </td>
                       <td>
                         <Pill tone={ORDER_STATUS_TONE[o.status]}>{ORDER_STATUS_LABEL[o.status]}</Pill>
+                        {/*
+                          FACTURADO VA APARTE DEL ESTADO, Y ES A PROPÓSITO.
+
+                          Primero se puso como un paso más, después de entregado.
+                          El local lo probó un día y encontró el problema: "a
+                          veces facturan antes o después de prepararlo,
+                          ¿facturado no podrá estar aparte?".
+
+                          Son dos ejes distintos. El recorrido lo maneja la
+                          cocina —se arma, está listo, sale— y la facturación la
+                          maneja otra persona en otro sistema, a veces antes de
+                          que salga y a veces después. En la misma fila uno
+                          pisaba al otro: marcar facturado escondía que el pedido
+                          ya se había entregado, y al día siguiente había que
+                          acordarse de memoria.
+                        */}
+                        <button
+                          className={`chip-facturado${o.billedAt ? ' hecho' : ''}`}
+                          aria-pressed={Boolean(o.billedAt)}
+                          title={
+                            o.billedAt
+                              ? `Facturado ${new Date(o.billedAt).toLocaleString('es-AR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · tocá para desmarcar`
+                              : 'Marcar como facturado'
+                          }
+                          onClick={() =>
+                            void update(o.id, {
+                              billedAt: o.billedAt ? null : new Date().toISOString(),
+                            })
+                          }
+                        >
+                          {o.billedAt ? '🧾 Facturado' : 'Sin facturar'}
+                        </button>
                       </td>
                       <td>
                         <div className="row" style={{ gap: 4 }}>
@@ -587,9 +625,7 @@ export function Pedidos({
                           >
                             Comanda
                           </button>
-                          {o.status !== 'cancelado' &&
-                          o.status !== 'entregado' &&
-                          o.status !== 'facturado' ? (
+                          {o.status !== 'cancelado' && o.status !== 'entregado' ? (
                             <button
                               className="btn btn-sm btn-ghost"
                               title="Cancelar el pedido"

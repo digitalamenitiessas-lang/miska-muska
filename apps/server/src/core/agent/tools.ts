@@ -1089,26 +1089,36 @@ export async function executeTool(
           lo antes que puede estar listo.
         */
         /*
-          El piso de las 9 vale para TODAS las modalidades, no solo para nuestro
-          cadete. Estaba acotado a cadete-miska pensando que el problema era
-          despachar, y el local aclaró que es antes: el desayuno no está armado.
-          "A veces piden a las 8 y no llegamos, y él confirma".
+          NUESTRO CADETE NO SALE ANTES DE LAS 9. NINGÚN ENVÍO, no solo los
+          desayunos.
+
+          Empezó siendo una regla de desayunos porque así se reportó. El local
+          la corrigió con un caso que no era un desayuno: a las 08:20 pidieron
+          unas cookies y un chipá "entre 8 y 8:30" y el bot contestó "anotado,
+          entre las 8 y las 8:30 hacemos lo posible" — a las 08:20, o sea diez
+          minutos. Textual: "no solo el desayuno es a partir de las 09, sino que
+          todos los envíos con cadete nuestro son a partir de las 09hs".
+
+          El desayuno además no está armado antes de esa hora, pero el motivo de
+          fondo es el mismo para todo: el cadete no está.
+
+          Solo aplica a NUESTRO cadete. Un retiro a las 8:15 está perfecto —el
+          local abre a las 8— y un Uber que manda el cliente también.
         */
         const desde = desayunoNoSaleAntesDe(entrega);
-        if (llevaDesayuno && arranca !== null && arranca < desde) {
+        if (modalidad === 'cadete-miska' && arranca !== null && arranca < desde) {
           return {
             ok: false,
             error: domingo
-              ? 'Es un desayuno o un box para un DOMINGO, y los domingos salen a partir de las ' +
-                '14:30 (abrimos a las 14 y se arman en el momento). NO cargues el pedido con ' +
-                'esa hora. Decíselo derecho —"los domingos los desayunos los mandamos a partir ' +
-                'de las 14:30"— y preguntale si le sirve de ahí en adelante. Cuando te diga la ' +
-                'hora nueva, reintentá.'
-              : 'Un desayuno o un box no lo podemos mandar antes de las 9 de la mañana: el ' +
-                'local abre a las 8 y se arma en el momento. NO cargues el pedido con esa ' +
-                'hora. Decíselo así, sin vueltas y sin pedir disculpas de más —"los desayunos ' +
-                'salen a partir de las 9"— y preguntale si le sirve de 9 en adelante. Cuando ' +
-                'te diga la hora nueva, reintentá.',
+              ? 'Ese día es DOMINGO: abrimos a las 14 y nuestro cadete no sale antes de las ' +
+                '14:30. NO cargues el pedido con esa hora. Decíselo derecho y preguntale si le ' +
+                'sirve de ahí en adelante, o si prefiere retirarlo o mandar un Uber. Cuando te ' +
+                'diga la hora nueva, reintentá.'
+              : 'Nuestro cadete no sale antes de las 9 de la mañana, sea lo que sea el pedido. ' +
+                'NO lo cargues con esa hora. Decíselo así, sin vueltas y sin disculpas de ' +
+                'más —"los envíos con nuestro cadete salen a partir de las 9"— y ofrecele las ' +
+                'dos salidas que sí hay más temprano: retirarlo por el local, que abre a las 8, ' +
+                'o mandar un Uber a buscarlo. Cuando te diga qué prefiere, reintentá.',
           };
         }
 

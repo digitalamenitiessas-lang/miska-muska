@@ -156,7 +156,6 @@ export const ORDER_STATUS_LABEL: Record<string, string> = {
   'en-preparacion': 'En preparación',
   listo: 'Listo',
   entregado: 'Entregado',
-  facturado: 'Facturado',
   cancelado: 'Cancelado',
 };
 
@@ -166,8 +165,6 @@ export const ORDER_STATUS_TONE: Record<string, PillTone> = {
   'en-preparacion': 'lav',
   listo: 'ok',
   entregado: 'grey',
-  // Verde: es el unico estado donde el pedido esta realmente terminado.
-  facturado: 'ok',
   cancelado: 'danger',
 };
 

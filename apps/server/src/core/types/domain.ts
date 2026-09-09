@@ -202,8 +202,6 @@ export type OrderStatus =
   | 'en-preparacion'
   | 'listo'
   | 'entregado'
-  /** Ya salió Y ya se cargó en la facturación, que es otro sistema. */
-  | 'facturado'
   | 'cancelado';
 
 export type DeliveryMode = 'retira-local' | 'uber-cliente' | 'cadete-miska';
@@ -254,6 +252,15 @@ export interface Order {
    */
   paidAt: string | null;
   status: OrderStatus;
+  /**
+   * Cuándo se cargó en el sistema de facturación, si ya se cargó.
+   *
+   * Va aparte del estado y no como un paso más, porque es otro eje: el
+   * recorrido lo maneja la cocina y la facturación otra persona, a veces antes
+   * de que el pedido salga y a veces después. El local: "a veces facturan antes
+   * o después de prepararlo, ¿facturado no podrá estar aparte?".
+   */
+  billedAt: string | null;
   deliveryMode: DeliveryMode;
   /** Fecha de retiro/entrega en formato YYYY-MM-DD. */
   deliveryDate: string | null;
