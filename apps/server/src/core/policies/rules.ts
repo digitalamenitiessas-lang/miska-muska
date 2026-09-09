@@ -577,8 +577,8 @@ te dieron.
 
 Para retirar en el local:
   Nombre y apellido / Teléfono / Producto / Fecha y hora de retiro.
-Para un Uber o cadete que manda el cliente (no aplica a desayunos ni boxes de regalo:
-esos los llevamos nosotros, o los retira quien compra):
+Para un Uber o cadete que manda el cliente (también para desayunos y boxes: los llevamos
+nosotros si quieren, pero puede retirarlos un Uber o quien ellos manden):
   Nombre y apellido / Teléfono / Producto / Nombre con el que va a retirar.
   EL NOMBRE DE QUIEN RETIRA NO FRENA EL PEDIDO. Es un dato útil y hay que pedirlo, pero se
   suma después: el pedido se carga igual sin él y se completa cuando lo diga.
@@ -1396,33 +1396,26 @@ export function validateOrder(
     discute — que además ya era lo que decía la prosa, y esta guarda la
     contradecía en el código.
 
-    La declaración se queda: la usa la guarda de acá abajo, la del tercero que
-    pasa a retirar, que sigue en pie.
   */
-  const envioPropio = itemsDeEnvioPropio(draft, productsById);
 
   /*
-    El mismo agujero por la otra puerta: retira-local con el nombre de un tercero.
-    El regalo sale con alguien que no es quien compra, sin sorpresa y sin que
-    sepamos quién se lo llevó. Se compara el nombre porque el esquema pide repetir
-    el de quien compra cuando lo recibe él mismo, y ese caso es legítimo.
+    UN TERCERO SÍ PUEDE RETIRAR UN DESAYUNO. Esta guarda se sacó.
+
+    Bloqueaba que un box o un desayuno lo retirara alguien que no fuera quien
+    compró, por el mismo motivo que la del Uber: el regalo salía sin sorpresa y
+    sin saber quién se lo llevó.
+
+    Cuando se dio de baja la del Uber quedó una contradicción a la vista: el bot
+    aceptaba que un chofer desconocido retirara el desayuno y le seguía diciendo
+    que no a un amigo con nombre y apellido. Se le preguntó al local y contestó
+    así: "que lo tome igual, no importa si es Uber o amigo. Pero primero que
+    confirmemos que está tomado el pedido para la hora que lo quiera".
+
+    Esa condición ya se cumple sin esta guarda: la hora de un desayuno la
+    confirma una persona siempre —ver `horaDesayunoAConfirmar` en crear_pedido—,
+    sea retiro, Uber o cadete nuestro. El pedido se carga, la hora queda anotada
+    y el local dice si llega. Quién lo pasa a buscar no cambia nada de eso.
   */
-  if (
-    draft.deliveryMode === 'retira-local' &&
-    envioPropio.length &&
-    draft.recipientName &&
-    normalizarNombre(draft.recipientName) !== normalizarNombre(draft.customerName)
-  ) {
-    problems.push({
-      code: 'desayuno_no_lo_retira_un_tercero',
-      message:
-        `${envioPropio.map((i) => i.description).join(', ')}: si lo retira alguien que no es ` +
-        'quien compra, eso lo autoriza el local. O lo llevamos nosotros con nuestro cadete ' +
-        '(cargalo con cadete-miska y pedile la dirección, el día y la franja en UN mensaje), o ' +
-        'lo retira quien compra. Si insisten con mandar a otra persona, decile que lo consultás ' +
-        'en cocina y escalá.',
-    });
-  }
 
   /*
     EL STOCK APAGADO FRENA LO DE HOY, NO LO DE LA SEMANA QUE VIENE.
