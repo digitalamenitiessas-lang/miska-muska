@@ -101,6 +101,15 @@ export interface BrainTurn {
   cacheReadTokens: number;
   /** Costo real en dólares que informa OpenRouter. */
   costUsd: number;
+  /**
+   * Cuántas veces se llamó al modelo en este turno.
+   *
+   * Cada vuelta reenvía el prompt entero, así que el costo es, en la práctica,
+   * el tamaño del prefijo por este número. Hasta ahora se estimaba dividiendo
+   * los tokens de entrada por lo que mide una vuelta, que alcanza para saber
+   * dónde mirar pero no para decidir.
+   */
+  rounds: number;
   /** Modelo que efectivamente respondió (OpenRouter puede haber ruteado a otro). */
   model: string | null;
   toolCalls: Array<{ name: string; input: unknown; ok: boolean }>;
@@ -253,6 +262,7 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
     outputTokens: 0,
     cacheReadTokens: 0,
     costUsd: 0,
+    rounds: 0,
     model: null,
     toolCalls: [],
     intent: 'chat',
@@ -304,6 +314,7 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
     turn.outputTokens += usage.completion_tokens ?? 0;
     turn.cacheReadTokens += usage.prompt_tokens_details?.cached_tokens ?? 0;
     turn.costUsd += usage.cost ?? 0;
+    turn.rounds += 1;
     turn.model = completion.model ?? model;
 
     if (completion.error) {

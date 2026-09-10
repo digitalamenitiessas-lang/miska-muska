@@ -506,6 +506,41 @@ CREATE INDEX IF NOT EXISTS idx_orders_sin_facturar
   ON orders (delivery_date) WHERE billed_at IS NULL;
 `,
   },
+  {
+    id: 15,
+    name: 'que-cuesta-cada-turno',
+    sql: `
+-- Lo que costó CADA turno, se haya mandado un mensaje o no.
+--
+-- Hasta acá el costo viajaba pegado al mensaje saliente, así que todo turno que
+-- terminaba sin decir nada era gratis para nuestras cuentas y carísimo en la
+-- factura: el bot decide callarse 261 veces por día, y cada una de esas paga el
+-- prompt entero. Tampoco quedaba registrado el turno que una persona descartó
+-- tomando la charla en el medio.
+--
+-- Y guarda las VUELTAS, que es el número que faltaba. El costo de un turno es
+-- el tamaño del prefijo por la cantidad de vueltas, y hasta ahora esa cantidad
+-- se estimaba dividiendo tokens: alcanzaba para saber dónde mirar, no para
+-- decidir qué recortar.
+CREATE TABLE IF NOT EXISTS model_turns (
+  id                text PRIMARY KEY,
+  conversation_id   text REFERENCES conversations(id) ON DELETE SET NULL,
+  intent            text,
+  rounds            integer NOT NULL DEFAULT 0,
+  input_tokens      integer NOT NULL DEFAULT 0,
+  output_tokens     integer NOT NULL DEFAULT 0,
+  cache_read_tokens integer NOT NULL DEFAULT 0,
+  cost_usd          numeric(12, 8) NOT NULL DEFAULT 0,
+  model             text,
+  latency_ms        integer,
+  -- 'respuesta' | 'callado' | 'error'. Lo que el turno produjo, no lo que se
+  -- termino enviando: el descarte por "la tomó una persona" pasa después.
+  resultado         text NOT NULL DEFAULT 'respuesta',
+  created_at        timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_model_turns_created ON model_turns (created_at DESC);
+`,
+  },
 ];
 
 /**

@@ -741,6 +741,38 @@ export class Pipeline {
       },
     });
 
+    /*
+      LO QUE COSTÓ ESTE TURNO SE ANOTA ACÁ, Y NO MÁS ABAJO.
+
+      Va pegado al retorno del modelo y antes de cualquier decisión sobre el
+      mensaje, porque de acá para abajo hay seis caminos que terminan en
+      `return` —el modelo se calló, una persona tomó la charla, el turno se
+      descartó, hubo error— y cada uno de esos se llevaba el costo puesto. El
+      importe viajaba pegado al mensaje saliente: sin mensaje, no había registro.
+
+      No es un detalle contable. El bot decide callarse 261 veces por día, y cada
+      una paga el prompt entero: son unos siete dólares diarios que la factura
+      cobraba y nuestros números no veían.
+
+      Que falle esto no puede tumbar el turno: es una medición, no la venta.
+    */
+    try {
+      await repos.modelTurns.record({
+        conversationId,
+        intent: turn.intent,
+        rounds: turn.rounds,
+        inputTokens: turn.inputTokens,
+        outputTokens: turn.outputTokens,
+        cacheReadTokens: turn.cacheReadTokens,
+        costUsd: turn.costUsd,
+        model: turn.model,
+        latencyMs: turn.latencyMs,
+        resultado: turn.error ? 'error' : turn.callado ? 'callado' : 'respuesta',
+      });
+    } catch (err) {
+      log('warn', `No pude anotar el costo del turno (${conversationId})`, String(err));
+    }
+
     // --- efectos de las herramientas ----------------------------------------
     /*
       Van ANTES del manejo de errores a propósito: si el modelo escaló y después se

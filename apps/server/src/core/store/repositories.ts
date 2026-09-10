@@ -881,6 +881,47 @@ export function createRepositories() {
     },
   };
 
+  /**
+   * Lo que costó cada turno del modelo, se haya mandado algo o no.
+   *
+   * Se escribe apenas vuelve el modelo y antes de cualquier decisión sobre el
+   * mensaje: así ningún camino de salida se lleva el dato puesto. Ver la
+   * migración 15.
+   */
+  const modelTurns = {
+    async record(t: {
+      conversationId: string | null;
+      intent: string | null;
+      rounds: number;
+      inputTokens: number;
+      outputTokens: number;
+      cacheReadTokens: number;
+      costUsd: number;
+      model: string | null;
+      latencyMs: number | null;
+      resultado: 'respuesta' | 'callado' | 'error';
+    }): Promise<void> {
+      await exec(
+        `INSERT INTO model_turns (id, conversation_id, intent, rounds, input_tokens,
+           output_tokens, cache_read_tokens, cost_usd, model, latency_ms, resultado)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+        [
+          newId('mt_'),
+          t.conversationId,
+          t.intent,
+          t.rounds,
+          t.inputTokens,
+          t.outputTokens,
+          t.cacheReadTokens,
+          t.costUsd,
+          t.model,
+          t.latencyMs,
+          t.resultado,
+        ],
+      );
+    },
+  };
+
   const orders = {
     /*
       `paidAt` no entra: no es un dato que traiga quien crea el pedido, sale de
@@ -1665,6 +1706,7 @@ export function createRepositories() {
 
   return {
     contacts, conversations, messages, products, orders, campaigns, courses, quickReplies, push,
+    modelTurns,
     media, settings, metrics,
   };
 }
