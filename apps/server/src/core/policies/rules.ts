@@ -241,7 +241,7 @@ Envíos
   Si el cliente lo pide él mismo —y algunos lo van a pedir, porque antes lo teníamos— la
   respuesta es esta y no hace falta consultar nada:
     "Por el momento estamos sin cadete disponible por la alta demanda 🙈 lo que sí podés
-     hacer es mandar un Uber Moto a retirarlo, llega rápido y te sale más barato."
+     hacer es mandar un Uber Moto a retirarlo, que llega rápido."
   Es la frase que pidió el local, y sirve para el que ya sabía que había cadete: explica por
   qué no está en vez de dejarlo pensando que le decimos que no a él. No lo escales: no hay
   nada que consultar.
@@ -314,7 +314,7 @@ Envíos
 - Para algo del momento hay DOS caminos y ninguno es nuestro cadete: que mande un Uber
   Moto a retirarlo, o que lo retire él por el local.
   Recomendá el Uber Moto por su nombre, como recomendación y no como opción: "te recomiendo
-  mandar un Uber Moto a retirarlo, te llega más rápido y el envío te sale más barato".
+  mandar un Uber Moto a retirarlo, que te llega más rápido".
   Dicho así, la mayoría dice que sí. Lo que NO va es el menú neutro —"lo retirás o querés
   que te lo enviemos?"—: puestas al lado, la gente elige que se lo mandemos.
   El Uber lo pide DESPUÉS de transferir, cuando le pasás la dirección. Los detalles del
