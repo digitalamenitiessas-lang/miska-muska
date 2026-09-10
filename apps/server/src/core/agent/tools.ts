@@ -273,8 +273,10 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         type: 'string',
         enum: ['retira-local', 'uber-cliente', 'cadete-miska'],
         description:
-          'Cómo lo recibe. Las tortas y tartas nunca van con cadete-miska. Los desayunos y los ' +
-          'boxes de regalo nunca van con uber-cliente: van con cadete-miska (los llevamos ' +
+          'Cómo lo recibe. cadete-miska es SOLO para desayunos y boxes de regalo: para todo lo ' +
+          'demás el envío va en el Uber que manda el cliente (uber-cliente) o se retira. Un ' +
+          'desayuno también puede ir en uber-cliente si el cliente lo prefiere. Las tortas y ' +
+          'tartas nunca van con cadete-miska (los llevamos ' +
           'nosotros) o retira-local.',
       },
       fecha_retiro: { type: 'string', description: 'AAAA-MM-DD.' },
@@ -733,8 +735,8 @@ export async function executeTool(
             ok: false,
             error:
               'Falta la modalidad, o vino con un valor que no existe. Tiene que ser exactamente ' +
-              'retira-local, uber-cliente o cadete-miska. Preguntale al cliente cómo lo recibe ' +
-              '(y si es un desayuno o un box de regalo, va con cadete-miska: lo llevamos nosotros).',
+              'retira-local, uber-cliente o cadete-miska. Preguntale al cliente cómo lo recibe. ' +
+              'cadete-miska es solo para desayunos y boxes; para el resto, uber-cliente o retiro.',
           };
         }
 
@@ -1120,6 +1122,30 @@ export async function executeTool(
                 'dos salidas que sí hay más temprano: retirarlo por el local, que abre a las 8, ' +
                 'o mandar un Uber a buscarlo. Cuando te diga qué prefiere, reintentá.',
           };
+        }
+
+        /*
+          TERMÓMETRO: nuestro cadete para algo que no es un desayuno.
+
+          El local sacó el cadete de todo lo que no sea desayuno: "desde el vamos
+          sacale la opción de que tenemos cadete; cadete solo ofrezcamos para
+          desayunos". Son unos 0,7 pedidos por día, medido sobre 30.
+
+          NO se bloquea, y es a propósito. Es una regla de NO OFRECER, no de no
+          poder: si una persona del local autoriza el cadete para unas cookies,
+          un bloqueo haría que el bot le discuta a la empleada, que es
+          exactamente lo que pasó el domingo con los envíos. Las guardas duras
+          son para lo que no puede pasar; esto es una preferencia comercial y va
+          en la prosa.
+
+          Se anota para poder ver en unos días si la regla escrita alcanzó.
+        */
+        if (modalidad === 'cadete-miska' && !llevaDesayuno) {
+          log(
+            'info',
+            `CADETE PARA ALGO QUE NO ES DESAYUNO (${ctx.conversation.id}): ` +
+              items.map((i) => `${i.quantity}x ${i.description}`).join(', '),
+          );
         }
 
         /*
