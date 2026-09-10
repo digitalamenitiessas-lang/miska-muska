@@ -46,6 +46,31 @@ for (const d of await q<{
   );
 }
 
+/*
+  El caché: cuánto se lee y cuánto hay que reescribir.
+
+  Un token leído de caché vale una décima de uno normal; uno ESCRITO vale más
+  que uno normal. El caché vence a los cinco minutos, así que cada hueco de
+  tráfico obliga a reescribir el prefijo entero en la vuelta siguiente. Este
+  número es el que decide si conviene pedir el caché de una hora, que se
+  escribe más caro pero muchas menos veces.
+*/
+const w = await q<{ v: number; esc: number; leido: number; conEsc: number }>(
+  `select coalesce(sum(rounds),0)::float v,
+          coalesce(sum(cache_write_tokens),0)::bigint::float esc,
+          coalesce(sum(cache_read_tokens),0)::bigint::float leido,
+          count(*) filter (where cache_write_tokens > 0)::int "conEsc"
+   from model_turns where created_at > ${desde}`,
+  [],
+);
+if (w[0].v > 0) {
+  console.log(`\n  === el caché: leer vs reescribir ===\n`);
+  const porVuelta = (n: number) => Math.round(n / w[0].v).toLocaleString('es-AR');
+  console.log(`  leído por vuelta      : ${porVuelta(w[0].leido)} tokens`);
+  console.log(`  reescrito por vuelta  : ${porVuelta(w[0].esc)} tokens (promediado)`);
+  console.log(`  turnos que reescriben : ${w[0].conEsc}`);
+}
+
 console.log(`\n  === lo que se paga sin mandar nada ===\n`);
 const r = await q<{ res: string; n: number; usd: number; v: number }>(
   `select resultado res, count(*)::int n, coalesce(sum(cost_usd),0)::float usd,

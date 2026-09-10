@@ -764,6 +764,7 @@ export class Pipeline {
         inputTokens: turn.inputTokens,
         outputTokens: turn.outputTokens,
         cacheReadTokens: turn.cacheReadTokens,
+        cacheWriteTokens: turn.cacheWriteTokens,
         costUsd: turn.costUsd,
         model: turn.model,
         latencyMs: turn.latencyMs,

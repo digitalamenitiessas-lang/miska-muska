@@ -323,7 +323,63 @@ function knowledgeBlock(settings: BotSettings): string | null {
 }
 
 /** Prompt estable (se cachea). No debe contener fechas ni nada volátil. */
-export function buildStablePrompt(settings: BotSettings): string {
+/**
+ * El catálogo completo, agrupado por categoría y con precio.
+ *
+ * VA EN EL BLOQUE CACHEADO, y esa es toda la gracia. Antes viajaba dentro del
+ * contexto del día, que se manda fresco en cada vuelta al modelo: 4.226 de los
+ * 5.271 caracteres de ese contexto eran esto, a precio pleno, 974 veces por día.
+ *
+ * Un token fresco cuesta unas diez veces uno de caché, así que ese 10% de
+ * tokens frescos se llevaba casi la mitad de la factura. Medido: 50.140 tokens
+ * de entrada por vuelta, 45.209 de caché y 4.931 frescos, y esos 4.931 pesaban
+ * el 47% del costo.
+ *
+ * Se construye SOLO con lo que no cambia durante el día —nombre, precio,
+ * categoría— y a propósito NO mira `availableToday`: si mirara, cada vez que el
+ * local prende o apaga un producto se invalidaría el caché de todos. Qué hay
+ * hoy lo dice el contexto del día, que sigue yendo fresco porque tiene que
+ * estar al minuto.
+ */
+function catalogoCompleto(products: Product[]): string {
+  const porCategoria = new Map<string, Product[]>();
+  for (const p of [...products].sort((a, b) => a.name.localeCompare(b.name, 'es'))) {
+    const lista = porCategoria.get(p.category) ?? [];
+    lista.push(p);
+    porCategoria.set(p.category, lista);
+  }
+  const lineas = [...porCategoria.entries()].map(
+    ([categoria, lista]) =>
+      `  ${categoria}: ${lista.map((p) => `${p.name} $${p.price.toLocaleString('es-AR')}`).join(' · ')}`,
+  );
+  return (
+    'CATÁLOGO COMPLETO — todo lo que vendemos, con su precio.\n' +
+    'Que algo esté en esta lista NO quiere decir que hoy haya: eso lo dice la lista del día, ' +
+    'más abajo, y esa manda. Esta lista sirve para dos cosas: saber cuánto sale algo aunque ' +
+    'hoy esté agotado, y saber que existe.\n' +
+    lineas.join('\n') +
+    /*
+      Y acá, cómo se leen las dos listas del día. La explicación vive en este
+      bloque —que se cachea— y no al lado de las listas, que se mandan frescas
+      en cada vuelta: son las mismas palabras siempre, no tiene sentido pagarlas
+      a precio pleno mil veces por día.
+    */
+    '\n\nCÓMO SE LEEN LAS DOS LISTAS DEL DÍA (van más abajo, con los nombres nada más):\n' +
+    '- DISPONIBLE HOY: lo único que se puede vender hoy. No ofrezcas nada que no esté ahí.\n' +
+    '- HOY NO HAY: existe y tiene precio —está en el catálogo de arriba—, pero hoy está ' +
+    'agotado. Podés decir cuánto sale y ofrecer lo que sí hay, pero NO lo cargues en un ' +
+    'pedido de hoy.\n' +
+    '- Los que dicen [no se encarga] son los que NO se producen para una fecha: con esos no ' +
+    'ofrezcas consultarlos para otro día ni coordinar una entrega, porque el stock lo maneja ' +
+    'el local y nadie sabe cuándo vuelve a haber. Con las tortas y los desayunos sí.'
+  );
+}
+
+export function buildStablePrompt(
+  settings: BotSettings,
+  products: Product[] = [],
+  quickReplies: QuickReply[] = [],
+): string {
   return [
     IDENTITY,
     'No te presentes con un nombre propio ni firmes con uno. Del otro lado hay un equipo, ' +
@@ -335,6 +391,12 @@ export function buildStablePrompt(settings: BotSettings): string {
     EMOTION,
     POLICY_PROSE,
     operationalFacts(settings),
+    products.length ? catalogoCompleto(products) : '',
+    quickReplies.length
+      ? 'MENSAJES RÁPIDOS que escribió el local (traelos con `mensaje_rapido`, no los ' +
+        'reescribas): ' +
+        quickReplies.map((q) => `${q.key} (${q.label})`).join(' · ')
+      : '',
     knowledgeBlock(settings),
     TOOL_GUIDANCE,
   ]
@@ -425,18 +487,20 @@ export function buildDailyContext(input: DailyContextInput): string {
     );
   }
 
+/*
+    SOLO LOS NOMBRES. Los precios están en el catálogo completo, que va en el
+    bloque cacheado y el modelo tiene delante.
+
+    Repetirlos acá costaba caro: esta parte se manda fresca en cada vuelta y un
+    token fresco vale diez veces uno de caché. Sacando los precios y las
+    categorías, este bloque pasa de 4.226 caracteres a unos 700.
+
+    Se mantiene la frase "no ofrezcas nada que no esté acá" tal cual, porque es
+    la que hace el trabajo: el catálogo de arriba dice qué existe, esta lista
+    dice qué se puede vender hoy, y entre las dos gana esta.
+  */
   const available = products.filter((p) => p.availableToday);
-  const byCategory = new Map<string, Product[]>();
-  for (const p of available) {
-    const list = byCategory.get(p.category) ?? [];
-    list.push(p);
-    byCategory.set(p.category, list);
-  }
-  const catalogLines = [...byCategory.entries()].map(
-    ([category, list]) =>
-      `  ${category}: ${list.map((p) => `${p.name} $${p.price.toLocaleString('es-AR')}`).join(' · ')}`,
-  );
-  parts.push(`DISPONIBLE HOY (no ofrezcas nada que no esté acá):\n${catalogLines.join('\n')}`);
+  parts.push(`DISPONIBLE HOY:\n  ${available.map((p) => p.name).join(' · ')}`);
 
   /*
     Lo que hoy no hay va AGRUPADO POR CATEGORÍA Y CON PRECIO, igual que lo que
@@ -479,19 +543,25 @@ export function buildDailyContext(input: DailyContextInput): string {
     */
     const marca = (p: Product) =>
       seEncargaConAnticipacion(p.category) ? '' : ' [no se encarga]';
+    /*
+      SIN PRECIOS: están en el catálogo completo, que va en el bloque cacheado.
+
+      Este bloque se manda fresco en cada vuelta y un token fresco vale unas
+      diez veces uno de caché, así que repetir 51 precios acá era de lo más
+      caro que había en el prompt.
+
+      La agrupación por categoría SÍ se queda, y es lo que hace el trabajo de
+      este bloque: sin ella el bot no sabía que "Frutimiska" o "Tarta de
+      frutilla" eran tortas, y contestaba "las tortas no las tenemos"
+      nombrando solo las dos que se llaman torta. La marca [no se encarga]
+      también se queda, porque decide si se puede ofrecer para otro día.
+    */
     const lineasConMarca = [...porCategoria.entries()].map(
       ([categoria, list]) =>
-        `  ${categoria}: ${list
-          .map((p) => `${p.name} $${p.price.toLocaleString('es-AR')}${marca(p)}`)
-          .join(' · ')}`,
+        `  ${categoria}: ${list.map((p) => `${p.name}${marca(p)}`).join(' · ')}`,
     );
     parts.push(
-      'HOY NO HAY (existen y tienen precio, pero hoy están agotados). Podés decir cuánto ' +
-        'salen y ofrecer lo que sí hay, pero NO los cargues en un pedido de hoy.\n' +
-        'Los que dicen [no se encarga] son los que NO se producen para una fecha: con esos ' +
-        'no ofrezcas consultarlos para otro día ni coordinar una entrega, porque el stock lo ' +
-        'maneja el local y nadie sabe cuándo vuelve a haber. Con los otros —tortas y ' +
-        `desayunos— sí:\n${lineasConMarca.join('\n')}`,
+      `HOY NO HAY:\n${lineasConMarca.join('\n')}`,
     );
   }
 
@@ -543,12 +613,13 @@ export function buildDailyContext(input: DailyContextInput): string {
     );
   }
 
-  if (quickReplies.length) {
-    parts.push(
-      'Mensajes rápidos disponibles (traelos con `mensaje_rapido`): ' +
-        quickReplies.map((q) => `${q.key} (${q.label})`).join(' · '),
-    );
-  }
+  /*
+    Los mensajes rápidos NO van acá: van en el bloque cacheado.
+
+    Son textos que el local edita una vez cada tanto, no algo que cambie durante
+    el día. Listarlos en el contexto fresco costaba 878 caracteres a precio
+    pleno en cada vuelta, por un dato que es el mismo toda la semana.
+  */
 
   /*
     Lo único que hoy le faltaba al modelo para no ser ciego a su propia escritura:

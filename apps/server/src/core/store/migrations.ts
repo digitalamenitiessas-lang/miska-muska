@@ -541,6 +541,23 @@ CREATE TABLE IF NOT EXISTS model_turns (
 CREATE INDEX IF NOT EXISTS idx_model_turns_created ON model_turns (created_at DESC);
 `,
   },
+  {
+    id: 16,
+    name: 'cuanto-se-reescribe-el-cache',
+    sql: `
+-- Cuántos tokens hubo que ESCRIBIR en el caché, no solo leer.
+--
+-- El caché vence a los cinco minutos. Cada hueco de tráfico más largo que eso
+-- obliga a reescribir el prefijo entero en la vuelta siguiente, y eso se paga
+-- más caro que un token normal. Midiendo esto se puede decidir si conviene
+-- pedir el caché de una hora: se escribe más caro pero muchas menos veces.
+--
+-- La sospecha que lo motiva: de los 4.931 tokens frescos por vuelta, el
+-- contexto del día y el historial explican unos 2.800. Los otros 2.100 no
+-- tenían dueño.
+ALTER TABLE model_turns ADD COLUMN IF NOT EXISTS cache_write_tokens integer NOT NULL DEFAULT 0;
+`,
+  },
 ];
 
 /**

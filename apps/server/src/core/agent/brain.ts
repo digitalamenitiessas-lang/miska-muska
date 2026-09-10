@@ -99,6 +99,17 @@ export interface BrainTurn {
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;
+  /**
+   * Tokens que hubo que ESCRIBIR en el caché, que se pagan más caro que los
+   * normales.
+   *
+   * El caché de Anthropic vence a los cinco minutos. Cada hueco de tráfico más
+   * largo que eso obliga a reescribir el prefijo entero —hoy unos 45.000
+   * tokens— en la vuelta siguiente. Sin medirlo no se puede saber si conviene
+   * pedir el caché de una hora, que se escribe más caro pero muchas menos
+   * veces.
+   */
+  cacheWriteTokens: number;
   /** Costo real en dólares que informa OpenRouter. */
   costUsd: number;
   /**
@@ -261,6 +272,7 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
     inputTokens: 0,
     outputTokens: 0,
     cacheReadTokens: 0,
+    cacheWriteTokens: 0,
     costUsd: 0,
     rounds: 0,
     model: null,
@@ -288,7 +300,17 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
     return turn;
   }
 
-  const stable: TextPart = { type: 'text', text: buildStablePrompt(settings) };
+  /*
+    El catalogo entra en el bloque CACHEADO, no en el contexto del dia.
+
+    Se construye solo con nombre, precio y categoria: nada que cambie durante
+    el dia. Que hay hoy y que no lo sigue diciendo el contexto del dia, que va
+    fresco porque tiene que estar al minuto.
+  */
+  const stable: TextPart = {
+    type: 'text',
+    text: buildStablePrompt(settings, dailyContext.products, dailyContext.quickReplies),
+  };
   if (supportsExplicitCaching(model)) stable.cache_control = { type: 'ephemeral' };
 
   const messages: ChatMessage[] = [
@@ -313,6 +335,7 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
     turn.inputTokens += usage.prompt_tokens ?? 0;
     turn.outputTokens += usage.completion_tokens ?? 0;
     turn.cacheReadTokens += usage.prompt_tokens_details?.cached_tokens ?? 0;
+    turn.cacheWriteTokens += usage.prompt_tokens_details?.cache_write_tokens ?? 0;
     turn.costUsd += usage.cost ?? 0;
     turn.rounds += 1;
     turn.model = completion.model ?? model;

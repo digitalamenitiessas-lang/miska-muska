@@ -896,6 +896,7 @@ export function createRepositories() {
       inputTokens: number;
       outputTokens: number;
       cacheReadTokens: number;
+      cacheWriteTokens: number;
       costUsd: number;
       model: string | null;
       latencyMs: number | null;
@@ -903,8 +904,9 @@ export function createRepositories() {
     }): Promise<void> {
       await exec(
         `INSERT INTO model_turns (id, conversation_id, intent, rounds, input_tokens,
-           output_tokens, cache_read_tokens, cost_usd, model, latency_ms, resultado)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+           output_tokens, cache_read_tokens, cache_write_tokens, cost_usd, model,
+           latency_ms, resultado)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
         [
           newId('mt_'),
           t.conversationId,
@@ -913,6 +915,7 @@ export function createRepositories() {
           t.inputTokens,
           t.outputTokens,
           t.cacheReadTokens,
+          t.cacheWriteTokens,
           t.costUsd,
           t.model,
           t.latencyMs,
