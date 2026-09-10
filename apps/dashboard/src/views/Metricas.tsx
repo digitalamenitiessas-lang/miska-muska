@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, type Metrics } from '../api';
+import { api, type MetricPoint, type Metrics } from '../api';
 import { Empty } from '../ui';
+
 
 /**
  * Paleta de los gráficos.
@@ -126,6 +127,17 @@ export function Metricas() {
 
       <section className="card" style={{ marginBottom: 14 }}>
         <div className="card-pad">
+          <h3 className="card-title">Consumo del modelo</h3>
+          {daily.length === 0 ? (
+            <Empty glyph="💸">Todavía no hay consumo para graficar.</Empty>
+          ) : (
+            <ConsumoPorDia daily={daily} />
+          )}
+        </div>
+      </section>
+
+      <section className="card" style={{ marginBottom: 14 }}>
+        <div className="card-pad">
           <h3 className="card-title">Mensajes por día</h3>
           {daily.length === 0 ? (
             <Empty glyph="📭">Todavía no hay actividad para graficar.</Empty>
@@ -169,6 +181,68 @@ export function Metricas() {
           </div>
         </section>
       </div>
+    </>
+  );
+}
+
+/**
+ * El consumo del modelo, día por día.
+ *
+ * El local: "necesito poder ver en las métricas los consumos, quizás añadir una
+ * barrita más de consumo, para ver cómo vamos".
+ *
+ * Se dibuja con el gasto de verdad, que sale de contar TODOS los turnos: el bot
+ * decide callarse unas 190 veces por día y cada una paga el prompt entero sin
+ * dejar mensaje. La cuenta vieja, que sumaba los mensajes salientes, se quedaba
+ * corta un 16%.
+ *
+ * La barra de hoy va aparte y en otro color: el día está a medio hacer y
+ * compararla con las cerradas sin avisar sería engañoso.
+ */
+function ConsumoPorDia({ daily }: { daily: MetricPoint[] }) {
+  const hoy = new Date().toLocaleDateString('en-CA', { timeZone: 'America/Argentina/Tucuman' });
+  const max = Math.max(...daily.map((d) => d.costUsd), 0.01);
+  const cerrados = daily.filter((d) => d.day !== hoy);
+  const promedio = cerrados.length
+    ? cerrados.reduce((s, d) => s + d.costUsd, 0) / cerrados.length
+    : 0;
+  const total = daily.reduce((s, d) => s + d.costUsd, 0);
+
+  return (
+    <>
+      <div className="row consumo-resumen">
+        <span>
+          <strong>{usd(total)}</strong> <span className="muted">en el período</span>
+        </span>
+        {promedio > 0 ? (
+          <span>
+            <strong>{usd(promedio)}</strong> <span className="muted">por día</span>
+          </span>
+        ) : null}
+        {promedio > 0 ? (
+          <span>
+            <strong>{usd(promedio * 30)}</strong> <span className="muted">al mes, a este ritmo</span>
+          </span>
+        ) : null}
+      </div>
+      <div className="consumo">
+        {daily.map((d) => {
+          const esHoy = d.day === hoy;
+          const alto = Math.max(2, Math.round((d.costUsd / max) * 100));
+          const [, mes, dia] = d.day.split('-');
+          return (
+            <div key={d.day} className="consumo-col" title={`${dia}/${mes}: ${usd(d.costUsd)}${d.turnos ? ` · ${d.turnos} turnos` : ''}`}>
+              <span className="consumo-cifra">{d.costUsd >= 1 ? d.costUsd.toFixed(0) : ''}</span>
+              <div className={`consumo-barra${esHoy ? ' hoy' : ''}`} style={{ height: `${alto}%` }} />
+              <span className="consumo-dia">{esHoy ? 'hoy' : `${dia}/${mes}`}</span>
+            </div>
+          );
+        })}
+      </div>
+      <p className="small muted" style={{ marginTop: 8 }}>
+        En dólares, lo que cobra OpenRouter. Los días sin turnos contados son anteriores a
+        que empezáramos a medir los turnos que no mandan mensaje, y quedan cortos.
+      </p>
     </>
   );
 }

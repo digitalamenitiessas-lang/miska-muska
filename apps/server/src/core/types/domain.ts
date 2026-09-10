@@ -450,6 +450,13 @@ export interface MetricPoint {
   outputTokens: number;
   /** Gasto real del día en dólares, según OpenRouter. */
   costUsd: number;
+  /**
+   * Turnos del modelo de ese día, contando los que no mandaron nada.
+   *
+   * Cero en los días anteriores a que empezáramos a medirlos: ahí el costo es
+   * el viejo, el que solo veía los mensajes salientes, y queda corto un 16%.
+   */
+  turnos: number;
 }
 
 // ---------------------------------------------------------------------------

@@ -1613,6 +1613,28 @@ export function createRepositories() {
         [days, TIMEZONE],
       );
 
+      /*
+        EL COSTO SALE DE model_turns, NO DE LOS MENSAJES.
+
+        Un turno que termina sin mandar nada -el bot decide callarse 190 veces
+        por día- paga el prompt entero y no deja mensaje, así que sumando
+        `messages` faltaba el 16% del gasto. La cuenta de arriba se queda para
+        los mensajes y los tokens; la plata la pisa esta.
+
+        Los días anteriores a que existiera la tabla no tienen filas, y ahí se
+        deja el número viejo: es lo único que hay para esos días, y borrarlo
+        dejaría el gráfico vacío hacia atrás.
+      */
+      const reales = await q<{ day: string; cost_usd: string; turnos: string }>(
+        `SELECT to_char(created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS day,
+                SUM(cost_usd) AS cost_usd, COUNT(*) AS turnos
+         FROM model_turns
+         WHERE created_at >= now() - ($1 || ' days')::interval
+         GROUP BY day`,
+        [days, TIMEZONE],
+      );
+      const porDia = new Map(reales.map((r) => [r.day, r]));
+
       const orderRows = await q<{ day: string; n: string }>(
         `SELECT to_char(created_at AT TIME ZONE $2, 'YYYY-MM-DD') AS day, COUNT(*) AS n
          FROM orders WHERE created_at >= now() - ($1 || ' days')::interval
@@ -1630,7 +1652,9 @@ export function createRepositories() {
         orders: ordersByDay.get(String(r.day)) ?? 0,
         inputTokens: Number(r.input_tokens ?? 0),
         outputTokens: Number(r.output_tokens ?? 0),
-        costUsd: Number(r.cost_usd ?? 0),
+        // El de model_turns si ese día ya se estaba midiendo; si no, el viejo.
+        costUsd: Number(porDia.get(String(r.day))?.cost_usd ?? r.cost_usd ?? 0),
+        turnos: Number(porDia.get(String(r.day))?.turnos ?? 0),
       }));
     },
 

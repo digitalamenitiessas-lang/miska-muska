@@ -1849,3 +1849,26 @@ table.grid tbody tr:hover {
   border-color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
 }
+
+/* El gráfico de consumo del modelo. Barras simples: lo que importa es la
+   forma de la curva y si hoy se sale de lo normal, no el número exacto. */
+.consumo-resumen { gap: 18px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
+.consumo {
+  display: flex; align-items: flex-end; gap: 5px;
+  height: 140px; padding-top: 14px;
+}
+.consumo-col {
+  flex: 1; display: flex; flex-direction: column; align-items: center;
+  justify-content: flex-end; height: 100%; min-width: 0;
+}
+.consumo-cifra { font-size: 9.5px; color: var(--muted); line-height: 1; margin-bottom: 2px; }
+.consumo-barra {
+  width: 100%; border-radius: 3px 3px 0 0;
+  background: color-mix(in srgb, var(--accent) 55%, transparent);
+  min-height: 2px;
+}
+.consumo-barra.hoy { background: var(--accent); }
+.consumo-dia {
+  font-size: 9px; color: var(--muted); margin-top: 4px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}

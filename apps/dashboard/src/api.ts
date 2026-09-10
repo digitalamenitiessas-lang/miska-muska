@@ -295,6 +295,8 @@ export interface MetricPoint {
   inputTokens: number;
   outputTokens: number;
   costUsd: number;
+  /** Turnos del modelo, incluidos los que no mandaron nada. 0 si ese dia no se media. */
+  turnos?: number;
 }
 
 export interface ResumenPedidos {
