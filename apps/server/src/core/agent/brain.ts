@@ -27,7 +27,7 @@
 
 import { config } from '../../config.js';
 import { log } from '../events/bus.js';
-import { normalizeBubbles } from '../policies/writing.js';
+import { normalizeBubbles, suenaAEspana } from '../policies/writing.js';
 import type { BotSettings, StoredMessage } from '../types/domain.js';
 import { buildDailyContext, buildStablePrompt, SPLIT_MARKER, type DailyContextInput } from './persona.js';
 import { executeTool, TOOL_DEFINITIONS, type ToolContext } from './tools.js';
@@ -411,6 +411,12 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
         // que hoy no existía en ningún lado.
         log('info', 'La guarda de escritura corrigió el turno', normalized.fixes);
       }
+      /*
+        Termómetro del acento. Solo anota: ver `suenaAEspana`, que explica por qué
+        esto no se corrige. Si aparece seguido, el prompt no alcanzó.
+      */
+      const espana = suenaAEspana(turn.bubbles.join(' '));
+      if (espana.length) log('warn', `SE LE ESCAPÓ EL ACENTO: ${espana.join(', ')}`);
       if (!turn.bubbles.length) {
         turn.error =
           choice.finish_reason === 'length'

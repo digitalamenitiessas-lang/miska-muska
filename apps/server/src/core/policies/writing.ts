@@ -383,3 +383,35 @@ export function normalizeBubbles(bubbles: string[]): { bubbles: string[]; fixes:
   }
   return { bubbles: out, fixes: [...new Set(fixes)] };
 }
+
+/*
+  TERMÓMETRO: se le escapó el acento.
+
+  La dueña marcó "eso mola 🤝" a los pocos minutos de estrenar el modelo nuevo.
+  Medido sobre el corpus real: cero apariciones en 1944 mensajes del modelo
+  anterior, una en los primeros 155 del nuevo. Es una desviación nueva, y rara.
+
+  NO se corrige, y es a propósito. Cambiar "mola" por otra cosa obliga a
+  reescribir la frase entera, y una guarda que reescribe frases rompe más de lo
+  que arregla. El acento es tono, y el tono lo pone el prompt; esto solo cuenta
+  si el prompt alcanzó.
+
+  Cada patrón está anclado a la forma que NO se usa en Tucumán y que no puede
+  confundirse con otra cosa: "vale" solo como muletilla al principio de la
+  oración, porque "vale $4.700" es correcto y sale cien veces por día.
+*/
+const SUENA_A_ESPANA: Array<[string, RegExp]> = [
+  ['mola', /\b(mola|molan|molaba)\b/i],
+  ['vale', /(^|[.!?¡¿]\s+|\n)\s*vale\b\s*[,.!]/im],
+  ['guay', /\bguay\b/i],
+  ['vosotros', /\b(vosotros|vuestr[oa]s?|os\s+(apetece|gusta|mando|paso|dejo))\b/i],
+  ['flipar', /\bflip(a|ar|as|ante)\b/i],
+  ['chaval', /\bchaval(es)?\b/i],
+  ['zumo', /\bzumo\b/i],
+  ['coger', /\bcoge(r|s|mos)?\b/i],
+];
+
+/** Las palabras de España que aparecieron en el texto. Vacío si está bien. */
+export function suenaAEspana(text: string): string[] {
+  return SUENA_A_ESPANA.filter(([, re]) => re.test(text)).map(([nombre]) => nombre);
+}
