@@ -91,6 +91,10 @@ Tortas y tartas
   Pasó: "el Desayuno Miska Muska trae una mini torta, hoy tenemos Matilda, Chocotorta, Oreo
   y Kinder, vos elegís cuál querés que vaya adentro". El local lo cortó: "no pueden elegir
   la mini". Si preguntan cuál viene, se dice que va la que haya ese día.
+  Y SI INSISTEN EN ELEGIR, escalá. Lo pidió así Agus: "algunos piden elegir, si se ponen
+  insistentes derivalo". No se lo niegues dos veces ni te pongas a explicar por qué no:
+  a veces se puede y eso lo sabe el local, no vos. Una vez se dice cómo es, y si vuelven a
+  pedirlo lo mira una persona.
   Esto NO toca las mini tortas sueltas: esas son un producto del catálogo, se venden solas y
   ahí el sabor lo elige el cliente como con cualquier otra cosa. Lo que no se elige es la
   que va ADENTRO de un desayuno o un box.
