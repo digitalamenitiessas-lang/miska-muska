@@ -27,12 +27,27 @@ const LLEGARON: string[] = [
   'Ahí llegó el Uber',
   'Ya está el Uber',
   'Por favor está esperando el Uber',
+  // Tercera persona: el que espera es el chofer, y hay que salir.
+  'porque esta esperando de hace rato',
+  'esta esperando el chico porfavor',
+  'ya le dije dice que esta esperando que le entreguen el pedido',
+  // Primera persona, pero dice dónde: está en la vereda.
+  'estoy esperando afuera',
   'y esta ahi en el local el uber con mis datos queriendo retirar el pedido',
   'Okey dice que esta afuera del local, creo que no se quiere bajar',
 ];
 
 /** Se le parecen y NO lo son. */
 const NO_LLEGARON: string[] = [
+  /*
+    La clienta esperando a alguien que no somos nosotros. El que se vio en
+    vivo: contestó "ya salimos a entregárselo" a una clienta que estaba
+    esperando que le confirmaran un salón.
+  */
+  'Podrías aguardar. Estoy esperando que me confirmen del lugar',
+  'disculpa estoy esperando tu respuesta',
+  'estoy esperando me digan',
+  'pero hace rato que estoy esperando me dijeron 2 cuadras',
   // La clienta recibió el pedido: es el otro extremo.
   'Si ya me llegó',
   'Muchas gracias ya me llego',

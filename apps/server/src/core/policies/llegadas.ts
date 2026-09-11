@@ -30,7 +30,27 @@ function plano(texto: string): string {
 
 /** Las formas en que la gente avisa que el chofer está. Salieron de la base. */
 const ESTA_ESPERANDO: RegExp[] = [
-  /\b(esta|estoy) (afuera|en la puerta|esperando)\b/,
+  /\b(esta|estoy) (afuera|en la puerta)\b/,
+  /*
+    "Esperando" separado por persona, y esto salió de un caso que se vio en
+    vivo. La clienta escribió "podrías aguardar, estoy esperando que me
+    confirmen del lugar" —estaba esperando a OTRO, no en nuestra puerta— y el
+    bot le contestó "ya salimos a entregárselo". Tuvo que entrar una empleada:
+    "tranqui, un error fue de la automatización".
+
+    Medido sobre 15.777 mensajes entrantes de 120 días, la rama suelta se
+    prendía 10 veces y casi la mitad estaban mal. Lo que las separa es la
+    persona: "ESTÁ esperando" es alguien contando de un tercero, y ese tercero
+    es el chofer. "ESTOY esperando" es la clienta esperándonos a nosotros, y
+    los cuatro casos malos eran todos así —"tu respuesta", "me digan", "que me
+    confirmen"—. Con este corte los cinco avisos de verdad siguen entrando y
+    los cuatro falsos quedan afuera.
+
+    La primera persona vuelve a contar si dice DÓNDE está esperando, que es
+    cuando sí está en la vereda.
+  */
+  /\besta esperando\b/,
+  /\b(esta|estoy) esperando (afuera|en la puerta|aca|aqui|abajo)\b/,
   /\bahi (esta|estan)\b/,
   /\b(esta|estan) (ahi|aca|aqui)\b/,
   /\besta a (un|1|dos|2|tres|3|cinco|5) (min|minuto|minutos|cuadra|cuadras)\b/,
