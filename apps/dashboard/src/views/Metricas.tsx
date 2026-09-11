@@ -207,6 +207,14 @@ function ConsumoPorDia({ daily }: { daily: MetricPoint[] }) {
     ? cerrados.reduce((s, d) => s + d.costUsd, 0) / cerrados.length
     : 0;
   const total = daily.reduce((s, d) => s + d.costUsd, 0);
+  /*
+    El costo por mensaje se saca SOLO de los días ya medidos y cerrados. En los
+    anteriores el gasto viene de la cuenta vieja, que se quedaba corta, y
+    dividirlo por los mensajes de verdad daría un número bajo y mentiroso.
+  */
+  const medidos = cerrados.filter((d) => (d.turnos ?? 0) > 0);
+  const msjMedidos = medidos.reduce((s, d) => s + d.inbound, 0);
+  const porMensaje = msjMedidos ? medidos.reduce((s, d) => s + d.costUsd, 0) / msjMedidos : 0;
 
   return (
     <>
@@ -224,6 +232,12 @@ function ConsumoPorDia({ daily }: { daily: MetricPoint[] }) {
             <strong>{usd(promedio * 30)}</strong> <span className="muted">al mes, a este ritmo</span>
           </span>
         ) : null}
+        {porMensaje > 0 ? (
+          <span>
+            <strong>{usd(porMensaje)}</strong>{' '}
+            <span className="muted">por mensaje que entra</span>
+          </span>
+        ) : null}
       </div>
       <div className="consumo">
         {daily.map((d) => {
@@ -231,20 +245,31 @@ function ConsumoPorDia({ daily }: { daily: MetricPoint[] }) {
           const alto = Math.max(2, Math.round((d.costUsd / max) * 100));
           const [, mes, dia] = d.day.split('-');
           return (
-            <div key={d.day} className="consumo-col" title={`${dia}/${mes}: ${usd(d.costUsd)}${d.turnos ? ` · ${d.turnos} turnos` : ''}`}>
+            <div
+              key={d.day}
+              className="consumo-col"
+              title={
+                `${dia}/${mes}: ${usd(d.costUsd)} · ${d.inbound} mensajes` +
+                (d.turnos ? ` · ${d.turnos} turnos` : '')
+              }
+            >
               <div className="consumo-pista">
                 <div className={`consumo-barra${esHoy ? ' hoy' : ''}`} style={{ height: `${alto}%` }}>
                   <span className="consumo-cifra">{d.costUsd >= 1 ? d.costUsd.toFixed(0) : ''}</span>
                 </div>
               </div>
               <span className="consumo-dia">{esHoy ? 'hoy' : `${dia}/${mes}`}</span>
+              <span className="consumo-msj">{d.inbound}</span>
             </div>
           );
         })}
       </div>
       <p className="small muted" style={{ marginTop: 8 }}>
-        En dólares, lo que cobra OpenRouter. Los días sin turnos contados son anteriores a
-        que empezáramos a medir los turnos que no mandan mensaje, y quedan cortos.
+        La barra y el número de arriba son dólares, lo que cobra OpenRouter. El número
+        chiquito de abajo son los mensajes que entraron ese día, para ver si el gasto sube
+        porque hubo más trabajo o porque cada charla salió más cara. Los días sin turnos
+        contados son anteriores a que empezáramos a medir los turnos que no mandan mensaje,
+        y quedan cortos.
       </p>
     </>
   );

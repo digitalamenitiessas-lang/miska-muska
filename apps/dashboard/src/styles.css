@@ -1855,7 +1855,7 @@ table.grid tbody tr:hover {
 .consumo-resumen { gap: 18px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; }
 .consumo {
   display: flex; align-items: flex-end; gap: 5px;
-  height: 140px; padding-top: 14px;
+  height: 152px; padding-top: 14px;
 }
 .consumo-col {
   flex: 1; display: flex; flex-direction: column;
@@ -1881,4 +1881,12 @@ table.grid tbody tr:hover {
 .consumo-dia {
   font-size: 9px; color: var(--ink-soft); margin-top: 4px;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+  text-align: center;
+}
+/* Los mensajes que entraron ese dia. Van mas apagados que la fecha a proposito:
+   la barra es la plata, y esto es el volumen que la explica. Se leen como un
+   renglon aparte, no como parte de la fecha. */
+.consumo-msj {
+  font-size: 9px; color: var(--ink-faint); margin-top: 1px;
+  font-variant-numeric: tabular-nums; text-align: center;
 }
