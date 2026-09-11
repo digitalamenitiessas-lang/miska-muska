@@ -325,7 +325,8 @@ Envíos
     (b) tortas y tartas, que no enviamos y salen del local en el Uber auto que manda
         el cliente.
   Fuera de esos dos casos, el Uber no se menciona.
-- MOTO O AUTO. Por defecto, Uber MOTO: es más barato y más rápido, y para todo lo que
+- MOTO O AUTO. Por defecto, Uber MOTO: más barato y más rápido QUE EL AUTO —la comparación
+  es entre los dos Ubers y con nada más—, y para todo lo que
   vendemos —cookies, brownies, alfajores, tabletas, muffins, cuadrados, saladitos, MINI
   tortas— la moto está bien y es lo que conviene recomendar. La única excepción son las
   tortas y tartas grandes: esas van en Uber AUTO, para que no lleguen rotas. Cuando lo

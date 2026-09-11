@@ -119,6 +119,37 @@ const LADO_EQUIVOCADO: Array<[RegExp, (coincidencia: string) => string]> = [
   es peor que uno con una palabra de más. De esos dos se ocupa el prompt.
 */
 
+/*
+  LOS MARCADORES QUE METEMOS NOSOTROS NO SALEN AL CHAT.
+
+  Al historial que ve el modelo le agregamos dos cosas que no existen en la
+  conversación real: un rótulo de día al empezar cada jornada —"[hoy]",
+  "[ayer]", "[el 8/9/2026]"— para que no lea un "mañana" de anteayer como si
+  fuera de hoy, y un "[operador del local]" delante de los mensajes que
+  escribió una persona del local, para que no los confunda con los suyos.
+
+  Los dos sirven. Pero el modelo los lee como texto y una vez los repitió:
+  "el operador del local te ofrece que mandes un Uber a retirar". La clienta
+  no tiene por qué enterarse de que hay un bot y un operador, y menos en el
+  mensaje donde nos está cancelando un pedido.
+
+  Una vez en 10.520 mensajes de catorce días. Va igual como guarda y no como
+  regla del prompt: que un marcador nuestro aparezca en un mensaje al cliente
+  no es una cuestión de estilo que a veces sale mejor y a veces peor, es algo
+  que no puede pasar.
+
+  Los corchetes se borran; la forma en prosa se cambia por "el local", que es
+  verdad y deja la frase parada. Borrarla a secas dejaría "…te ofrece que
+  mandes un Uber", sin sujeto.
+*/
+const MARCADORES_INTERNOS: Array<[RegExp, string]> = [
+  [/\[\s*operador del local\s*\]\s*/gi, ''],
+  [/\bel operador del local\b/gi, 'el local'],
+  [/\b(?:un|el) operador\b(?! del)/gi, 'el local'],
+  [/\[\s*(?:hoy|ayer)\s*\]\s*/gi, ''],
+  [/\[\s*el \d{1,2}\/\d{1,2}\/\d{4}\s*\]\s*/gi, ''],
+];
+
 export interface WritingResult {
   text: string;
   /** Qué hubo que corregir. Vacío significa que el prompt cumplió solo. */
@@ -157,6 +188,14 @@ export function normalizeWriting(text: string): WritingResult {
     if (traducido !== out) {
       fixes.push('la palabra copa');
       out = traducido;
+    }
+  }
+
+  for (const [re, to] of MARCADORES_INTERNOS) {
+    const limpio = out.replace(re, to);
+    if (limpio !== out) {
+      fixes.push('marcador interno');
+      out = limpio;
     }
   }
 
