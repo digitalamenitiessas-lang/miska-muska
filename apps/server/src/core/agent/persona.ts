@@ -95,8 +95,11 @@ Largo y ritmo
   cinco, sobra algo — casi siempre una explicación que nadie pidió. Si tenés que decir varias cosas, cortá el mensaje
   con la marca ${SPLIT_MARKER} en su propia línea y se envían como burbujas separadas.
   Máximo tres burbujas por turno.
-- No hagas listas con guiones ni títulos en negrita salvo que estés pasando una carta de
-  productos o los datos de un pedido. En el resto, prosa corta.
+- No hagas listas con guiones salvo que estés pasando una carta de productos o los datos
+  de un pedido. En el resto, prosa corta.
+- NADA DE NEGRITA. Ni con asteriscos ni de ninguna forma: en WhatsApp los asteriscos se
+  ven como asteriscos y el local los marcó apenas aparecieron. Lo que se quiere destacar
+  se destaca poniéndolo en su propio renglón, no con formato.
 `.trim();
 
 const WRITING = `

@@ -150,6 +150,32 @@ const MARCADORES_INTERNOS: Array<[RegExp, string]> = [
   [/\[\s*el \d{1,2}\/\d{1,2}\/\d{4}\s*\]\s*/gi, ''],
 ];
 
+/*
+  LOS ASTERISCOS DE LA NEGRITA NO EXISTEN EN WHATSAPP.
+
+  Del local: "antes no ponía los **, no sé qué pasó". Lo que pasó fue el
+  modelo nuevo. Medido: el anterior escribió negrita 10 veces en 8.448
+  mensajes —cero por ciento—, y el nuevo la pone en el 24%.
+
+  En WhatsApp "**Cookies:**" no se ve en negrita: se ven los asteriscos, tal
+  cual, dos de cada lado. Ahí la negrita es con UNO solo.
+
+  Y sin embargo se BORRAN en vez de convertirse a un asterisco, que era la
+  otra opción. Convertir pondría negrita de verdad en uno de cada cuatro
+  mensajes, y eso nadie lo pidió: el equipo escribió 3.075 mensajes en un mes
+  sin usar negrita ni una sola vez, y el modelo anterior tampoco la usaba.
+  Borrar devuelve exactamente lo que había antes, que es lo que reclamaron.
+
+  Dos pasadas y en este orden: primero los pares, que es donde está el texto
+  a rescatar, y después cualquier "**" suelto que haya quedado de un par mal
+  cerrado. Al revés, el suelto se comería la mitad del par.
+
+  El asterisco SOLO no se toca: la ficha del local usa "* Café doble" como
+  viñeta, y eso está bien escrito.
+*/
+const NEGRITA_PAR = /\*\*([^*\n]+)\*\*/g;
+const NEGRITA_SUELTA = /\*\*/g;
+
 export interface WritingResult {
   text: string;
   /** Qué hubo que corregir. Vacío significa que el prompt cumplió solo. */
@@ -189,6 +215,12 @@ export function normalizeWriting(text: string): WritingResult {
       fixes.push('la palabra copa');
       out = traducido;
     }
+  }
+
+  const sinNegrita = out.replace(NEGRITA_PAR, '$1').replace(NEGRITA_SUELTA, '');
+  if (sinNegrita !== out) {
+    fixes.push('asteriscos de negrita');
+    out = sinNegrita;
   }
 
   for (const [re, to] of MARCADORES_INTERNOS) {
