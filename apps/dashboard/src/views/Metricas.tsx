@@ -232,8 +232,11 @@ function ConsumoPorDia({ daily }: { daily: MetricPoint[] }) {
           const [, mes, dia] = d.day.split('-');
           return (
             <div key={d.day} className="consumo-col" title={`${dia}/${mes}: ${usd(d.costUsd)}${d.turnos ? ` · ${d.turnos} turnos` : ''}`}>
-              <span className="consumo-cifra">{d.costUsd >= 1 ? d.costUsd.toFixed(0) : ''}</span>
-              <div className={`consumo-barra${esHoy ? ' hoy' : ''}`} style={{ height: `${alto}%` }} />
+              <div className="consumo-pista">
+                <div className={`consumo-barra${esHoy ? ' hoy' : ''}`} style={{ height: `${alto}%` }}>
+                  <span className="consumo-cifra">{d.costUsd >= 1 ? d.costUsd.toFixed(0) : ''}</span>
+                </div>
+              </div>
               <span className="consumo-dia">{esHoy ? 'hoy' : `${dia}/${mes}`}</span>
             </div>
           );
