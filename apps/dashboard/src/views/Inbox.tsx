@@ -1847,7 +1847,21 @@ function CargarPedido({
   const comoSeVe = (p: Product) => `${p.name} — $${p.price.toLocaleString('es-AR')}`;
 
   const total = lineas.reduce((suma, l) => suma + l.quantity * l.unitPrice, 0);
-  const listo = nombre.trim().length >= 3 && total > 0;
+  /*
+    QUÉ HACE FALTA PARA PODER CARGAR: un nombre y un total. Nada más.
+
+    Antes se pedían TRES letras de nombre, y eso dejó una venta sin registrar.
+    El nombre viene puesto con el de WhatsApp, y el de esta clienta era "Lu":
+    dos letras. El botón quedaba apagado sin decir por qué, y del local nos
+    escribieron "no me deja cargar este pedido a mano". No es un caso raro —hay
+    143 contactos de 1808 con nombre de una o dos letras, uno de cada doce.
+
+    Un nombre corto no es un nombre inválido. Y el daño está todo de un lado:
+    un pedido que dice "Lu" se entiende igual, uno que no se puede cargar se
+    pierde, que es justo el agujero que veníamos tapando.
+  */
+  const falta = !nombre.trim() ? 'el nombre' : total <= 0 ? 'el precio de algún producto' : null;
+  const listo = !falta;
 
   const cambiar = (i: number, patch: Partial<LineaNueva>) =>
     setLineas((prev) => prev.map((l, n) => (n === i ? { ...l, ...patch } : l)));
@@ -2061,8 +2075,14 @@ function CargarPedido({
         </label>
 
         <div className="row" style={{ marginTop: 14 }}>
+          {/*
+            Si el botón está apagado, tiene que decir por qué. Un botón muerto y
+            mudo hace que se abandone la carga, y la venta queda sin registrar.
+          */}
           <span className="small muted grow">
-            Queda cargado como hecho por una persona, así que el bot no lo toca.
+            {falta
+              ? `Falta ${falta} para poder cargarlo.`
+              : 'Queda cargado como hecho por una persona, así que el bot no lo toca.'}
           </span>
           <button className="btn btn-ghost" onClick={onCerrar}>
             Cancelar
