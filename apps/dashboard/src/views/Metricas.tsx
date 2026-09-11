@@ -249,7 +249,9 @@ function ConsumoPorDia({ daily }: { daily: MetricPoint[] }) {
               key={d.day}
               className="consumo-col"
               title={
-                `${dia}/${mes}: ${usd(d.costUsd)} · ${d.inbound} mensajes` +
+                `${dia}/${mes}: ${usd(d.costUsd)}` +
+                ` · ${d.conversations} ${d.conversations === 1 ? 'conversación' : 'conversaciones'}` +
+                ` · ${d.inbound} mensajes` +
                 (d.turnos ? ` · ${d.turnos} turnos` : '')
               }
             >
