@@ -28,6 +28,7 @@
 import { config } from '../../config.js';
 import { log } from '../events/bus.js';
 import { normalizeBubbles, suenaAEspana } from '../policies/writing.js';
+import { corregirTotal } from '../policies/totales.js';
 import type { BotSettings, StoredMessage } from '../types/domain.js';
 import { buildDailyContext, buildStablePrompt, SPLIT_MARKER, type DailyContextInput } from './persona.js';
 import { executeTool, TOOL_DEFINITIONS, type ToolContext } from './tools.js';
@@ -417,6 +418,27 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
       */
       const espana = suenaAEspana(turn.bubbles.join(' '));
       if (espana.length) log('warn', `SE LE ESCAPÓ EL ACENTO: ${espana.join(', ')}`);
+
+      /*
+        LA SUMA. Del local: "está haciendo mal la suma de los totales".
+
+        Es la única guarda que reescribe un número, y por eso va acá y no en
+        la prosa: 4.800 por 2 más 4.100 más 4.100 da 17.800 y no hay una
+        segunda lectura posible. Solo actúa cuando leyó el mensaje entero sin
+        ambigüedad; ver `revisarCuenta`, que explica cuándo no se cree la
+        lectura. Medido sobre 691 mensajes de 30 días: corrige uno, que es el
+        que estaba mal.
+      */
+      turn.bubbles = turn.bubbles.map((b) => {
+        const { texto, corregido } = corregirTotal(b);
+        if (corregido) {
+          log(
+            'warn',
+            `LA SUMA NO DABA: decía $${corregido.dijo} y son $${corregido.da}. Corregido.`,
+          );
+        }
+        return texto;
+      });
       if (!turn.bubbles.length) {
         turn.error =
           choice.finish_reason === 'length'
