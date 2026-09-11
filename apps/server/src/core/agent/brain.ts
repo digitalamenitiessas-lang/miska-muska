@@ -29,6 +29,7 @@ import { config } from '../../config.js';
 import { log } from '../events/bus.js';
 import { normalizeBubbles, suenaAEspana } from '../policies/writing.js';
 import { corregirTotal } from '../policies/totales.js';
+import { ofreceCadeteDeMas } from '../policies/cadete.js';
 import type { BotSettings, StoredMessage } from '../types/domain.js';
 import { buildDailyContext, buildStablePrompt, SPLIT_MARKER, type DailyContextInput } from './persona.js';
 import { executeTool, TOOL_DEFINITIONS, type ToolContext } from './tools.js';
@@ -418,6 +419,15 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
       */
       const espana = suenaAEspana(turn.bubbles.join(' '));
       if (espana.length) log('warn', `SE LE ESCAPÓ EL ACENTO: ${espana.join(', ')}`);
+
+      /*
+        Termómetro: ofrecer nuestro cadete para algo que no es un desayuno.
+        Mira el TEXTO y no el pedido cargado —ver `ofreceCadeteDeMas`, que
+        explica por qué el termómetro anterior marcaba cero el día que el
+        local reclamó—. Línea de base antes de la regla: 33 por día.
+      */
+      const cadete = ofreceCadeteDeMas(turn.bubbles.join(' '));
+      if (cadete) log('warn', `OFRECIÓ NUESTRO CADETE SIN SER DESAYUNO: "${cadete}"`);
 
       /*
         LA SUMA. Del local: "está haciendo mal la suma de los totales".
