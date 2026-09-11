@@ -114,10 +114,11 @@ export default function App() {
     marcada hace media hora se va al fondo justo mientras alguien espera.
   */
   const [filtroPedido, setFiltroPedido] = useState<{ filtro: string; n: number } | null>(null);
-  const verLasDeAtencion = () => {
+  const verLasDe = (filtro: string) => {
     setView('bandeja');
-    setFiltroPedido((p) => ({ filtro: 'atencion', n: (p?.n ?? 0) + 1 }));
+    setFiltroPedido((p) => ({ filtro, n: (p?.n ?? 0) + 1 }));
   };
+  const verLasDeAtencion = () => verLasDe('atencion');
   const irAlChat = (conversationId: string) => {
     setSalto((previo) => ({ id: conversationId, n: (previo?.n ?? 0) + 1 }));
     setView('bandeja');
@@ -260,6 +261,25 @@ export default function App() {
     [conversations],
   );
   const attention = resumen?.atencion ?? localAtencion;
+
+  /*
+    CUÁNTAS ESTÁ ATENDIENDO UNA PERSONA.
+
+    El local lo pidió señalando la cabecera: "humano ya no figura como
+    notificación, ahí aparecía (5) por ejemplo". No es que se haya sacado —
+    nunca hubo una píldora de humano—, es que la de atención CONTABA otra
+    cosa. Hasta hoy, cada charla escalada quedaba marcada para siempre, así
+    que ese número era en los hechos "las que tiene alguien". Cuando se
+    arregló que "Devolver al bot" la apague, el número bajó y con él
+    desapareció el dato que ella miraba todos los días.
+
+    Así que va aparte y con su propio color: uno es "acá hace falta alguien",
+    el otro es "acá ya hay alguien". Mezclados no se puede leer ninguno.
+
+    Sale del resumen, que cuenta contra la base entera. Sin resumen no se
+    muestra: la lista cargada da un número corto justo el día que hay mucho.
+  */
+  const enHumano = resumen?.humano ?? 0;
 
   /*
     El sonidito, y el número en la solapa del navegador.
@@ -432,6 +452,15 @@ export default function App() {
           ) : (
             <Pill tone="ok">todo al día</Pill>
           )}
+          {enHumano > 0 ? (
+            <button
+              className="btn-pill"
+              onClick={() => verLasDe('humano')}
+              title="Charlas que está atendiendo alguien del equipo. Clic para verlas."
+            >
+              <Pill tone="rose">{enHumano} con una persona</Pill>
+            </button>
+          ) : null}
           {settings && !settings.botEnabled ? <Pill tone="warn">bot apagado</Pill> : null}
           {gasto ? <Gastometro gasto={gasto} onVerMas={() => setView('metricas')} /> : null}
         </header>
