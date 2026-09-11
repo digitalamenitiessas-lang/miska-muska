@@ -36,6 +36,7 @@ import { diceQueQuedoReservado, llegoComprobante } from '../policies/comprobante
 import { yaLoDijo } from '../policies/repeticion.js';
 import { avisaQueLlego, AVISO_DE_LLEGADA, RESPUESTA_A_LA_LLEGADA } from '../policies/llegadas.js';
 import { yaDijeronQueEstaListo } from '../policies/listo.js';
+import { comprometeEncargo, mandaElUberSinConfirmar, RESPUESTA_AL_ENCARGO } from '../policies/encargos.js';
 import { ofreceLoQueNoHay, vaACobrar } from '../policies/stock.js';
 import {
   afirmaQueYaSalio,
@@ -1022,10 +1023,23 @@ export class Pipeline {
             es armar el pedido, y eso hay que decirlo con todas las letras,
             incluido que son MINUTOS.
           */
+          /*
+            SIN LA PARTE DEL UBER, y es un pedido textual del local: "al toque que
+            mandan el comprobante ya dice que manden uber. Debe decir que ya lo
+            chequea y ahí valida una persona, y la persona dice también que manden
+            el uber, nunca la IA".
+
+            Ojo con la tentación de reemplazarlo por "coordinamos el envío": eso
+            suena a que lo llevamos nosotros, y es justo lo que no hay. Agus: "si
+            no le decimos lo del Uber y decimos coordinamos el envío, doy a
+            entender que podemos llegar a mandarle un cadete". El Uber se nombra
+            TEMPRANO —cuando preguntan si hacemos envíos— y fuerte; lo que no va
+            acá es la instrucción de mandarlo, porque esa la da el local cuando el
+            pedido está listo de verdad.
+          */
           contenido.text =
-            'Recibido 🙌🏼 Ya nos ponemos a armar tu pedido. Puede demorar unos minutos: ' +
-            'apenas esté listo te avisamos para que mandes el Uber, así no llega antes que ' +
-            'el pedido 🩷';
+            'Recibido 🙌🏼 Ya nos ponemos a armar tu pedido, puede demorar unos minutos. ' +
+            'Apenas esté listo te avisamos 🩷';
           alertaDeGuarda = true;
           guardaEscalo = true;
           motivoGuarda =
@@ -1108,6 +1122,70 @@ export class Pipeline {
       ) {
         log('info', `Avisaron que llegó el chofer (${conversationId}): respuesta fija.`);
         contenido.text = RESPUESTA_A_LA_LLEGADA;
+        continue;
+      }
+
+      /*
+        UNA TORTA O UN DESAYUNO NO LOS CONFIRMA EL BOT.
+
+        Ya había una guarda para esto y vivía en `crear_pedido`, o sea que solo
+        corría si el bot INTENTABA cargar el pedido. El caso de esta tarde no
+        pasó por ahí: escribió "ya queda anotada tu Torta Red Velvet de 20
+        porciones para el domingo a las 19" sin llamar a ninguna herramienta, y
+        nadie en la cocina se enteró. Esta mira lo que SALE, que es donde el
+        daño ocurre.
+
+        El circuito que pidió el local, en tres pasos: el bot pregunta qué torta
+        y para cuándo y muestra las que hay; cuando el cliente contesta, dice
+        que chequea la agenda y para; y de ahí en adelante contesta una persona,
+        incluido el alias. Esta guarda es el segundo paso y nada más: no impide
+        preguntar ni mostrar la carta, impide COMPROMETER y impide pedir plata.
+
+        Se apaga si una persona del local ya habló en la charla: ahí la torta
+        está autorizada y discutirle a una empleada es peor que no tener guarda.
+      */
+      const hayHumano = history.some((m) => m.direction === 'out' && m.author === 'human');
+      /*
+        Termometro: el bot acusando el pago y de paso mandando el Uber. El texto
+        armado y la prosa ya no lo dicen; esto cuenta las veces que lo escribe
+        igual por su cuenta. Solo anota: si manana sigue apareciendo, se endurece.
+      */
+      if (mandaElUberSinConfirmar(contenido.text)) {
+        log('warn', `MANDO EL UBER AL ACUSAR EL PAGO (${conversationId}): "${contenido.text.slice(0, 120)}"`);
+      }
+
+      /*
+        DOS mensajes de contexto, y el numero salio de medirlo. El mensaje que
+        pide la plata muchas veces no nombra la torta —"el monto de la seña es
+        de $17.400"— asi que mirando solo el texto que sale se escapaba justo el
+        renglon que importa. Pero cuanto mas atras se mira, mas se frenan ventas
+        que no tienen nada que ver: una charla que nombro una torta y despues
+        compro cookies no tiene que trabarse.
+
+        Medido sobre 9.172 mensajes de diez dias, frenaria por dia:
+          sin contexto   5,3      con 3 mensajes   15,4
+          con 1 mensaje  8,3      con 6 mensajes   22,8
+          con 2 mensajes 11,4
+        Dos es el intercambio inmediato -lo ultimo que dijo el cliente y lo
+        ultimo que dijo el bot-, que es donde vive "de que estamos hablando".
+      */
+      const contextoReciente = history
+        .slice(-2)
+        .map((m) => m.text ?? '')
+        .join(' ');
+      const encargo = comprometeEncargo(contenido.text, hayHumano, contextoReciente);
+      if (encargo) {
+        log(
+          'warn',
+          `ENCARGO COMPROMETIDO SIN UNA PERSONA (${conversationId}): ${encargo.motivo} — ` +
+            `"${contenido.text.slice(0, 140)}"`,
+        );
+        contenido.text = RESPUESTA_AL_ENCARGO;
+        guardaEscalo = true;
+        alertaDeGuarda = true;
+        motivoGuarda =
+          '[torta o desayuno] Contestá vos: quiere encargar y el bot no puede confirmarlo. ' +
+          'Fijate en la agenda si se puede para esa fecha, y si va, pasale vos el alias.';
         continue;
       }
 
