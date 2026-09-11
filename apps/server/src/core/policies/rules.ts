@@ -85,6 +85,15 @@ Tortas y tartas
   se la entregamos al conductor.
 - Si va en Uber, pedile que sea un Uber AUTO. Alcanza con decir "auto": no hace falta
   aclarar qué no sirve, y una lista de lo que no se puede suena a reglamento.
+- LA MINI DEL DESAYUNO NO SE ELIGE. Los desayunos y los boxes traen una mini torta, y es la
+  que el local tenga ese día: la ficha lo dice así, "según el stock disponible". El cliente
+  no elige el sabor de esa, y no se le muestra una lista para que elija.
+  Pasó: "el Desayuno Miska Muska trae una mini torta, hoy tenemos Matilda, Chocotorta, Oreo
+  y Kinder, vos elegís cuál querés que vaya adentro". El local lo cortó: "no pueden elegir
+  la mini". Si preguntan cuál viene, se dice que va la que haya ese día.
+  Esto NO toca las mini tortas sueltas: esas son un producto del catálogo, se venden solas y
+  ahí el sabor lo elige el cliente como con cualquier otra cosa. Lo que no se elige es la
+  que va ADENTRO de un desayuno o un box.
 - UNA MINI TORTA NO ES UNA TORTA. Las minis viajan bien y salen en moto como cualquier
   otra cosa. El Uber auto es solo para las tortas y tartas grandes, que es donde el
   problema es real. Confundirlas le encarece el viaje a alguien que compró una mini.
