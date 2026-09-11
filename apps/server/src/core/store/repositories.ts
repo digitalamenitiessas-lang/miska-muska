@@ -517,23 +517,41 @@ export function createRepositories() {
      * ni aparecía en el filtro. No se veía lento — se veía como si no
      * existiera, que es el peor final posible.
      *
-     * Tres COUNT sobre `conversations`, que es una tabla chica: son
+     * Unos COUNT sobre `conversations`, que es una tabla chica: son
      * milisegundos y no dependen de cuántas filas mire el panel.
+     *
+     * HUMANO se agregó porque el local lo pidió: "humano ya no figura como
+     * notificación, en la barra aparecía (5) por ejemplo". Nunca había
+     * estado —el número de la barra siempre fue el de sin leer—, pero el
+     * pedido es justo: si alguien del equipo tomó cinco charlas, eso hay que
+     * poder verlo sin abrir el filtro.
      */
-    async contar(): Promise<{ atencion: number; sinLeer: number; consultas: number }> {
-      const row = await one<{ atencion: string; sin_leer: string; consultas: string }>(
+    async contar(): Promise<{
+      atencion: number;
+      sinLeer: number;
+      consultas: number;
+      humano: number;
+    }> {
+      const row = await one<{
+        atencion: string;
+        sin_leer: string;
+        consultas: string;
+        humano: string;
+      }>(
         `SELECT
            COUNT(*) FILTER (WHERE needs_attention)::text AS atencion,
            COUNT(*) FILTER (WHERE unread_count > 0)::text AS sin_leer,
            COUNT(*) FILTER (
              WHERE pending_review IS NOT NULL AND pending_review->>'resueltoEn' IS NULL
-           )::text AS consultas
+           )::text AS consultas,
+           COUNT(*) FILTER (WHERE mode = 'human')::text AS humano
          FROM conversations`,
       );
       return {
         atencion: Number(row?.atencion ?? 0),
         sinLeer: Number(row?.sin_leer ?? 0),
         consultas: Number(row?.consultas ?? 0),
+        humano: Number(row?.humano ?? 0),
       };
     },
 

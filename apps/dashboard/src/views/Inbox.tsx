@@ -62,6 +62,7 @@ const FILTERS: Array<{ id: Filter; label: string }> = [
 ];
 
 export function Inbox({
+  resumen,
   conversations,
   lastEvent,
   tick,
@@ -70,6 +71,14 @@ export function Inbox({
   filtroPedido,
   toast,
 }: {
+  /*
+    Los números de los chips salen de acá y no de `conversations`, y la razón
+    es la misma por la que existe el resumen: el panel tiene cargada una
+    página de charlas, así que contar sobre esa lista da un número que se
+    queda corto justo el día que hay mucho. Si el resumen no llegó, el chip
+    va sin número — mejor ninguno que uno mentiroso.
+  */
+  resumen: { atencion: number; sinLeer: number; consultas: number; humano: number } | null;
   conversations: Conversation[];
   lastEvent: LiveEvent | null;
   tick: number;
@@ -873,16 +882,31 @@ export function Inbox({
         </div>
 
         <div className="inbox-filters">
-          {FILTERS.map((f) => (
-            <button
-              key={f.id}
-              className="chip"
-              aria-pressed={filter === f.id}
-              onClick={() => setFilter(f.id)}
-            >
-              {f.label}
-            </button>
-          ))}
+          {FILTERS.map((f) => {
+            /*
+              Solo los filtros que tienen una cuenta de verdad contra la base.
+              "Para anotar" y "Guardadas" no están acá porque se calculan con
+              una consulta aparte, y un número que a veces aparece y a veces no
+              confunde más de lo que ayuda.
+            */
+            const cuenta =
+              f.id === 'sin-leer' ? resumen?.sinLeer
+              : f.id === 'atencion' ? resumen?.atencion
+              : f.id === 'consultas' ? resumen?.consultas
+              : f.id === 'humano' ? resumen?.humano
+              : undefined;
+            return (
+              <button
+                key={f.id}
+                className="chip"
+                aria-pressed={filter === f.id}
+                onClick={() => setFilter(f.id)}
+              >
+                {f.label}
+                {cuenta ? <span className="chip-cuenta">{cuenta}</span> : null}
+              </button>
+            );
+          })}
         </div>
         </div>
 

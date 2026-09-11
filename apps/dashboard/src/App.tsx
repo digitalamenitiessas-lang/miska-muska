@@ -140,6 +140,7 @@ export default function App() {
     atencion: number;
     sinLeer: number;
     consultas: number;
+    humano: number;
   } | null>(null);
   /*
     Refresca los contadores, como mucho una vez cada tres segundos.
@@ -437,6 +438,7 @@ export default function App() {
 
         {view === 'bandeja' ? (
           <Inbox
+            resumen={resumen}
             conversations={conversations}
             lastEvent={lastEvent}
             tick={tick}

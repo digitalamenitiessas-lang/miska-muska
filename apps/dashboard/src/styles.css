@@ -1890,3 +1890,14 @@ table.grid tbody tr:hover {
   font-size: 9px; color: var(--ink-faint); margin-top: 1px;
   font-variant-numeric: tabular-nums; text-align: center;
 }
+
+/* El número de cada filtro. Va adentro del chip y no al lado: es parte de la
+   etiqueta, no un adorno. Apagado cuando el filtro no está elegido, y del color
+   del chip cuando sí, para que no compita con el texto. */
+.chip-cuenta {
+  margin-left: 5px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.65;
+}
+.chip[aria-pressed='true'] .chip-cuenta { opacity: 1; }
