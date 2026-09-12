@@ -215,8 +215,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
 
   tool(
     'crear_pedido',
-    'Carga un pedido en el sistema. Solo llamala cuando ya tengas nombre y apellido, teléfono, ' +
-      'los productos, y la fecha y hora de retiro o entrega. Queda en estado "borrador" hasta que ' +
+    'Carga un pedido en el sistema. Llamala APENAS tengas el nombre y los productos con su ' +
+      'precio: con eso alcanza. NO esperes a tener la hora — cuando el pedido sale en un Uber ' +
+      'esa hora no existe todavía, el Uber se manda después, cuando el local avisa que está ' +
+      'listo. El teléfono lo completa el sistema solo, no hace falta que lo pidas. ' +
+      'Si dudás entre cargarlo o esperar, CARGALO: un pedido cargado de más se corrige en dos ' +
+      'clics, uno que falta es una venta cobrada que no está en ningún lado. ' +
+      'Queda en estado "borrador" hasta que ' +
       'llegue el comprobante de la transferencia: avisale eso al cliente. ' +
       'Mandá SIEMPRE el pedido COMPLETO (todos los ítems acordados, el principal primero), no el ' +
       'último cambio. Cada producto tiene que llevar precio: el producto_id del catálogo, o ' +
@@ -273,11 +278,13 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
         type: 'string',
         enum: ['retira-local', 'uber-cliente', 'cadete-miska'],
         description:
-          'Cómo lo recibe. cadete-miska es SOLO para desayunos y boxes de regalo: para todo lo ' +
-          'demás el envío va en el Uber que manda el cliente (uber-cliente) o se retira. Un ' +
-          'desayuno también puede ir en uber-cliente si el cliente lo prefiere. Las tortas y ' +
-          'tartas nunca van con cadete-miska (los llevamos ' +
-          'nosotros) o retira-local.',
+          'Cómo lo recibe. Son tres y ninguna necesita una hora para cargar el pedido:\n' +
+          '· uber-cliente: el Uber lo pide y lo paga el cliente, y nosotros le entregamos el ' +
+          'paquete al chofer en la puerta. Es el caso NORMAL: todo lo que no sea un desayuno o ' +
+          'un box de regalo va por acá.\n' +
+          '· retira-local: pasa a buscarlo por el local.\n' +
+          '· cadete-miska: lo llevamos nosotros. SOLO desayunos y boxes de regalo, y solo si el ' +
+          'cliente no prefiere mandar un Uber. Las tortas y tartas NUNCA van por acá.',
       },
       fecha_retiro: { type: 'string', description: 'AAAA-MM-DD.' },
       hora_retiro: { type: 'string', description: 'Franja horaria libre, ej. "16:00 a 17:00".' },

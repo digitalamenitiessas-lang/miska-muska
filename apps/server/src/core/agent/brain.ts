@@ -482,6 +482,19 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
       const result = await executeTool(call.function.name, parsed.value, toolContext);
       turn.toolCalls.push({ name: call.function.name, input: parsed.value, ok: result.ok });
       turn.intent = call.function.name;
+      /*
+        UN RECHAZO NO PUEDE SER MUDO.
+
+        `crear_pedido` tiene nueve caminos de rechazo y ninguno dejaba rastro: ni un log
+        ni una fila. Cuando el local dijo "no te hace el pedido al costado" hubo que
+        adivinar por qué, y se adivinó mal dos veces. Ahora cada rechazo dice cuál fue.
+
+        Solo `crear_pedido`: es la única herramienta cuyo fracaso cuesta una venta, y
+        loguear las nueve a este nivel llenaría el journal de ruido.
+      */
+      if (call.function.name === 'crear_pedido' && !result.ok) {
+        log('warn', `CREAR_PEDIDO RECHAZADO: ${result.error}`);
+      }
       messages.push({
         role: 'tool',
         tool_call_id: call.id,
