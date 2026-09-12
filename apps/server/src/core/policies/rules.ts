@@ -1336,7 +1336,32 @@ export function datosFaltantes(
     if (itemsDeEnvioPropio(draft, productsById).length && !draft.recipientName) {
       faltan.push('nombre de quien lo recibe');
     }
-  } else if (!draft.deliveryTime) {
+  } else if (draft.deliveryMode !== 'uber-cliente' && !draft.deliveryTime) {
+    /*
+      LA HORA DE RETIRO NO SE PIDE PARA UN UBER, Y ES LA DIFERENCIA ENTRE TOMAR
+      UN PEDIDO Y NO TOMARLO.
+
+      Con retiro en el local la pregunta tiene sentido: la persona sabe a qué
+      hora va a pasar. Con un Uber no existe. El circuito es "transferís →
+      armamos → te avisamos → mandás el Uber", así que en el momento de cargar
+      el pedido esa hora no la sabe nadie, ni ella ni nosotros.
+
+      Pedirla dejaba al bot trabado pidiendo un dato imposible:
+
+        17:42  "Para finalizarlo necesito que me digas a qué hora lo retirás"
+        17:47  "Perdón, me falta un dato: a qué franja horaria te viene bien
+                que el Uber lo retire?"
+        17:48  "Necesito la dirección donde está el Uber"
+
+      Y el pedido nunca se cargaba. El viernes en que el Uber pasó a ser el
+      camino normal para casi todo, el bot cargó 8 pedidos contra los 22 a 39 de
+      los días anteriores, y ninguno después de las cuatro de la tarde. Del
+      local: "parece que el bot no está tomando ningún pedido".
+
+      Que no hace falta lo dicen los datos: de los 23 pedidos con Uber que
+      cargaron personas del local en diez días, 20 no tienen hora. La pedía la
+      validación, no el negocio.
+    */
     faltan.push('hora de retiro');
   }
 
