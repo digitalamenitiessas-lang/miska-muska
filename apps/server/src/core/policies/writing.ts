@@ -89,6 +89,49 @@ function comoVenia(original: string, reemplazo: string): string {
   El reemplazo es una función para no perder la mayúscula cuando la frase
   arranca con "Retiramos".
 */
+/*
+  NOSOTROS NO MANDAMOS NINGÚN UBER.
+
+  Salió así: "Cómo lo querés recibir: retirás por el local o TE LO MANDAMOS
+  CON UBER?". La clienta contestó "sí, mandámelo" y se quedó esperando. El
+  local lo marcó al toque: "te lo mandamos, confunde con que le mandamos
+  nosotros".
+
+  El Uber lo pide y lo paga ELLA. Nosotros le entregamos el paquete al chofer
+  en la puerta y nada más. Dicho en primera persona del plural queda al revés,
+  y es el mismo error que "hoy retiramos hasta las 21:30" de más arriba: el bot
+  hablando desde el lado del mostrador que no le toca.
+
+  Acá el daño es peor que sonar raro. Si ella entiende que se lo mandamos
+  nosotros, no pide el Uber, y el pedido se queda en el local esperando a un
+  chofer que nadie llamó.
+
+  Medido sobre 9.159 mensajes de diez días: 18 veces, 1,8 por día. Poco, pero
+  cada una es un pedido que no sale.
+
+  El mapa es CERRADO y anclado, como los otros: "mandamos" o "enviamos" pegado
+  a "uber". "Lo llevamos nosotros, o mandás un Uber" NO se toca —ahí está bien
+  dicho, contrapone las dos cosas— y por eso el patrón no deja pasar palabras
+  en el medio.
+*/
+const NOSOTROS_MANDANDO_UBER =
+  /\b(te\s+)?(lo|la|los|las)?\s*(mandamos|enviamos)\s+(?:con|en|por)?\s*(?:un\s+)?uber\b/gi;
+
+/**
+ * "te lo mandamos con Uber" → "lo mandás a buscar con un Uber".
+ *
+ * Se conserva el pronombre —lo, la, los, las— para que la frase siga hablando
+ * del mismo pedido, y la mayúscula inicial si la tenía.
+ */
+function delLadoDeElla(coincidencia: string): string {
+  const m = /\b(?:te\s+)?(lo|la|los|las)?/i.exec(coincidencia);
+  const pronombre = (m?.[1] ?? '').toLowerCase();
+  const cuerpo = `${pronombre ? pronombre + ' ' : ''}mandás a buscar con un Uber`;
+  return coincidencia[0] === coincidencia[0].toUpperCase() && /[a-záéíóúñ]/i.test(coincidencia[0])
+    ? cuerpo[0].toUpperCase() + cuerpo.slice(1)
+    : cuerpo;
+}
+
 const LADO_EQUIVOCADO: Array<[RegExp, (coincidencia: string) => string]> = [
   [
     new RegExp(
@@ -109,6 +152,7 @@ const LADO_EQUIVOCADO: Array<[RegExp, (coincidencia: string) => string]> = [
     ),
     (coincidencia) => comoVenia(coincidencia, 'estamos'),
   ],
+  [NOSOTROS_MANDANDO_UBER, delLadoDeElla],
 ];
 
 /*

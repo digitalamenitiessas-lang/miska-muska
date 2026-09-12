@@ -17,6 +17,26 @@ type Caso = { entra: string; sale: string; porque: string };
 
 const CASOS: Caso[] = [
   // --- Se corrige ---
+  /*
+    El Uber lo pide y lo paga ella. "Te lo mandamos con Uber" le hace creer que
+    va a llegar solo: contesto "si, mandamelo" y se quedo esperando. Del local:
+    "te lo mandamos, confunde con que le mandamos nosotros".
+  */
+  {
+    entra: 'Cómo lo querés recibir: retirás por el local o te lo mandamos con Uber?',
+    sale: 'Cómo lo querés recibir: retirás por el local o lo mandás a buscar con un Uber?',
+    porque: 'el caso que reportó el local, textual',
+  },
+  {
+    entra: 'Te la enviamos con un Uber apenas esté lista',
+    sale: 'La mandás a buscar con un Uber apenas esté lista',
+    porque: 'con enviar, y conservando el pronombre femenino',
+  },
+  {
+    entra: 'Lo mandamos por Uber',
+    sale: 'Lo mandás a buscar con un Uber',
+    porque: 'con por, y con la mayúscula al principio',
+  },
   {
     entra: 'Sí, sin problema, hoy retiramos hasta las 21:30 🙌',
     sale: 'Sí, sin problema, hoy estamos hasta las 21:30 🙌',
@@ -58,6 +78,16 @@ const CASOS: Caso[] = [
     entra: 'El pedido lo retira un Uber que pedís vos',
     sale: 'El pedido lo retira un Uber que pedís vos',
     porque: 'tercera persona, correcta',
+  },
+  {
+    entra: 'Los desayunos los llevamos nosotros, o mandás un Uber si preferís',
+    sale: 'Los desayunos los llevamos nosotros, o mandás un Uber si preferís',
+    porque: 'contrapone las dos cosas: el "llevamos" es nuestro y el Uber es de ella',
+  },
+  {
+    entra: 'Te recomiendo mandar un Uber Moto a retirarlo',
+    sale: 'Te recomiendo mandar un Uber Moto a retirarlo',
+    porque: 'el que manda es ella, y así está escrito',
   },
 ];
 
