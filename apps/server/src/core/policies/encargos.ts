@@ -161,3 +161,24 @@ export function mandaElUberSinConfirmar(texto: string): boolean {
   const t = plano(texto);
   return ACUSA_EL_PAGO.test(t) && MANDA_EL_UBER.test(t);
 }
+
+/*
+  TERMÓMETRO: el Uber y el costo del envío en el mismo mensaje.
+
+  Si el Uber lo manda el cliente, no hay envío nuestro que cobrar ni que
+  chequear: el viaje lo paga él y el precio se lo dice la app. Decir las dos
+  cosas juntas —"mandá un Uber" y "el costo del envío te lo confirmo"— deja a
+  la persona sin entender qué está esperando.
+
+  Solo anota. La regla está escrita en la prosa; esto cuenta si alcanzó. Sobre
+  9.149 mensajes de diez días, el bot ofreció chequear el costo del envío 126
+  veces —28 solo hoy— y en 12 de ellas nombraba el Uber en el mismo mensaje.
+*/
+const OFRECE_COTIZAR_ENVIO =
+  /(cheque|confirm|averigu|consult)[a-z]*[^.!?]{0,40}\b(el )?(costo|precio|valor|cuanto sale|monto)\b[^.!?]{0,30}\benvio\b|\benvio\b[^.!?]{0,40}\b(lo|te lo) (cheque|confirm)/;
+
+/** ¿Dice que lo manda el cliente en Uber y encima ofrece cotizarle el envío? */
+export function cotizaUnEnvioQueNoEsNuestro(texto: string): boolean {
+  const t = plano(texto);
+  return /\buber\b/.test(t) && OFRECE_COTIZAR_ENVIO.test(t);
+}

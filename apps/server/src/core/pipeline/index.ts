@@ -36,7 +36,12 @@ import { diceQueQuedoReservado, llegoComprobante } from '../policies/comprobante
 import { yaLoDijo } from '../policies/repeticion.js';
 import { avisaQueLlego, AVISO_DE_LLEGADA, RESPUESTA_A_LA_LLEGADA } from '../policies/llegadas.js';
 import { yaDijeronQueEstaListo } from '../policies/listo.js';
-import { comprometeEncargo, mandaElUberSinConfirmar, RESPUESTA_AL_ENCARGO } from '../policies/encargos.js';
+import {
+  comprometeEncargo,
+  cotizaUnEnvioQueNoEsNuestro,
+  mandaElUberSinConfirmar,
+  RESPUESTA_AL_ENCARGO,
+} from '../policies/encargos.js';
 import { ofreceLoQueNoHay, vaACobrar } from '../policies/stock.js';
 import {
   afirmaQueYaSalio,
@@ -1150,6 +1155,10 @@ export class Pipeline {
         armado y la prosa ya no lo dicen; esto cuenta las veces que lo escribe
         igual por su cuenta. Solo anota: si manana sigue apareciendo, se endurece.
       */
+      if (cotizaUnEnvioQueNoEsNuestro(contenido.text)) {
+        log('warn', `COTIZO UN ENVIO QUE NO ES NUESTRO (${conversationId}): "${contenido.text.slice(0, 130)}"`);
+      }
+
       if (mandaElUberSinConfirmar(contenido.text)) {
         log('warn', `MANDO EL UBER AL ACUSAR EL PAGO (${conversationId}): "${contenido.text.slice(0, 120)}"`);
       }
