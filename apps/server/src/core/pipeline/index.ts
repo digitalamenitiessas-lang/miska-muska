@@ -42,6 +42,7 @@ import {
   mandaElUberSinConfirmar,
   RESPUESTA_AL_ENCARGO,
 } from '../policies/encargos.js';
+import { diceQueSigueEsperando, RESPUESTA_SIN_CONSULTA } from '../policies/consultas.js';
 import { ofreceLoQueNoHay, vaACobrar } from '../policies/stock.js';
 import {
   afirmaQueYaSalio,
@@ -1155,6 +1156,40 @@ export class Pipeline {
         armado y la prosa ya no lo dicen; esto cuenta las veces que lo escribe
         igual por su cuenta. Solo anota: si manana sigue apareciendo, se endurece.
       */
+      /*
+        "SIGO ESPERANDO" SIN NADA QUE ESPERAR.
+
+        Ver `diceQueSigueEsperando`, que cuenta el caso entero: una empleada
+        contestó "no llegamos porque en 20 cerramos" y nueve minutos después el
+        bot seguía diciendo "estoy en contacto con cocina". Tuvo que salir a
+        pedir disculpas por el bot delante de la clienta.
+
+        El mensaje de una persona CIERRA la consulta, así que si no hay ninguna
+        abierta el bot no está esperando nada. Eso no es una opinión: es una
+        fila en la base. Se consulta solo cuando la frase aparece —unas cuatro
+        veces por día—, así que no cuesta nada en el camino normal.
+      */
+      if (diceQueSigueEsperando(contenido.text)) {
+        const alDecirlo = await this.#repos.conversations.get(conversationId);
+        const hayConsulta = Boolean(
+          alDecirlo?.pendingReview && !alDecirlo.pendingReview.resueltoEn,
+        );
+        if (!hayConsulta) {
+          log(
+            'warn',
+            `DIJO QUE SIGUE ESPERANDO Y NO HAY NADA ABIERTO (${conversationId}): ` +
+              `"${contenido.text.slice(0, 120)}"`,
+          );
+          contenido.text = RESPUESTA_SIN_CONSULTA;
+          guardaEscalo = true;
+          alertaDeGuarda = true;
+          motivoGuarda =
+            '[sin consulta] El bot decía que seguía esperando una respuesta y no había ' +
+            'ninguna consulta abierta. Fijate qué le falta y contestale vos.';
+          continue;
+        }
+      }
+
       if (cotizaUnEnvioQueNoEsNuestro(contenido.text)) {
         log('warn', `COTIZO UN ENVIO QUE NO ES NUESTRO (${conversationId}): "${contenido.text.slice(0, 130)}"`);
       }
