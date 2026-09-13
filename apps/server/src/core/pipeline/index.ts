@@ -48,6 +48,11 @@ import {
   RESPUESTA_AL_ENCARGO,
 } from '../policies/encargos.js';
 import { diceQueSigueEsperando, RESPUESTA_SIN_CONSULTA } from '../policies/consultas.js';
+import {
+  elComprobanteEntroRecien,
+  tipDeCookies,
+  yaMandamosElTip,
+} from '../policies/cookies.js';
 import { extraerPedido } from '../agent/brain.js';
 import {
   contextoDeCadete,
@@ -1690,6 +1695,33 @@ export class Pipeline {
           );
         }
       }
+    }
+
+    /*
+      EL TIP DE LAS COOKIES VA ACÁ, DESPUÉS DE TODAS LAS GUARDAS.
+
+      Es una regla de la ficha que el modelo cumplía el 35% de las veces, y el
+      local la volvió a pedir. Ver core/policies/cookies.ts, que cuenta la
+      medición y por qué la excepción del Box de Edición Limitada existe.
+
+      Después de las guardas y no antes porque algunas reescriben la burbuja
+      entera —la de la dirección sin cobrar, sin ir más lejos, que se dispara
+      justo en este momento— y el tip quedaría pisado. Acá se agrega a lo
+      último que se va a decir, sea lo que sea.
+
+      Y se pega a la última burbuja en vez de mandar una aparte: son tres
+      líneas de consejo, no merecen su propio globo, y el local lo pidió como
+      "agregar al final".
+    */
+    const tip = tipDeCookies(abiertos.flatMap((o) => o.items ?? []));
+    if (tip && elComprobanteEntroRecien(history) && !yaMandamosElTip(history)) {
+      const ultima = [...contents].reverse().find((c) => c.kind === 'text' && c.text.trim());
+      if (ultima && ultima.kind === 'text') {
+        ultima.text = `${ultima.text.trimEnd()}\n\n${tip}`;
+      } else {
+        contents.push({ kind: 'text', text: tip });
+      }
+      log('info', `Tip de cookies agregado (${conversationId}).`);
     }
 
     /*
