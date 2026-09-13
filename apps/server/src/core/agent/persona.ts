@@ -451,6 +451,32 @@ function esReciente(iso: string, horas = 48): boolean {
  * Contexto volátil. Va como mensaje `role: "system"` al final de la
  * conversación, no en el `system` cacheado.
  */
+/**
+ * Qué día es hoy, en las dos formas que el modelo necesita.
+ *
+ * Vive suelto porque lo usan dos caminos: el contexto del día de cada turno y
+ * la extracción del pedido cuando entra un comprobante. Ese segundo camino no
+ * lleva el contexto del día —solo el prompt estable, que es el cacheado— y sin
+ * esta línea el modelo no sabe en qué año está: probándolo contra una charla
+ * real devolvió "fecha_retiro: 2024-01-10", veinte meses en el pasado.
+ */
+export function queDiaEsHoy(): string {
+  const now = new Date();
+  const fecha = now.toLocaleDateString('es-AR', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'America/Argentina/Tucuman',
+  });
+  const hora = now.toLocaleTimeString('es-AR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'America/Argentina/Tucuman',
+  });
+  return `Hoy es ${fecha}, ${hora} (hora de Tucumán). En formato de pedido, hoy es ${localToday()}.`;
+}
+
 export function buildDailyContext(input: DailyContextInput): string {
   const { settings, products, campaigns, quickReplies, contact, outsideHours } = input;
   const { openOrders, pendingReview, courses } = input;

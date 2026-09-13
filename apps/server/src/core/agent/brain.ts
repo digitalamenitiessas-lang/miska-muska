@@ -31,7 +31,13 @@ import { normalizeBubbles, suenaAEspana } from '../policies/writing.js';
 import { corregirTotal } from '../policies/totales.js';
 import { necesitaLasOcasionales } from '../policies/rules.js';
 import type { BotSettings, Product, QuickReply, StoredMessage } from '../types/domain.js';
-import { buildDailyContext, buildStablePrompt, SPLIT_MARKER, type DailyContextInput } from './persona.js';
+import {
+  buildDailyContext,
+  buildStablePrompt,
+  queDiaEsHoy,
+  SPLIT_MARKER,
+  type DailyContextInput,
+} from './persona.js';
 import { executeTool, TOOL_DEFINITIONS, type ToolContext } from './tools.js';
 
 const MAX_TOOL_ROUNDS = 6;
@@ -704,7 +710,29 @@ export async function extraerPedido(input: {
       settings,
       messages: [
         { role: 'system', content: [stable] },
-        { role: 'system', content: INSTRUCCION_DE_EXTRACCION },
+        {
+          role: 'system',
+          /*
+            EL CATÁLOGO CON LOS IDs VA ACÁ Y NO EN EL BLOQUE CACHEADO.
+
+            En un turno normal el modelo consigue el producto_id llamando a
+            `buscar_catalogo`. Esta llamada es de una sola vuelta con la
+            herramienta clavada, así que no puede buscar nada: sin la lista
+            inventa el id y `crear_pedido` lo rechaza. Probándolo contra cinco
+            charlas reales, dos de cinco salieron bien y una inventó
+            "box-cookies-edicion-limitada".
+
+            Y va en el mensaje de la extracción y no en el prompt estable
+            —donde el catálogo ya está, pero sin ids— porque ahí se pagaría en
+            CADA turno del día. Acá se paga en los ~25 rescates diarios.
+          */
+          content: [
+            queDiaEsHoy(),
+            INSTRUCCION_DE_EXTRACCION,
+            'Los producto_id del catálogo, que es de donde tenés que sacarlos:\n' +
+              products.map((p) => `${p.id} = ${p.name} ($${p.price})`).join('\n'),
+          ].join('\n\n'),
+        },
         ...conversation,
       ],
       // Lo único que cambia respecto de un turno: la herramienta no se elige.
