@@ -558,6 +558,39 @@ CREATE INDEX IF NOT EXISTS idx_model_turns_created ON model_turns (created_at DE
 ALTER TABLE model_turns ADD COLUMN IF NOT EXISTS cache_write_tokens integer NOT NULL DEFAULT 0;
 `,
   },
+  {
+    id: 17,
+    name: 'cuando-se-apago-cada-producto',
+    sql: `
+-- CUÁNDO SE PRENDIÓ Y SE APAGÓ CADA PRODUCTO.
+--
+-- Del local, un sábado: "bot vendió productos desactivados, cookie kinder no
+-- tenemos desde temprano está desactivada". Hubo que devolver la plata.
+--
+-- Y no se pudo responder. La columna available_today es un booleano: dice
+-- cómo está el producto AHORA, no cómo estaba a las 11:49 cuando se vendió.
+-- Los productos se apagan a lo largo del día, a medida que se acaban, así
+-- que un pedido de la mañana con algo que hoy figura apagado no prueba nada:
+-- puede haber sido correcto cuando se tomó.
+--
+-- Sin esto, cada vez que el local dice "vendió algo que no había" lo único
+-- que se puede hacer es creerlo o discutirlo, y las dos cosas son malas. Con
+-- esto se mira la hora del cambio y la hora de la venta, y se termina.
+--
+-- Una fila por cambio y no un campo en products: lo que hace falta es la
+-- historia, no el último estado, que ya está.
+CREATE TABLE IF NOT EXISTS product_availability_log (
+  id          bigserial PRIMARY KEY,
+  product_id  text NOT NULL,
+  available   boolean NOT NULL,
+  -- Quién lo tocó: el panel, la carga masiva de la mañana, o el seed.
+  source      text,
+  changed_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_pal_producto ON product_availability_log (product_id, changed_at DESC);
+CREATE INDEX IF NOT EXISTS idx_pal_fecha ON product_availability_log (changed_at DESC);
+`,
+  },
 ];
 
 /**

@@ -878,20 +878,43 @@ export function createRepositories() {
       return toProduct(row!);
     },
 
-    async setAvailability(id: string, available: boolean): Promise<void> {
+    /*
+      CADA CAMBIO DEJA SU FILA. Ver la migración 17: sin la historia, un pedido
+      de la mañana con algo que a la tarde figura apagado no prueba nada, y la
+      pregunta "¿vendió algo que no había?" no se puede contestar.
+
+      El log va DESPUÉS del update y sin await bloqueante sobre el camino de
+      error: si falla el registro no puede tumbar el apagado de un producto,
+      que es lo que el local está haciendo con el pedido en la mano.
+    */
+    async setAvailability(id: string, available: boolean, source = 'panel'): Promise<void> {
       await exec('UPDATE products SET available_today = $2, updated_at = now() WHERE id = $1', [
         id,
         available,
       ]);
+      await exec(
+        'INSERT INTO product_availability_log (product_id, available, source) VALUES ($1,$2,$3)',
+        [id, available, source],
+      ).catch(() => undefined);
     },
 
     /** Marca varios de una vez: es lo que hace el local a la mañana. */
-    async setAvailabilityMany(ids: string[], available: boolean): Promise<number> {
+    async setAvailabilityMany(
+      ids: string[],
+      available: boolean,
+      source = 'panel-masivo',
+    ): Promise<number> {
       if (!ids.length) return 0;
-      return exec(
+      const n = await exec(
         'UPDATE products SET available_today = $2, updated_at = now() WHERE id = ANY($1::text[])',
         [ids, available],
       );
+      await exec(
+        'INSERT INTO product_availability_log (product_id, available, source) ' +
+          'SELECT unnest($1::text[]), $2, $3',
+        [ids, available, source],
+      ).catch(() => undefined);
+      return n;
     },
 
     async remove(id: string): Promise<void> {
