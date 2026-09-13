@@ -55,11 +55,60 @@ const COPA: Array<[RegExp, string]> = [
   diciendo lo mismo. El tono lo arregla el prompt; esto solo saca la palabra que
   nunca tendría que haber salido.
 */
+/*
+  ESTA TABLA ESTUVO MUERTA DESDE QUE SE ESCRIBIÓ, y nadie se enteró porque una
+  guarda que no dispara no deja rastro en ningún lado.
+
+  Lo que había guardado de verdad en el archivo, visto con `cat -A`:
+
+      [/s+en (?:el|nuestro|mi) cat[áa]logo^H/gi, '']
+            ↑                            ↑
+         falta la barra          un byte 0x08, no un \b
+
+  Dos daños del mismo origen: el archivo se escribió alguna vez desde un
+  heredoc de shell, que se come las barras invertidas. El "\s" quedó como una
+  ese literal —"s+en" pide una ese repetida, no un espacio— y el "\b" quedó
+  como el carácter backspace de verdad, que dentro de un regex no es un borde
+  de palabra sino un caracter más.
+
+  En el editor se ve perfecto. Solo se nota corriéndolo: medido sobre los
+  11.580 mensajes que mandó el bot en catorce días, CERO correcciones. La
+  frase de la salsa que el comentario de abajo documenta como el caso que le
+  dio origen volvió a salir tal cual todo este tiempo.
+
+  `probar-guardas-vivas.mts` existe por esto: busca el byte 0x08 en todo el
+  código y además le pasa a cada tabla el ejemplo que su propio comentario
+  dice que arregla. Una guarda que no dispara con su caso fundador está rota.
+*/
+
+/*
+  Vocabulario de adentro que se le escapa al cliente.
+
+  El caso real: preguntaron "venden salsa?" y el bot contestó "No tenemos
+  salsa en el catálogo, así que no la vendemos". Fuera de que suena seco, le
+  mostró al cliente cómo funcionamos por dentro: él no sabe que existe un
+  catálogo, y no tiene por qué enterarse.
+
+  Se BORRA la muletilla y no se reescribe la frase. "no tenemos salsa en el
+  catálogo" queda "no tenemos salsa", que sigue siendo castellano y sigue
+  diciendo lo mismo. El tono lo arregla el prompt; esto solo saca la palabra
+  que nunca tendría que haber salido.
+*/
 const JERGA_INTERNA: Array<[RegExp, string]> = [
-  [/s+en (?:el|nuestro|mi) cat[áa]logo/gi, ''],
-  [/s+en (?:el|nuestro|mi) sistema/gi, ''],
-  [/s+en (?:la|nuestra|mi) base(?: de datos)?/gi, ''],
-  [/no (?:lo |la |los |las )?tengo cargad[oa]s?/gi, 'no tenemos'],
+  [/\s+en (?:el|nuestro|mi) cat[áa]logo\b/gi, ''],
+  [/\s+en (?:el|nuestro|mi) sistema\b/gi, ''],
+  [/\s+en (?:la|nuestra|mi) base(?: de datos)?\b/gi, ''],
+  /*
+    "está en nuestra lista de disponibles" no se puede borrar a secas: deja un
+    "está" colgado. Se mapea a la única palabra que hace falta, igual que "el
+    operador del local" → "el local" en MARCADORES_INTERNOS.
+
+    Salió así, y es el mensaje que el local marcó con "manda ese msj cuando
+    vende cosas que no hay": "la cookie nutella y oreo no figura en el sistema,
+    pero está en nuestra lista de disponibles".
+  */
+  [/\s+en (?:nuestra|mi|la) lista de disponibles\b/gi, ' disponible'],
+  [/\bno (?:lo |la |los |las )?tengo cargad[oa]s?\b/gi, 'no tenemos'],
 ];
 
 /*
