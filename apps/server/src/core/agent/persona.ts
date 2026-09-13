@@ -548,7 +548,37 @@ export function buildDailyContext(input: DailyContextInput): string {
     dice qué se puede vender hoy, y entre las dos gana esta.
   */
   const available = products.filter((p) => p.availableToday);
-  parts.push(`DISPONIBLE HOY:\n  ${available.map((p) => p.name).join(' · ')}`);
+  /*
+    AGRUPADO POR CATEGORÍA, igual que la lista de abajo, y por exactamente el
+    mismo motivo — que ya estaba escrito cuatro párrafos más abajo para los
+    agotados y acá no se había aplicado.
+
+    Una clienta preguntó "les queda sorrentinos?" con CUATRO de los cinco
+    sorrentinos prendidos, y el bot contestó "sorrentinos hoy no nos quedan".
+    No estaba inventando: en la lista plana los sorrentinos se llaman "Calabaza
+    y muzarella", "Jamón y muzarella", "Lomo al malbec" y "Ternera y queso".
+    Ninguno dice la palabra sorrentino. Lo que los hace sorrentinos es la
+    categoría, y la categoría no estaba.
+
+    Es el mismo error que las tortas que se llaman "Frutimiska" y "Tarta de
+    frutilla": el nombre del producto no dice de qué familia es, y el cliente
+    pregunta por la familia.
+
+    Sin precios, como la otra: están en el catálogo del bloque cacheado, y este
+    bloque se manda fresco en cada vuelta.
+  */
+  const disponiblesPorCategoria = new Map<string, Product[]>();
+  for (const p of available) {
+    const list = disponiblesPorCategoria.get(p.category) ?? [];
+    list.push(p);
+    disponiblesPorCategoria.set(p.category, list);
+  }
+  parts.push(
+    'DISPONIBLE HOY:\n' +
+      [...disponiblesPorCategoria.entries()]
+        .map(([categoria, list]) => `  ${categoria}: ${list.map((p) => p.name).join(' · ')}`)
+        .join('\n'),
+  );
 
   /*
     Lo que hoy no hay va AGRUPADO POR CATEGORÍA Y CON PRECIO, igual que lo que
