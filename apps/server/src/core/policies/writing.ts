@@ -108,6 +108,8 @@ const JERGA_INTERNA: Array<[RegExp, string]> = [
     pero está en nuestra lista de disponibles".
   */
   [/\s+en (?:nuestra|mi|la) lista de disponibles\b/gi, ' disponible'],
+  /* El panel es la pantalla del local: "la traigo del panel" → "la traigo". */
+  [/\s+del panel\b/gi, ''],
   [/\bno (?:lo |la |los |las )?tengo cargad[oa]s?\b/gi, 'no tenemos'],
 ];
 
@@ -138,6 +140,75 @@ function comoVenia(original: string, reemplazo: string): string {
   El reemplazo es una función para no perder la mayúscula cuando la frase
   arranca con "Retiramos".
 */
+/*
+  CON QUIÉN LO ESTÁS CONSULTANDO NO SE CUENTA.
+
+  La regla existe en la prosa desde hace rato —"NUNCA DIGAS CON QUIÉN LO ESTÁS
+  CONSULTANDO"— y la pidió el local así: "que en ningún momento diga dónde
+  deriva, el local, la encargada o lo que sea". Nadie que atiende un mostrador
+  dice "lo consulto con la encargada": dice "ahora lo chequeo y te confirmo".
+
+  El prompt no alcanzó. Sobre los 11.580 mensajes del bot de catorce días la
+  muletilla salió 299 veces, 21 por día, uno de cada cuarenta mensajes:
+
+      76  "lo chequeo con el local" / "con la encargada" / "con cocina"
+      65  "ya lo estamos chequeando en el local"
+      60  "eso lo consulto en cocina"
+      58  "ya le paso esto a alguien del local"
+      23  "le paso esto a la encargada"
+       7  "sigo esperando la confirmación de cocina"
+
+  Se BORRA la muletilla y no se reescribe la frase. "Ya lo estamos chequeando
+  en el local" queda "Ya lo estamos chequeando", que es palabra por palabra lo
+  que el local pidió que diga.
+
+  LOS TRES BORDES QUE COSTARON LA MEDICIÓN, porque son los que rompen:
+
+  1. "EN EL LOCAL" CASI SIEMPRE ESTÁ BIEN DICHO. "Retiralo en el local", "con
+     tarjeta pero en el local", "te esperamos en el local": 515 mensajes en
+     catorce días y ninguno se toca. Por eso el patrón exige un verbo de
+     consulta pegado adelante y nunca la frase suelta. Y por eso "coordinar" NO
+     está entre esos verbos: "coordinamos la entrega en el local" es un punto de
+     entrega, no una consulta.
+
+  2. Y AUN CON EL VERBO, A VECES ES UN LOCATIVO. "El precio te lo confirman en
+     el local cuando vayas a pedirlo" es la regla de cafetería —los precios se
+     dan ahí— y borrarle el lugar la deja sin sentido. El lookbehind de "te lo /
+     te la" es lo único que separa ese caso de "lo están confirmando en el
+     local".
+
+  3. "ALGUIEN DEL LOCAL" SOLO SE BORRA CUANDO ES COMPLEMENTO. "Ya le paso esto a
+     alguien del local" queda "ya le paso esto" y se entiende. Pero "en un rato
+     te escribe alguien del local" es el SUJETO: borrarlo deja "en un rato te
+     escribe", sin nadie que escriba. Esas 38 se dejan pasar a propósito:
+     arreglarlas pide inventar un verbo, y eso no lo hace un regex.
+*/
+const CON_QUIEN_SE_CONSULTA: Array<[RegExp, string]> = [
+  /*
+    El lookahead es por una frase real: "lo tengo que chequear con cocina y con
+    el cadete" — borrar la primera mitad dejaba "lo tengo que chequear y con el
+    cadete".
+  */
+  [/\s+con\s+(?:el\s+local|la\s+encargada|cocina)\b(?!\s+y\s+con\b)/gi, ''],
+  [/\s+a\s+la\s+encargada\b/gi, ''],
+  [/\s+(?:a|con)\s+(?:alguien|una\s+persona)\s+del\s+local\b/gi, ''],
+  [/\s+al\s+equipo\s+del\s+local\b/gi, ''],
+  // "ya lo estamos chequeando en el local" → "ya lo estamos chequeando".
+  [
+    /(?<!\bte\s(?:lo|la|los|las)\s)\b((?:cheque|confirm|consult|revis|averigu)\w*(?:\s+[^\s.,;:!?¡¿]+){0,3}?)\s+en\s+el\s+local\b/gi,
+    '$1',
+  ],
+  // "cuando en el local confirmen la transferencia" → "cuando confirmen…"
+  [/\ben\s+el\s+local\s+(?=(?:cheque|confirm|consult|revis|averigu)\w*\b)/gi, ''],
+  // "eso lo consulto en cocina", "me contestan de cocina"
+  [
+    /\b((?:cheque|confirm|consult|revis|averigu)\w*(?:\s+[^\s.,;:!?¡¿]+){0,3}?)\s+(?:en|de|desde|a)\s+cocina\b/gi,
+    '$1',
+  ],
+  // "sigo esperando la confirmación de cocina" → "…la confirmación"
+  [/\s+(?:de|desde)\s+cocina\b/gi, ''],
+];
+
 /*
   NOSOTROS NO MANDAMOS NINGÚN UBER.
 
@@ -328,6 +399,19 @@ export function normalizeWriting(text: string): WritingResult {
     const limpio = out.replace(re, to);
     if (limpio !== out) {
       fixes.push('vocabulario interno');
+      out = limpio;
+    }
+  }
+
+  /*
+    Va DESPUÉS de los marcadores internos y no antes: ese paso puede dejar un
+    "el local" nuevo —"el operador del local" → "el local"— y este tiene que
+    verlo.
+  */
+  for (const [re, to] of CON_QUIEN_SE_CONSULTA) {
+    const limpio = out.replace(re, to);
+    if (limpio !== out) {
+      fixes.push('dónde se consulta');
       out = limpio;
     }
   }
