@@ -356,12 +356,31 @@ function catalogoCompleto(products: Product[]): string {
     lista.push(p);
     porCategoria.set(p.category, lista);
   }
+  /*
+    CON EL producto_id, y esto se midió antes de agregarlo.
+
+    `crear_pedido` exige el producto_id y el modelo lo conseguía llamando a
+    `buscar_catalogo`. Cuando no la llamaba, lo adivinaba — y adivinar un id no
+    sale nunca bien. En una tarde de domingo, cinco pedidos rechazados por eso:
+    "mini-torta-matilda" (es mini-matilda), "cookie-nutella-y-oreo",
+    "sanguchito-jq-chipa", "mini_chocotorta" con guión bajo. Cada uno es un
+    pedido que no se cargó.
+
+    Cuesta unos 450 tokens, y están en el bloque CACHEADO: a precio de caché son
+    cuatro centavos por día. Del otro lado, `buscar_catalogo` se usa unas 64
+    veces por día y cada una es una vuelta más que vuelve a leer 35.000 tokens.
+    Si con esto el modelo deja de necesitar buscar, se paga solo.
+  */
   const lineas = [...porCategoria.entries()].map(
     ([categoria, lista]) =>
-      `  ${categoria}: ${lista.map((p) => `${p.name} $${p.price.toLocaleString('es-AR')}`).join(' · ')}`,
+      `  ${categoria}: ${lista
+        .map((p) => `${p.name} [${p.id}] $${p.price.toLocaleString('es-AR')}`)
+        .join(' · ')}`,
   );
   return (
-    'CATÁLOGO COMPLETO — todo lo que vendemos, con su precio.\n' +
+    'CATÁLOGO COMPLETO — todo lo que vendemos, con su precio y su producto_id.\n' +
+    'El id entre corchetes es el que pide `crear_pedido`. Usá ESE, tal cual: no lo armes vos ' +
+    'a partir del nombre. Si el producto no está en esta lista, no existe.\n' +
     'Que algo esté en esta lista NO quiere decir que hoy haya: eso lo dice la lista del día, ' +
     'más abajo, y esa manda. Esta lista sirve para dos cosas: saber cuánto sale algo aunque ' +
     'hoy esté agotado, y saber que existe.\n' +
