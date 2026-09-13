@@ -1917,6 +1917,38 @@ function CargarPedido({
     if (!listo || guardando) return;
     setGuardando(true);
     try {
+      /*
+        SE RELEE JUSTO ANTES DE GUARDAR.
+
+        El aviso de arriba mira los pedidos que había cuando se abrió el cuadro, y
+        entre que alguien lo abre y aprieta guardar pasan minutos. Desde que el
+        bot carga el pedido solo al ver el comprobante, esa ventana alcanza para
+        que aparezca uno.
+
+        Pasó: el bot cargó el #3564 a las 17:33:49 y la misma venta se guardó a
+        mano como #3565 a las 17:33:57. Ocho segundos. Lo vieron y cancelaron el
+        duplicado, pero cancelarlo es trabajo que no tendrían que hacer.
+
+        No bloquea: avisa y deja decidir. Puede haber una segunda venta legítima
+        en la misma charla, y quien está del otro lado del mostrador sabe cuál de
+        las dos cosas es.
+      */
+      const ahora = await api
+        .orders({ conversationId: conversation.id, vigentes: '1' })
+        .catch(() => null);
+      const aparecio = ahora?.filter((o) => !yaHay.some((v) => v.id === o.id)) ?? [];
+      if (aparecio.length) {
+        const cuales = aparecio.map((o) => `#${o.number} (${money(o.total)})`).join(', ');
+        const seguir = window.confirm(
+          `Mientras cargabas esto apareció ${cuales} en esta charla — puede que el bot ya lo ` +
+            `haya cargado al ver el comprobante.\n\n¿Lo cargo igual?`,
+        );
+        if (!seguir) {
+          setGuardando(false);
+          onCargado();
+          return;
+        }
+      }
       await api.crearPedido({
         conversationId: conversation.id,
         contactId: conversation.contactId,
