@@ -30,7 +30,7 @@ import { log } from '../events/bus.js';
 import { normalizeBubbles, suenaAEspana } from '../policies/writing.js';
 import { corregirTotal } from '../policies/totales.js';
 import { necesitaLasOcasionales } from '../policies/rules.js';
-import type { BotSettings, StoredMessage } from '../types/domain.js';
+import type { BotSettings, Product, QuickReply, StoredMessage } from '../types/domain.js';
 import { buildDailyContext, buildStablePrompt, SPLIT_MARKER, type DailyContextInput } from './persona.js';
 import { executeTool, TOOL_DEFINITIONS, type ToolContext } from './tools.js';
 
@@ -524,15 +524,22 @@ async function callOpenRouter(args: {
   model: string;
   messages: ChatMessage[];
   settings: BotSettings;
+  /*
+    Los dos últimos son opcionales para no tocar el camino de siempre: un turno
+    normal sigue llamando con tres argumentos y se comporta igual que antes.
+    Los usa `extraerPedido`, que necesita clavar la herramienta.
+  */
+  toolChoice?: 'auto' | { type: 'function'; function: { name: string } };
+  maxTokens?: number;
 }): Promise<Completion> {
-  const { model, messages, settings } = args;
+  const { model, messages, settings, toolChoice = 'auto', maxTokens = MAX_TOKENS } = args;
 
   const body: Record<string, unknown> = {
     model,
     messages,
     tools: TOOL_DEFINITIONS,
-    tool_choice: 'auto',
-    max_tokens: MAX_TOKENS,
+    tool_choice: toolChoice,
+    max_tokens: maxTokens,
     // Sin esto, `usage.cost` no viene en la respuesta.
     usage: { include: true },
   };
@@ -617,4 +624,111 @@ async function callOpenRouter(args: {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/*
+  LEER LA CHARLA Y LLENAR EL FORMULARIO DEL PEDIDO.
+
+  Esto NO es un turno. No le contesta nada al cliente, no manda mensajes y no
+  mira si corresponde hablar: lee la conversación y llena `crear_pedido`.
+
+  Existe porque cargar el pedido no puede seguir dependiendo de que el modelo
+  se acuerde. Medido: el jueves con el modelo grande cargaba 36 de 51 ventas;
+  con el chico bajó a 10 de 47, y el viernes SIETE ventas quedaron cobradas y
+  sin registrar en ningún lado. El local lo dijo así: "toma pedidos y confirma
+  comprobantes, no te hace el pedido al costado".
+
+  La diferencia con un turno es una sola línea: `tool_choice` clavado en
+  `crear_pedido`. El modelo ya no decide SI carga, solo llena el formulario.
+  Todo lo demás es igual —el mismo prompt estable cacheado, las mismas
+  herramientas— así que cuesta lo que cuesta un turno: unos $0,012.
+
+  Y el piso es el comportamiento de hoy: si el modelo devuelve cualquier cosa,
+  los nueve caminos de rechazo de `crear_pedido` siguen enteros y queda el
+  cartel que ya existe.
+*/
+const INSTRUCCION_DE_EXTRACCION =
+  '[tarea del sistema] Esto NO es una conversación: nada de lo que devuelvas le llega al ' +
+  'cliente, así que no escribas prosa. Acaba de entrar un comprobante de transferencia en ' +
+  'esta charla y NO hay ningún pedido cargado. Alguien de este lado —vos o una persona del ' +
+  'local— le pasó el alias antes, así que la plata ya está. ' +
+  'Tu única tarea es leer la charla y llamar a crear_pedido con lo que se acordó: los ítems ' +
+  'con su producto_id del catálogo, las cantidades, el nombre, la modalidad, y la fecha y la ' +
+  'franja si las dijeron. Lo que no esté en la charla, no lo mandes: no inventes nada. ' +
+  'NO tenés que decidir si corresponde cargarlo, ni si alguien lo tiene que confirmar, ni si ' +
+  'es hora de tomar pedidos: de todo eso se ocupa el sistema. ' +
+  'Si lo que se cobró NO es un pedido de productos —una seña para reservar una mesa de ' +
+  'cumpleaños, el saldo de algo que ya está cargado, un curso— mandá items vacío. Eso avisa ' +
+  'al local y no carga nada, que es lo correcto.';
+
+export interface PedidoExtraido {
+  args: Record<string, unknown> | null;
+  costUsd: number;
+  model: string | null;
+  latencyMs: number;
+  error?: string;
+}
+
+/** Lee la charla y devuelve los argumentos de `crear_pedido`, sin ejecutarla. */
+export async function extraerPedido(input: {
+  settings: BotSettings;
+  history: StoredMessage[];
+  products: Product[];
+  quickReplies: QuickReply[];
+}): Promise<PedidoExtraido> {
+  const started = Date.now();
+  const { settings, history, products, quickReplies } = input;
+  const model = settings.model || config.openrouter.model;
+  const vacio = (error: string): PedidoExtraido => ({
+    args: null,
+    costUsd: 0,
+    model: null,
+    latencyMs: Date.now() - started,
+    error,
+  });
+
+  if (config.dryRun || !config.openrouter.apiKey) return vacio('sin OPENROUTER_API_KEY');
+  const conversation = toApiMessages(history);
+  if (!conversation.length) return vacio('no hay historial para leer');
+
+  const stable: TextPart = {
+    type: 'text',
+    text: buildStablePrompt(settings, products, quickReplies, necesitaLasOcasionales(history)),
+  };
+  if (supportsExplicitCaching(model)) stable.cache_control = { type: 'ephemeral' };
+
+  let completion: Completion;
+  try {
+    completion = await callOpenRouter({
+      model,
+      settings,
+      messages: [
+        { role: 'system', content: [stable] },
+        { role: 'system', content: INSTRUCCION_DE_EXTRACCION },
+        ...conversation,
+      ],
+      // Lo único que cambia respecto de un turno: la herramienta no se elige.
+      toolChoice: { type: 'function', function: { name: 'crear_pedido' } },
+      maxTokens: 800,
+    });
+  } catch (err) {
+    return vacio((err as Error).message ?? String(err));
+  }
+
+  const usage = completion.usage ?? {};
+  const costUsd = usage.cost ?? 0;
+  const usado = completion.model ?? model;
+  const call = completion.choices?.[0]?.message.tool_calls?.find(
+    (c) => c.function.name === 'crear_pedido',
+  );
+  if (!call) {
+    return {
+      ...vacio('el modelo no llamó crear_pedido pese a tool_choice'),
+      costUsd,
+      model: usado,
+    };
+  }
+  const parsed = parseArguments(call.function.arguments);
+  if (!parsed.ok) return { ...vacio(parsed.error), costUsd, model: usado };
+  return { args: parsed.value, costUsd, model: usado, latencyMs: Date.now() - started };
 }

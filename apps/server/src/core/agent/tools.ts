@@ -55,6 +55,21 @@ export interface ToolContext {
   conversation: Conversation;
   contact: Contact;
   settings: BotSettings;
+  /**
+   * REGISTRAR NO ES CONFIRMAR.
+   *
+   * Lo prende el rescate del comprobante, que carga el pedido sin mandarle
+   * ningún mensaje al cliente. Cuatro guardas de `crear_pedido` existen para
+   * que el bot no le DIGA que sí a algo —una torta a las nueve de la noche,
+   * un desayuno agotado, un pedido fuera de horario—, y ahí siguen valiendo.
+   * Pero cuando la plata ya entró y no se le contesta nada a nadie, esas
+   * guardas dejan de proteger algo: la alternativa a registrar una torta de
+   * $50.000 ya transferida es no registrarla, que es peor.
+   *
+   * No apaga las validaciones de verdad: los ítems sin precio, los productos
+   * que no existen y el pedido vacío se siguen rechazando igual.
+   */
+  forzado?: boolean;
   /** Efectos que el pipeline aplica después del turno. */
   effects: {
     /*
@@ -700,7 +715,8 @@ export async function executeTool(
           Solo los pedidos: una inscripción a un curso no tiene esta restricción
           porque no hay nada que producir a la mañana siguiente.
         */
-        if (!sePuedenTomarPedidos(settings)) {
+        // Registrar no es confirmar: ver `forzado` en ToolContext.
+        if (!ctx.forzado && !sePuedenTomarPedidos(settings)) {
           return {
             ok: false,
             error:
@@ -995,7 +1011,8 @@ export async function executeTool(
           const p = i.productId ? productsById.get(i.productId) : undefined;
           return p ? claveDeCategoria(p.category) === 'tortas' : false;
         });
-        if (tortas.length) {
+        // Con el pedido ya pago y sin mensaje al cliente, no hay nada que confirmar.
+        if (tortas.length && !ctx.forzado) {
           ctx.effects.escalate = {
             reason: 'torta',
             summary:
@@ -1172,7 +1189,8 @@ export async function executeTool(
               return p ? esDesayunoOBox(p.category) && !p.availableToday : false;
             })
           : [];
-        if (agotadosParaHoy.length) {
+        // Registrar no es confirmar: ver `forzado` en ToolContext.
+        if (agotadosParaHoy.length && !ctx.forzado) {
           ctx.effects.escalate = {
             reason: 'desayuno_sin_stock_hoy',
             summary:
@@ -1237,7 +1255,8 @@ export async function executeTool(
         const manana = new Date(Date.now() + 24 * 60 * 60 * 1000).toLocaleDateString('en-CA', {
           timeZone: 'America/Argentina/Tucuman',
         });
-        if (llevaDesayuno && entrega === manana && localMinutes() >= NOCHE_DESDE) {
+        // Registrar no es confirmar: ver `forzado` en ToolContext.
+        if (!ctx.forzado && llevaDesayuno && entrega === manana && localMinutes() >= NOCHE_DESDE) {
           ctx.effects.escalate = {
             reason: 'desayuno_de_noche_para_manana',
             summary:

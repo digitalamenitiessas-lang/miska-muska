@@ -21,7 +21,7 @@ import type { ChannelAdapter } from '../types/channel.js';
 import type { Repositories } from '../store/repositories.js';
 import { bus, log } from '../events/bus.js';
 import { config } from '../../config.js';
-import type { Conversation, ConversationMode, StoredMessage } from '../types/domain.js';
+import type { Conversation, ConversationMode, Order, StoredMessage } from '../types/domain.js';
 import type {
   ChannelId,
   InboundContent,
@@ -48,6 +48,7 @@ import {
   RESPUESTA_AL_ENCARGO,
 } from '../policies/encargos.js';
 import { diceQueSigueEsperando, RESPUESTA_SIN_CONSULTA } from '../policies/consultas.js';
+import { extraerPedido } from '../agent/brain.js';
 import {
   contextoDeCadete,
   ofreceCadeteDeMas,
@@ -68,7 +69,7 @@ import {
 } from '../policies/envios.js';
 import { renderQuickReply } from '../agent/persona.js';
 import { runTurn } from '../agent/brain.js';
-import type { ToolContext } from '../agent/tools.js';
+import { executeTool, type ToolContext } from '../agent/tools.js';
 import { ingest } from './ingress.js';
 import { route } from './router.js';
 import { deliver, typingDelay } from './egress.js';
@@ -156,6 +157,9 @@ interface SendOptions {
   metrics?: Parameters<typeof deliver>[0]['metrics'];
   humanize?: boolean;
 }
+
+/** Media hora entre intentos de rescate en la misma charla. */
+const REINTENTO_DE_CARGA_MS = 30 * 60 * 1000;
 
 export class Pipeline {
   #repos: Repositories;
@@ -337,6 +341,125 @@ export class Pipeline {
     }
   }
 
+  /**
+   * Cuánto espera antes de volver a intentar el rescate en la misma charla.
+   *
+   * Si el primer intento no pudo cargarlo, la segunda y la tercera foto no van a
+   * poder tampoco: lo que falta es un dato que no está en la charla. Sin esto,
+   * tres fotos seguidas serían tres llamadas al modelo para el mismo nada.
+   */
+  #cargaForzada = new Map<string, number>();
+
+  /**
+   * EL PEDIDO SE CARGA SOLO CUANDO ENTRA EL COMPROBANTE.
+   *
+   * Cargar el pedido dejó de depender de que el modelo se acuerde. Medido: el
+   * jueves con el modelo grande el bot cargaba 36 de 51 ventas; con el chico bajó
+   * a 10 de 47, y un viernes SIETE ventas quedaron cobradas y sin registrar en
+   * ningún lado. Del local: "toma pedidos y confirma comprobantes, no te hace el
+   * pedido al costado".
+   *
+   * POR QUÉ ACÁ Y NO CUANDO SE PASA EL ALIAS, que era la idea obvia: el alias
+   * llega mientras el modelo está cerrando la venta y obligaría a frenar un
+   * mensaje ya escrito. El comprobante llega tres minutos después, cuando ya no
+   * hay nada que negociar y la plata YA está. Y las tres condiciones ya eran
+   * código probado: entró una imagen, alguien de este lado pasó el alias antes,
+   * no hay ningún pedido en la charla.
+   *
+   * NO SALE NINGÚN MENSAJE. Por eso las cuatro guardas que impiden CONFIRMAR —la
+   * torta, el desayuno agotado, el desayuno de noche, el horario de pedidos— se
+   * saltean con `forzado`: existen para que el bot no le diga que sí a alguien, y
+   * acá no se le dice nada a nadie. La alternativa a registrar una torta de
+   * $50.000 ya transferida es no registrarla.
+   *
+   * El piso es el comportamiento de hoy: si algo falla, queda el cartel de
+   * siempre pidiendo que la carguen a mano.
+   */
+  async #cargarElPedidoDelComprobante(conversation: Conversation): Promise<Order | null> {
+    const ultimo = this.#cargaForzada.get(conversation.id) ?? 0;
+    if (Date.now() - ultimo < REINTENTO_DE_CARGA_MS) return null;
+    this.#cargaForzada.set(conversation.id, Date.now());
+
+    try {
+      const contact = conversation.contactId
+        ? await this.#repos.contacts.get(conversation.contactId)
+        : null;
+      if (!contact) return null;
+
+      const [settings, history, products, quickReplies] = await Promise.all([
+        this.#repos.settings.read(),
+        this.#repos.messages.history(conversation.id, 30),
+        this.#repos.products.list(),
+        this.#repos.quickReplies.list(),
+      ]);
+
+      const extraido = await extraerPedido({ settings, history, products, quickReplies });
+      if (!extraido.args) {
+        log(
+          'info',
+          `No pude armar el pedido del comprobante (${conversation.id}): ${extraido.error}`,
+        );
+        return null;
+      }
+
+      /*
+        SE RELEE JUSTO ANTES DE CARGAR, y hace falta: entre la llamada al modelo y
+        este punto pasan unos segundos, y en ese hueco una persona del local puede
+        haberlo cargado a mano. Un pedido cargado por una persona tiene
+        `createdBy: human`, así que la fusión de `crear_pedido` no lo ve y se
+        insertaría un duplicado.
+      */
+      const ahora = await this.#repos.orders.list({
+        conversationId: conversation.id,
+        vigentes: true,
+        limit: 5,
+      });
+      if (ahora.some((o) => o.status !== 'cancelado')) {
+        log('info', `Alguien cargó el pedido mientras lo armaba (${conversation.id})`);
+        return null;
+      }
+
+      const effects: ToolContext['effects'] = {};
+      const resultado = await executeTool(
+        'crear_pedido',
+        extraido.args,
+        {
+          repos: this.#repos,
+          conversation,
+          contact,
+          settings,
+          effects,
+          forzado: true,
+        } as ToolContext,
+      );
+
+      if (!resultado.ok || !effects.createdOrder) {
+        log(
+          'info',
+          `El rescate del comprobante no cargó nada (${conversation.id}): ` +
+            `${resultado.ok ? 'sin pedido' : resultado.error}`,
+        );
+        return null;
+      }
+
+      const pedido = effects.createdOrder;
+      log(
+        'warn',
+        `PEDIDO RESCATADO DEL COMPROBANTE (${conversation.id}): #${pedido.number}, ` +
+          `$${pedido.total}, ${pedido.items.length} ítem(s), ${extraido.latencyMs} ms, ` +
+          `$${extraido.costUsd.toFixed(4)}`,
+      );
+      bus.emit({ type: 'order', order: pedido });
+      return pedido;
+    } catch (err) {
+      log(
+        'error',
+        `El rescate del comprobante falló (${conversation.id}): ${(err as Error).message}`,
+      );
+      return null;
+    }
+  }
+
   async #avisarSiEsComprobante(
     conversation: Conversation,
     stored: StoredMessage,
@@ -356,7 +479,7 @@ export class Pipeline {
         this.#repos.courses.pendientesDePagoEn(conversation.id),
       ]);
 
-      const pedidoSinCobrar = pedidos.find(
+      let pedidoSinCobrar = pedidos.find(
         (p) => p.status !== 'cancelado' && p.total > 0 && p.paid < p.total,
       );
       const inscripcion = inscripciones[0];
@@ -387,6 +510,22 @@ export class Pipeline {
       if (!pedidoSinCobrar && !inscripcion) {
         ventaSinFila = await this.#pasamosElAlias(conversation.id, stored.id);
         if (!ventaSinFila) return;
+      }
+
+      /*
+        ANTES DE ESCRIBIR EL CARTEL, INTENTAR CARGARLO.
+
+        Hasta acá el código ya sabía todo lo que hacía falta —entró un
+        comprobante, se había pasado el alias, no hay ningún pedido— y lo único
+        que hacía era escribir un cartel pidiéndole a una persona que lo cargara
+        a mano. Ver `#cargarElPedidoDelComprobante`.
+      */
+      const rescatado = ventaSinFila
+        ? await this.#cargarElPedidoDelComprobante(conversation)
+        : null;
+      if (rescatado) {
+        pedidoSinCobrar = rescatado;
+        ventaSinFila = false;
       }
 
       /*
