@@ -13,3 +13,11 @@ data/
 .DS_Store
 .vite/
 *.tsbuildinfo
+
+# Temporales de los agentes que miden contra la base. Se escriben en apps/server
+# porque necesitan importar src/core/store/db.js con rutas relativas, y a veces
+# uno sobrevive a su script. Nunca son parte del sistema.
+apps/server/zz-*
+apps/server/_*.mts
+apps/server/_*.txt
+apps/server/_*.json
