@@ -28,7 +28,12 @@ import type {
   InboundMessage,
   OutboundContent,
 } from '../types/message.js';
-import { aliasDeCursos, isOutsideBusinessHours, nombreDeWhatsApp } from '../policies/rules.js';
+import {
+  aliasDeCursos,
+  isOutsideBusinessHours,
+  nombreDeWhatsApp,
+  seEncargaConAnticipacion,
+} from '../policies/rules.js';
 import { pideElNombre, yaSePidioElNombre } from '../policies/nombres.js';
 import { localToday } from '../store/db.js';
 import { agotadosConPrecio, preciosQueNoCoinciden } from '../policies/precios.js';
@@ -43,7 +48,16 @@ import {
   RESPUESTA_AL_ENCARGO,
 } from '../policies/encargos.js';
 import { diceQueSigueEsperando, RESPUESTA_SIN_CONSULTA } from '../policies/consultas.js';
-import { ofreceLoQueNoHay, vaACobrar } from '../policies/stock.js';
+import {
+  contextoDeCadete,
+  ofreceCadeteDeMas,
+} from '../policies/cadete.js';
+import {
+  cobraLoQueNoHay,
+  ofreceLoQueNoHay,
+  TEXTO_STOCK_A_CHEQUEAR,
+  vaACobrar,
+} from '../policies/stock.js';
 import {
   afirmaQueYaSalio,
   comprometeNuestroCadete,
@@ -1246,6 +1260,74 @@ export class Pipeline {
         motivoGuarda =
           '[repetido] Entrá vos a esta charla: se trabó. Fijate qué le está pidiendo, porque ' +
           'lo más probable es que la clienta ya se lo haya mandado.';
+        continue;
+      }
+
+      /*
+        NO SE COBRA LO QUE HOY NO HAY.
+
+        Ver `cobraLoQueNoHay`, que cuenta el caso entero: la Cookie kinder se
+        apagó a las 13:02, a las 18:13 el bot pasó el alias con dos adentro, y
+        hubo que devolver $19.800. El local: "mil disculpas, estamos con
+        mensajitos automáticos y te dijeron que sí a productos que no tenemos".
+
+        Va acá arriba y no abajo con el termómetro, y la posición importa: el
+        `if (guardaEscalo)` que se lleva la charla a una persona está ANTES del
+        termómetro, así que una guarda escrita allá abajo prendería las banderas
+        cuando ya nadie las mira.
+
+        Solo lo de mostrador: las tortas y los desayunos se producen para una
+        fecha y apagado no quiere decir que no se puedan hacer.
+      */
+      const apagadosDeMostrador = products
+        .filter((p) => !p.availableToday && !seEncargaConAnticipacion(p.category))
+        .map((p) => ({ id: p.id, name: p.name }));
+      /*
+        TERMÓMETRO: nuestro cadete para algo que no es un desayuno.
+
+        Estuvo a punto de salir como guarda dura y NO SALIÓ, y el motivo vale la
+        pena dejarlo escrito. Los dos mensajes que el local marcó el sábado —los
+        que motivaron todo esto— se leyeron enteros, en su charla:
+
+          18:06  "nosotros lo llevamos, ya sale para tu zona" → era un BOX, y el
+                 propio local lo entregó con su cadete y le cobró $4.000 de envío
+                 esa misma tarde.
+          16:56  "el local ve si consigue cadete" → era un DESAYUNO.
+
+        En los dos el cadete correspondía. El bot tenía razón y el detector estaba
+        mal: como guarda dura habría frenado dos ventas buenas.
+
+        Lo que sí se arregló son los patrones. El detector viejo buscaba "lo
+        llevamos nosotros" y el bot escribe "nosotros lo llevamos" — orden
+        invertido, cero detecciones— así que marcaba cero mientras pasaban cosas.
+        Ahora mide de verdad, y con el prompt de hoy da 1 a 3 por día contra los
+        24 a 34 de antes de que existieran las reglas del cadete.
+
+        Si algún día ese número sube, habrá material real para decidir si
+        conviene bloquear. Hoy no lo hay.
+      */
+      const cadeteDeMas = elLocalHabloDelEnvio(history)
+        ? null
+        : ofreceCadeteDeMas(contenido.text, contextoDeCadete(history));
+      if (cadeteDeMas) {
+        log(
+          'warn',
+          `OFRECIÓ NUESTRO CADETE SIN SER DESAYUNO (${conversationId}): "${cadeteDeMas}"`,
+        );
+      }
+
+      const cobrados = cobraLoQueNoHay(contenido.text, apagadosDeMostrador);
+      if (cobrados.length) {
+        log(
+          'warn',
+          `COBRABA ALGO APAGADO (${conversationId}): ${cobrados.map((c) => c.name).join(', ')}`,
+        );
+        contenido.text = TEXTO_STOCK_A_CHEQUEAR;
+        guardaEscalo = true;
+        alertaDeGuarda = true;
+        motivoGuarda =
+          `[stock] Iba a cobrar ${cobrados.map((c) => c.name).join(', ')}, que está apagado. ` +
+          'Fijate si lo tenés y contestale vos: si no hay, ofrecele otra cosa ANTES de que pague.';
         continue;
       }
 

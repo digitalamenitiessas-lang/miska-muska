@@ -35,7 +35,14 @@ function plano(texto: string): string {
  * escriba el modelo.
  */
 const DICE_QUE_NO_HAY =
-  /\b(no (nos )?(hay|queda|quedan|tenemos|nos quedo|tengo)|se (nos )?(agoto|agotaron|termino|terminaron)|agotad[oa]s?|sin stock|nos quedamos sin|ya no (hay|queda|tenemos)|todavia no (esta|hay)|vuelve a haber|apenas (vuelva|tengamos))\b/;
+  /\b(no (nos |los |las |lo |la |te |me )*(hay|queda|quedan|quedo|quedaron|tenemos|tengo)|no (esta|estan) disponible|(esta|estan|figura|figuran) (sin stock|agotad)|se (nos )?(agoto|agotaron|termino|terminaron)|agotad[oa]s?|sin stock|nos quedamos sin|ya no (hay|queda|tenemos)|todavia no (esta|hay)|vuelve a haber|apenas (vuelva|tengamos)|queda (afuera|fuera))\b/;
+/*
+  El agujero que tenía: "no LOS tenemos". El patrón pedía el "no" pegado al
+  verbo, así que "la cookie pistacho y el chipá no los tenemos disponibles hoy"
+  —que es exactamente lo que queremos que diga— contaba como oferta indebida.
+  Trece mensajes correctos marcados de más en siete días, y uno de ellos habría
+  sido un bloqueo con la guarda nueva.
+*/
 
 /**
  * Corta el texto en oraciones.
@@ -151,3 +158,86 @@ export function avisoDeStock(faltantes: OfertaIndebida[]): string {
     'Ya pasó que alguien pagó algo que no había y hubo que devolverle la plata.'
   );
 }
+
+/*
+  NO SE COBRA LO QUE HOY NO HAY.
+
+  El 12 de septiembre a las 18:13:
+
+    bot    "Entonces queda: 2 x Cookie kinder / 1 x Brownie pistacho /
+            1 x Alfajor block. Total: $19.800. Te paso el alias: miskapedidos"
+    ella   transfirió y mandó la captura
+    local  "tengo todo menos cookie kinder"
+    local  "mil disculpas, estamos con mensajitos automáticos y te dijeron que
+            sí a productos que no tenemos en el local"
+
+  La Cookie kinder se había apagado a las 13:02 de ese mismo día, cinco horas
+  antes. Hubo que devolver los $19.800.
+
+  Y OJO CON DÓNDE ESTABA EL AGUJERO, porque no era donde parecía: `crear_pedido`
+  hizo lo suyo. En esa charla NO quedó ningún pedido cargado —la validación
+  rechazó la kinder por apagada— y el bot pasó el alias igual. La validación del
+  pedido ya funcionaba; lo que faltaba era frenar el mensaje que pide la plata.
+
+  POR QUÉ ESTA ES ANGOSTA Y EL TERMÓMETRO SIGUE SIENDO ANCHO. Medido sobre los
+  5.609 mensajes del bot de siete días:
+
+    ofreceLoQueNoHay tal cual .................. 1.320 = 188,6/día
+    + está pidiendo la plata ...................... 84 =  12,0/día
+    + solo mostrador, sin tortas ni desayunos ..... 37 =   5,3/día
+
+  Los 189 no son un error: el bot habla de productos apagados todo el día con
+  razón. Pasa la carta de cookies, pasa la lista de precios de tortas, dice "hoy
+  no nos queda". Bloquear eso sería una de cada cuatro respuestas.
+
+  LAS TORTAS Y LOS DESAYUNOS QUEDAN AFUERA, y no es un descuido. Se producen para
+  una fecha, así que apagado quiere decir "no hay uno hecho", no "no se puede":
+  el local fue explícito en que apagado no significa dejar de ofrecerlos. Y para
+  el caso de HOY ya hay guarda dentro de `crear_pedido`. Meterlos acá subiría a
+  12 por día y frenaría encargos que están bien.
+
+  Con el mostrador es al revés: una cookie, un brownie, un alfajor no se producen
+  por encargo. Apagado ahí quiere decir que no hay, y cobrarlo termina en
+  devolución.
+*/
+const PIDE_LA_PLATA = /\b(alias|transferi|transferencia|comprobante|seña|senia|sena)\b/;
+
+/** ¿Este mensaje está pidiendo plata? */
+export function pideLaPlata(texto: string): boolean {
+  return PIDE_LA_PLATA.test(plano(texto));
+}
+
+const NOMBRA_UN_DESAYUNO = /\b(desayuno|desayunos|box|boxes)\b/;
+
+/**
+ * Los productos apagados que este mensaje está COBRANDO.
+ *
+ * `apagadosDeMostrador` tiene que venir ya filtrado: solo lo que no se produce
+ * por encargo. Ver el comentario de arriba, que explica por qué.
+ */
+export function cobraLoQueNoHay(
+  texto: string,
+  apagadosDeMostrador: ProductoApagado[],
+): OfertaIndebida[] {
+  if (!pideLaPlata(texto)) return [];
+  const ofrecidos = ofreceLoQueNoHay(texto, apagadosDeMostrador);
+  if (!ofrecidos.length) return [];
+  /*
+    La mini torta que va ADENTRO de un desayuno no se está vendiendo suelta, así
+    que su stock no importa acá. Es el único falso positivo estructural que
+    apareció en siete días.
+  */
+  if (NOMBRA_UN_DESAYUNO.test(plano(texto))) {
+    return ofrecidos.filter((o) => !/mini\s*torta/i.test(o.name));
+  }
+  return ofrecidos;
+}
+
+/**
+ * Lo que se manda en lugar del mensaje que cobraba.
+ *
+ * No dice qué falta —eso lo sabe el local, y decirlo mal es peor— y no cierra la
+ * venta: deja la charla esperando un minuto mientras alguien mira.
+ */
+export const TEXTO_STOCK_A_CHEQUEAR =
+  'Dame un minuto que confirmo que tengamos todo eso listo y te paso el alias 🙌🏼';
