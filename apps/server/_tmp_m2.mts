@@ -1,0 +1,11 @@
+import { openDb, q, closeDb } from './src/core/store/db.js';
+openDb({ connectionString: process.env.DATABASE_URL!, password: process.env.DATABASE_PASSWORD, max: 2 });
+const s = await q<any>(`select key, value from settings where key in ('transferAlias','transferAliasCursos','esperaMs','model','pedidosDesde','pedidosHasta')`);
+console.log('settings', JSON.stringify(s));
+const ck = await q<any>(`select content_kind, direction, count(*)::int n from messages group by 1,2 order by n desc limit 20`);
+console.log('content_kind', JSON.stringify(ck));
+const pk = await q<any>(`select payload->>'kind' k, count(*)::int n from messages where direction='in' group by 1 order by n desc`);
+console.log('payload kinds in', JSON.stringify(pk));
+const cats = await q<any>(`select category, count(*)::int n from products group by 1 order by n desc`);
+console.log('cats', JSON.stringify(cats));
+await closeDb();

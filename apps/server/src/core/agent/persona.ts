@@ -29,6 +29,7 @@ import {
   nombreDeWhatsApp,
   operationalFacts,
   POLICY_PROSE,
+  POLICY_PROSE_OCASIONAL,
   seEncargaConAnticipacion,
   sePuedenTomarPedidos,
 } from '../policies/rules.js';
@@ -382,10 +383,22 @@ function catalogoCompleto(products: Product[]): string {
   );
 }
 
+/**
+ * El prompt que no cambia, o casi.
+ *
+ * `conOcasionales` decide si se le agregan las reglas de cursos, reservas,
+ * modificaciones y audios. Van AL FINAL a propósito: así la versión corta es un
+ * prefijo exacto de la larga y las dos comparten el mismo bloque cacheado. Ver
+ * `POLICY_PROSE_OCASIONAL`, que explica la cuenta.
+ *
+ * El 81% de los turnos se lleva la corta, que son 12.385 caracteres menos —unos
+ * 3.000 tokens— de reglamento que ese turno no iba a usar.
+ */
 export function buildStablePrompt(
   settings: BotSettings,
   products: Product[] = [],
   quickReplies: QuickReply[] = [],
+  conOcasionales = true,
 ): string {
   return [
     IDENTITY,
@@ -406,6 +419,8 @@ export function buildStablePrompt(
       : '',
     knowledgeBlock(settings),
     TOOL_GUIDANCE,
+    // Último, siempre. Es lo que hace que la versión corta sea un prefijo.
+    conOcasionales ? POLICY_PROSE_OCASIONAL : '',
   ]
     .filter(Boolean)
     .join('\n\n---\n\n');

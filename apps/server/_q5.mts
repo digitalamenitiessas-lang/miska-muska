@@ -1,0 +1,10 @@
+import { openDb, q, closeDb } from './src/core/store/db.js';
+openDb({ connectionString: process.env.DATABASE_URL!, password: process.env.DATABASE_PASSWORD, max: 2 });
+const TZ = "America/Argentina/Tucuman";
+const r = await q<any>(`select min(created_at) as mn, max(created_at) as mx, count(*) as n from messages`);
+console.log(JSON.stringify(r));
+const d = await q<any>(`select (created_at at time zone '${TZ}')::date as dia, count(*) n from messages group by 1 order by 1 desc limit 12`);
+for (const x of d) console.log(x.dia, x.n);
+const a = await q<any>(`select count(*) n from messages where direction='out' and lower(text) like '%miskapedidos%'`);
+console.log('alias msgs total', JSON.stringify(a));
+await closeDb();

@@ -29,6 +29,7 @@ import { config } from '../../config.js';
 import { log } from '../events/bus.js';
 import { normalizeBubbles, suenaAEspana } from '../policies/writing.js';
 import { corregirTotal } from '../policies/totales.js';
+import { necesitaLasOcasionales } from '../policies/rules.js';
 import { ofreceCadeteDeMas } from '../policies/cadete.js';
 import type { BotSettings, StoredMessage } from '../types/domain.js';
 import { buildDailyContext, buildStablePrompt, SPLIT_MARKER, type DailyContextInput } from './persona.js';
@@ -311,7 +312,22 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
   */
   const stable: TextPart = {
     type: 'text',
-    text: buildStablePrompt(settings, dailyContext.products, dailyContext.quickReplies),
+    /*
+      Las reglas ocasionales —cursos, reservas, modificaciones, audios— solo si
+      esta charla las toca. Son 12.385 caracteres que el 81% de los turnos no
+      usa nunca, y el modelo chico obedece peor cuanto más reglamento carga.
+
+      Se mira el historial ENTERO y no el último mensaje: una vez que entran,
+      se quedan. Si entraran y salieran en el medio de una charla, el prefijo
+      cacheado cambiaría a cada rato y se pagaría el prompt completo de nuevo
+      en cada vuelta.
+    */
+    text: buildStablePrompt(
+      settings,
+      dailyContext.products,
+      dailyContext.quickReplies,
+      necesitaLasOcasionales(history),
+    ),
   };
   if (supportsExplicitCaching(model)) stable.cache_control = { type: 'ephemeral' };
 
