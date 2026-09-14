@@ -50,6 +50,7 @@ import {
 import { diceQueSigueEsperando, RESPUESTA_SIN_CONSULTA } from '../policies/consultas.js';
 import {
   elComprobanteEntroRecien,
+  hablaDelMicroondas,
   tipDeCookies,
   yaMandamosElTip,
 } from '../policies/cookies.js';
@@ -1714,7 +1715,21 @@ export class Pipeline {
       "agregar al final".
     */
     const tip = tipDeCookies(abiertos.flatMap((o) => o.items ?? []));
-    if (tip && elComprobanteEntroRecien(history) && !yaMandamosElTip(history)) {
+    /*
+      Y lo primero que se pregunta es si el modelo ya lo dijo EN ESTE TURNO.
+      El primer día pasó dos veces de quince: el modelo escribió su versión
+      —"Tip para disfrutar tus cookies…"— y abajo le pegamos la nuestra.
+      El historial no lo sabía porque ese texto todavía no era historial.
+    */
+    const yaLoDiceEsteTurno = contents.some(
+      (c) => c.kind === 'text' && hablaDelMicroondas(c.text),
+    );
+    if (
+      tip &&
+      !yaLoDiceEsteTurno &&
+      elComprobanteEntroRecien(history) &&
+      !yaMandamosElTip(history)
+    ) {
       const ultima = [...contents].reverse().find((c) => c.kind === 'text' && c.text.trim());
       if (ultima && ultima.kind === 'text') {
         ultima.text = `${ultima.text.trimEnd()}\n\n${tip}`;

@@ -887,6 +887,24 @@ export function createRepositories() {
       error: si falla el registro no puede tumbar el apagado de un producto,
       que es lo que el local está haciendo con el pedido en la mano.
     */
+    /*
+      EL REGISTRO, SUELTO DE QUIEN ESCRIBE.
+
+      Hacía falta porque el log nació incompleto: se anotaba en
+      `setAvailability` y `setAvailabilityMany`, y el interruptor que el local
+      usa de verdad no pasa por ninguno de los dos —el panel manda un PATCH del
+      producto entero, que va a `upsert`—. Resultado: dos días de cambios
+      reales y CERO filas en la tabla, con el `.catch` tapando la nada.
+
+      Se midió así: `products.updated_at` mostraba quince cambios en el día y
+      `product_availability_log` estaba vacía.
+    */
+    async logAvailability(id: string, available: boolean, source: string): Promise<void> {
+      await exec(
+        'INSERT INTO product_availability_log (product_id, available, source) VALUES ($1,$2,$3)',
+        [id, available, source],
+      ).catch(() => undefined);
+    },
     async setAvailability(id: string, available: boolean, source = 'panel'): Promise<void> {
       await exec('UPDATE products SET available_today = $2, updated_at = now() WHERE id = $1', [
         id,

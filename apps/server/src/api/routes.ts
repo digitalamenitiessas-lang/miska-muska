@@ -252,6 +252,15 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
         ? current.category
         : canonizarCategoria(String(body.category), await repos.products.categories());
     if (!category) return reply.code(400).send({ error: 'La categoría no puede quedar vacía' });
+    /*
+      Si lo que cambió es el interruptor de hoy, queda anotado. Es el camino
+      que usa el panel de la mañana, y hasta ahora era el único que no dejaba
+      rastro. Ver `logAvailability`.
+    */
+    if (body.availableToday !== undefined && body.availableToday !== current.availableToday) {
+      await repos.products.logAvailability(current.id, body.availableToday, 'panel-ficha');
+    }
+
     return repos.products.upsert({
       id: current.id,
       name: body.name ?? current.name,

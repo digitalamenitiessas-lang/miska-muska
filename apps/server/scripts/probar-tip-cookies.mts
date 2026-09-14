@@ -18,6 +18,7 @@ import {
   yaMandamosElTip,
   TIP_DE_LAS_COOKIES,
   TIP_DEL_BOX_LIMITADO,
+  hablaDelMicroondas,
   type MensajeParaElTip,
 } from '../src/core/policies/cookies.js';
 
@@ -113,6 +114,16 @@ chequear(
   'que lo diga la clienta no nos exime de decirlo',
 );
 
+chequear(
+  hablaDelMicroondas(
+    '🍪 Tip para disfrutar tus cookies: te recomendamos calentarlas 10 segundos en el microondas'
+  ),
+  'la versión que escribe el modelo también cuenta — salió repetida dos veces de quince',
+);
+chequear(
+  !hablaDelMicroondas('Recibido 🙌🏼 Ya nos ponemos a armar tu pedido'),
+  'y el acuse solo no la trae',
+);
 /* --------------------------------------------------------------------- */
 
 openDb({

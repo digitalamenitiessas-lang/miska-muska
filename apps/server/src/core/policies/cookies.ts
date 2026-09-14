@@ -101,7 +101,20 @@ export function elComprobanteEntroRecien(
 */
 const YA_LO_DIJIMOS = /\bmicroondas\b/i;
 
-/** ¿Alguien de este lado ya le dijo lo del microondas en esta charla? */
+/** ¿Este texto ya habla de calentar las cookies? */
+export function hablaDelMicroondas(texto: string): boolean {
+  return YA_LO_DIJIMOS.test(texto);
+}
+
+/**
+ * ¿Alguien de este lado ya le dijo lo del microondas en esta charla?
+ *
+ * Ojo con lo que NO alcanza: mirar solo el historial. El primer día salieron
+ * dos mensajes con el tip repetido —el del modelo y el nuestro, uno abajo del
+ * otro en la misma burbuja— porque el modelo lo había escrito en ESE turno, que
+ * todavía no es historial. Por eso `hablaDelMicroondas` vive aparte: en el
+ * pipeline hay que preguntarle también a lo que está por salir.
+ */
 export function yaMandamosElTip(mensajes: MensajeParaElTip[]): boolean {
-  return mensajes.some((m) => m.direction === 'out' && YA_LO_DIJIMOS.test(m.text));
+  return mensajes.some((m) => m.direction === 'out' && hablaDelMicroondas(m.text));
 }
