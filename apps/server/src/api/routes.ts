@@ -703,6 +703,16 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
   */
   app.get('/api/gasto', async () => repos.metrics.gasto());
 
+  /*
+    Y lo que hay para cobrar, que es otra pregunta: el gastómetro mira el mes
+    calendario y esto mira el período que todavía no se facturó. Ver
+    `facturacion` y el campo `cobroDesde` de los ajustes.
+  */
+  app.get('/api/facturacion', async () => {
+    const { cobroDesde } = await repos.settings.read();
+    return repos.metrics.facturacion(cobroDesde);
+  });
+
   // --- Avisos al celular ---------------------------------------------------
 
   /*

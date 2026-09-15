@@ -437,6 +437,22 @@ export interface BotSettings {
    * que nadie actualiza, así que el prompt lo dice y el panel también.
    */
   conocimiento: string;
+  /**
+   * Desde cuándo cuenta el consumo que todavía no se cobró.
+   *
+   * ISO 8601, y es un corte de UNA vez: el 15/09/2026 el local pagó el
+   * consumo hasta ese momento, y lo que viene después es lo que se factura a
+   * fin de mes. Sin esto, el contador del panel arrancaría el 1° y estaría
+   * cobrando dos veces la primera quincena.
+   *
+   * Se apaga solo, y por eso no hay que acordarse de borrarlo: el período
+   * empieza en el MÁS TARDE de los dos, este corte o el primero del mes. En
+   * octubre el primero del mes ya es posterior, así que el corte deja de
+   * pesar y la cuenta vuelve a ser mensual sin que nadie toque nada.
+   *
+   * Vacío = mes calendario, que es el caso normal.
+   */
+  cobroDesde: string;
 }
 
 export interface MetricPoint {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, type MetricPoint, type Metrics } from '../api';
+import { api, type Facturacion, type MetricPoint, type Metrics } from '../api';
 import { Empty } from '../ui';
 
 
@@ -45,6 +45,7 @@ const REFRESCO_MS = 30_000;
 
 export function Metricas() {
   const [data, setData] = useState<Metrics | null>(null);
+  const [cobro, setCobro] = useState<Facturacion | null>(null);
   const [days, setDays] = useState(14);
   const [showTable, setShowTable] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -52,6 +53,11 @@ export function Metricas() {
   const load = useCallback(async () => {
     try {
       setData(await api.metrics(days));
+      /*
+        Lo de cobrar no puede tumbar la pantalla: si esta consulta falla, las
+        métricas se ven igual y la tarjeta simplemente no aparece.
+      */
+      setCobro(await api.facturacion().catch(() => null));
       setError(null);
     } catch (err) {
       setError(String(err));
@@ -77,6 +83,8 @@ export function Metricas() {
 
   return (
     <>
+      {cobro ? <ParaCobrar cobro={cobro} /> : null}
+
       <div className="tiles">
         <Tile label="Conversaciones" value={String(summary.conversations)} />
         <Tile
@@ -524,6 +532,48 @@ function niceTicks(max: number, count: number): number[] {
  * Los turnos cuestan fracciones de centavo, así que un `$0.00` no dice nada:
  * se muestran cuatro decimales cuando el número es chico.
  */
+/**
+ * Lo que hay para cobrar, arriba de todo.
+ *
+ * Va separado del "Gasto del período" de las tarjetas y no es una repetición:
+ * ese sigue la ventana de 7/14/30 días que elegís para mirar los gráficos, y
+ * este sigue el período que se factura. Son dos preguntas distintas y mezclarlas
+ * en un número solo fue lo que hizo falta aclarar cuando se cobró la primera vez.
+ */
+function ParaCobrar({ cobro }: { cobro: Facturacion }) {
+  const desde = new Date(cobro.desde);
+  const dias = Math.max(1, Math.ceil((Date.now() - desde.getTime()) / 86_400_000));
+  const cuando = Number.isNaN(desde.getTime())
+    ? '—'
+    : desde.toLocaleString('es-AR', {
+        day: 'numeric',
+        month: 'long',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+  return (
+    <section className="card" style={{ marginBottom: 14 }}>
+      <div className="card-pad">
+        <h3 className="card-title">Para cobrar</h3>
+        <div className="row wrap" style={{ alignItems: 'baseline', gap: 10 }}>
+          <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            {usd(cobro.costoUsd)}
+          </span>
+          <span className="small muted">
+            consumo del modelo desde el {cuando} · {cobro.turnos.toLocaleString('es-AR')} turnos ·{' '}
+            {dias} {dias === 1 ? 'día' : 'días'}
+          </span>
+        </div>
+        <p className="small muted" style={{ margin: '6px 0 0' }}>
+          {cobro.arrancoElMes
+            ? 'Es el mes calendario: se reinicia solo el día 1°.'
+            : 'Arranca en el corte de Ajustes, porque el consumo anterior ya se cobró. Desde el ' +
+              '1° del mes que viene vuelve a contar el mes entero, sin tocar nada.'}
+        </p>
+      </div>
+    </section>
+  );
+}
 function usd(value: number): string {
   if (!value) return '$0';
   if (value < 0.01) return `$${value.toFixed(4)}`;

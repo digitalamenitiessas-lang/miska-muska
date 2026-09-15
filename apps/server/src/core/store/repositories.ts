@@ -1750,6 +1750,55 @@ export function createRepositories() {
       };
     },
 
+    /**
+     * Lo que hay para cobrar del período que todavía no se facturó.
+     *
+     * Se lee de `model_turns` y no de `messages`, que es de donde sale el
+     * gastómetro de la barra. No es un detalle de estilo: `messages` solo ve
+     * los turnos que TERMINARON en un mensaje, y el bot también paga los que
+     * decide callarse. Medido sobre los días completos que tienen las dos
+     * fuentes, `messages` queda corto entre un 10% y un 16%. Para mirar de
+     * reojo cómo viene el día da igual; para una factura, no.
+     *
+     * EL PERÍODO EMPIEZA EN EL MÁS TARDE de dos fechas: el corte que quedó
+     * guardado y el primero del mes. Así el arreglo de una vez —el local pagó
+     * hasta el 15/09— se desactiva solo cuando cambia el mes, y nadie tiene
+     * que acordarse de limpiarlo en octubre.
+     *
+     * Los cortes van en la hora de Tucumán, por lo mismo que `gasto()`: a las
+     * 22 de acá ya es mañana en UTC, y la noche es cuando más escriben.
+     */
+    async facturacion(cobroDesde: string): Promise<{
+      desde: string;
+      costoUsd: number;
+      turnos: number;
+      arrancoElMes: boolean;
+    }> {
+      const corte = cobroDesde.trim() || null;
+      const row = await one(
+        `WITH periodo AS (
+           SELECT GREATEST(
+             COALESCE($2::timestamptz, '-infinity'::timestamptz),
+             date_trunc('month', now() AT TIME ZONE $1) AT TIME ZONE $1
+           ) AS desde
+         )
+         SELECT p.desde,
+                COALESCE(SUM(t.cost_usd), 0) AS costo,
+                COUNT(t.*) AS turnos,
+                p.desde <= date_trunc('month', now() AT TIME ZONE $1) AT TIME ZONE $1
+                  AS arranco_el_mes
+         FROM periodo p
+         LEFT JOIN model_turns t ON t.created_at >= p.desde
+         GROUP BY p.desde`,
+        [TIMEZONE, corte],
+      );
+      return {
+        desde: row?.desde ? new Date(row.desde as string).toISOString() : '',
+        costoUsd: Number(row?.costo ?? 0),
+        turnos: Number(row?.turnos ?? 0),
+        arrancoElMes: Boolean(row?.arranco_el_mes),
+      };
+    },
     async intents(days = 14): Promise<Array<{ intent: string; count: number }>> {
       const rows = await q<{ intent: string; n: string }>(
         `SELECT intent, COUNT(*) AS n FROM messages
@@ -1895,4 +1944,6 @@ que sepas qué manejamos y puedas contestar, no para ofrecerla como envío.
 - Bebidas: línea Coca-Cola, aguas saborizadas.
 - También tenemos leche deslactosada y de almendras, y cualquier café se puede pedir "iced".
 `.trim(),
+  // Vacío = mes calendario. Ver `cobroDesde` en el tipo.
+  cobroDesde: '',
 };

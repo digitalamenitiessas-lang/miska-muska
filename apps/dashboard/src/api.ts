@@ -276,6 +276,15 @@ export interface Settings {
   cartaCafeteriaUrl: string;
   /** Texto libre con lo que el local sabe y ninguna tabla guarda. Va al prompt. */
   conocimiento: string;
+  /**
+   * Desde cuándo cuenta el consumo que todavía no se cobró, en ISO 8601.
+   *
+   * Vacío = mes calendario, que es el caso normal. Con fecha, el contador de
+   * Métricas arranca ahí y no el día 1°, para cuando ya se cobró parte del mes.
+   * Se desactiva solo: el período empieza en el más tarde de los dos, así que
+   * al cambiar el mes el corte deja de pesar.
+   */
+  cobroDesde: string;
 }
 
 export interface ChannelHealth {
@@ -332,6 +341,22 @@ export interface Gasto {
   hoy: number;
   mes: number;
   historico: number;
+}
+
+/**
+ * Lo que hay para cobrar del período que todavía no se facturó.
+ *
+ * No es lo mismo que `Gasto.mes`, y por dos motivos: mira desde el corte que
+ * haya en Ajustes —no desde el 1°— y sale de los turnos del modelo, que
+ * incluyen los que el bot decidió no contestar y también se pagan.
+ */
+export interface Facturacion {
+  /** ISO del arranque del período. */
+  desde: string;
+  costoUsd: number;
+  turnos: number;
+  /** true si el período es el mes calendario, o sea que no hay corte vigente. */
+  arrancoElMes: boolean;
 }
 
 export interface ConversationDetail {
@@ -519,6 +544,7 @@ export const api = {
   metrics: (days = 14) => get<Metrics>(`/api/metrics?days=${days}`),
   /** Lo que va gastando el bot en el modelo. Se pide en cada pantalla. */
   gasto: () => get<Gasto>('/api/gasto'),
+  facturacion: () => get<Facturacion>('/api/facturacion'),
 
   /** Avisos al celular. La clave es pública: viaja en el JS del panel. */
   claveDeAvisos: () => get<{ clave: string }>('/api/push/clave'),

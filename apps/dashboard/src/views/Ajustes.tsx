@@ -150,6 +150,23 @@ export function Ajustes({
               value={draft.escalateAfterErrors}
               onChange={(e) => set('escalateAfterErrors', Number(e.target.value))}
             />
+
+            <label className="label" style={{ marginTop: 10 }}>
+              Cobrar el consumo desde
+            </label>
+            <input
+              type="datetime-local"
+              value={paraElInput(draft.cobroDesde)}
+              onChange={(e) =>
+                set('cobroDesde', e.target.value ? new Date(e.target.value).toISOString() : '')
+              }
+            />
+            <p className="small muted" style={{ margin: '3px 0 0' }}>
+              Vacío es lo normal: el contador de Métricas cuenta el mes calendario. Esto es para
+              cuando ya se cobró parte del mes — el período arranca acá y no el día 1°, así no se
+              cobra dos veces lo mismo. Se apaga solo: cuando cambia el mes, vuelve a contar el
+              mes entero sin que haya que borrarlo.
+            </p>
           </div>
         </section>
 
@@ -339,6 +356,24 @@ export function Ajustes({
   );
 }
 
+/**
+ * El corte de facturación, ida y vuelta entre el ISO que guardamos y lo que
+ * espera un `datetime-local`, que es hora local sin zona ni segundos.
+ *
+ * La conversión la hace el navegador de quien edita, que es lo correcto: el
+ * panel se usa desde Tucumán y quien escribe "15/09 20:47" quiere decir las
+ * 20:47 de acá, no UTC.
+ */
+function paraElInput(iso: string): string {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '';
+  const dosDigitos = (n: number) => String(n).padStart(2, '0');
+  return (
+    `${d.getFullYear()}-${dosDigitos(d.getMonth() + 1)}-${dosDigitos(d.getDate())}` +
+    `T${dosDigitos(d.getHours())}:${dosDigitos(d.getMinutes())}`
+  );
+}
 function Field({
   label,
   value,
