@@ -109,22 +109,47 @@ export function Pedidos({
 
   const [resumen, setResumen] = useState<ResumenPedidos | null>(null);
 
+  /*
+    LA LISTA DE LA TARJETA LA TRAE EL SERVIDOR, NO SE FILTRA ACÁ.
+
+    Filtrarla acá era el bug que reportó el local: "no coincide el por cobrar
+    con el listado real". La tarjeta suma toda la tabla y la lista de abajo
+    trae las 200 más nuevas, así que los cuatro pedidos del 31/08 que estaban
+    entregados y sin cobrar —$103.600 de los $143.100 -— entraban en el número
+    y no había forma de verlos abajo.
+
+    `null` mientras no hay tarjeta puesta, o mientras la respuesta viaja: ahí
+    se sigue filtrando la lista cargada, que es lo que se hacía antes y por lo
+    menos muestra algo.
+  */
+  const [deLaTarjeta, setDeLaTarjeta] = useState<Order[] | null>(null);
+
   const load = useCallback(async () => {
     const mia = ++ultimaCarga.current;
     try {
-      const [lista, nums] = await Promise.all([
+      /*
+        La de la tarjeta va en la misma carga y no en un efecto aparte, para que
+        las dos se refresquen juntas: si no, marcar un pedido como cobrado dejaba
+        la lista de la tarjeta mostrando el estado de hace un rato.
+      */
+      const deServidor = tarjeta === 'porCobrar' || tarjeta === 'sinComprobante' || tarjeta === 'sinPrecio';
+      const [lista, nums, deTarjeta] = await Promise.all([
         api.orders(rango as Record<string, string>),
         api.resumenPedidos(),
+        deServidor
+          ? api.orders({ ...(rango as Record<string, string>), pendiente: tarjeta, limit: '500' })
+          : Promise.resolve(null),
       ]);
       if (mia !== ultimaCarga.current) return; // llegó tarde: ya hay una más nueva
       setOrders(lista);
       setResumen(nums);
+      setDeLaTarjeta(deTarjeta);
     } catch (err) {
       if (mia === ultimaCarga.current) toast(`No pude cargar los pedidos: ${String(err)}`);
     } finally {
       setLoading(false);
     }
-  }, [toast, rango]);
+  }, [toast, rango, tarjeta]);
 
   useEffect(() => {
     void load();
@@ -159,16 +184,21 @@ export function Pedidos({
 
   const visible = useMemo(() => {
     const vivo = (o: Order) => o.status !== 'cancelado';
-    const porTarjeta =
-      tarjeta === 'porCobrar'
-        ? orders.filter((o) => vivo(o) && o.total > o.paid)
-        : tarjeta === 'sinComprobante'
-          ? orders.filter((o) => vivo(o) && o.paid <= 0)
-          : tarjeta === 'sinPrecio'
-            ? orders.filter((o) => vivo(o) && o.total <= 0)
-            : tarjeta === 'sinFacturar'
-              ? orders.filter((o) => vivo(o) && !o.billedAt)
-              : orders;
+    /*
+      Si el servidor ya mandó la lista de la tarjeta, esa manda: viene filtrada
+      sobre TODA la tabla. Lo de abajo es el respaldo mientras llega, y el
+      camino normal de `sinFacturar`, que se queda mirando el día a propósito.
+    */
+    const porTarjeta = !tarjeta
+      ? orders
+      : (deLaTarjeta ??
+        (tarjeta === 'porCobrar'
+          ? orders.filter((o) => vivo(o) && o.total > o.paid)
+          : tarjeta === 'sinComprobante'
+            ? orders.filter((o) => vivo(o) && o.paid <= 0)
+            : tarjeta === 'sinPrecio'
+              ? orders.filter((o) => vivo(o) && o.total <= 0)
+              : orders.filter((o) => vivo(o) && !o.billedAt)));
     const porEstado =
       filter === 'todos' ? porTarjeta : porTarjeta.filter((o) => o.status === filter);
     const q = pelado(busqueda.trim());
@@ -179,7 +209,7 @@ export function Pedidos({
       const texto = buscables(o);
       return partes.every((p) => texto.includes(p));
     });
-  }, [orders, filter, busqueda, tarjeta]);
+  }, [orders, filter, busqueda, tarjeta, deLaTarjeta]);
 
   const counts = useMemo(() => {
     const map = new Map<string, number>();
@@ -249,6 +279,15 @@ export function Pedidos({
     try {
       const next = await api.updateOrder(id, patch);
       setOrders((prev) => prev.map((o) => (o.id === next.id ? next : o)));
+      /*
+        También en la de la tarjeta, si está puesta. Se actualiza en el lugar
+        en vez de sacarlo de la lista: cuando alguien marca cobrado uno de los
+        cuatro colgados, ver el renglón cambiar de estado es la confirmación
+        de que hizo lo que quería. Desaparece en la próxima carga.
+      */
+      setDeLaTarjeta((prev) =>
+        prev ? prev.map((o) => (o.id === next.id ? next : o)) : prev,
+      );
     } catch (err) {
       toast(`No pude actualizar: ${String(err)}`);
     }
@@ -415,7 +454,8 @@ export function Pedidos({
                 : tarjeta === 'sinFacturar'
                   ? 'Mostrando solo los que todavía no se facturaron'
                   : 'Mostrando solo los que quedaron sin precio'}
-            {dia.tipo !== 'todos' ? ' del día elegido' : ''}.
+            {dia.tipo !== 'todos' ? ' del día elegido' : ''}
+            {deLaTarjeta ? ` — ${deLaTarjeta.length} en total` : ''}.
           </span>
           <button className="chip" onClick={() => setTarjeta(null)}>
             ✕ ver todos

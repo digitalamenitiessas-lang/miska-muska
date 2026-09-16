@@ -1041,6 +1041,23 @@ export function createRepositories() {
          */
         desde?: string;
         hasta?: string;
+        /**
+         * Lo mismo que cuenta una tarjeta de Pedidos, pero para la lista.
+         *
+         * Sin esto la tarjeta y la lista contestaban preguntas distintas: la
+         * tarjeta suma TODA la tabla y la lista trae las 200 más nuevas, así que
+         * un pedido viejo colgado entraba en el número y no podía aparecer abajo
+         * ni filtrando. El local, con la captura al lado: "creo que está con un
+         * bug, no coincide el por cobrar con el listado real".
+         *
+         * Eran cuatro pedidos del 31/08, entregados y nunca marcados como
+         * cobrados: $103.600 que el número decía bien y la lista no mostraba.
+         *
+         * `sinFacturar` NO está acá a propósito: son 219 sobre 575 vivos, y su
+         * tarjeta dice "de los que estás viendo" justamente porque se mira por
+         * día. Traerlos todos sería volcar media tabla en la pantalla.
+         */
+        pendiente?: 'porCobrar' | 'sinComprobante' | 'sinPrecio';
         limit?: number;
       } = {},
     ): Promise<Order[]> {
@@ -1074,6 +1091,18 @@ export function createRepositories() {
       */
       if (opts.desde) put('delivery_date >= ?::date', opts.desde);
       if (opts.hasta) put('delivery_date <= ?::date', opts.hasta);
+      /*
+        Las tres condiciones son, palabra por palabra, las mismas que suma
+        `resumen()`. Si alguna vez se tocan, se tocan juntas: que el número y
+        la lista se separen es exactamente el bug que esto arregla.
+      */
+      if (opts.pendiente === 'porCobrar') {
+        where.push("status <> 'cancelado' AND total > paid");
+      } else if (opts.pendiente === 'sinComprobante') {
+        where.push("status <> 'cancelado' AND total > 0 AND paid <= 0");
+      } else if (opts.pendiente === 'sinPrecio') {
+        where.push("status <> 'cancelado' AND total <= 0");
+      }
       if (opts.vigentes) {
         where.push(
           `(status NOT IN ('entregado', 'cancelado')` +

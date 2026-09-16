@@ -380,10 +380,15 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
       vacía en vez de un error 500.
     */
     const fecha = (v: string | undefined) => (v && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : undefined);
+    /* Solo los tres valores que existen; cualquier otra cosa se ignora. */
+    const PENDIENTES = ['porCobrar', 'sinComprobante', 'sinPrecio'] as const;
+    const pendiente = PENDIENTES.find((p) => p === query.pendiente);
+
     return repos.orders.list({
       status: query.status as OrderStatus | undefined,
       desde: fecha(query.desde),
       hasta: fecha(query.hasta),
+      pendiente,
       limit: query.limit ? Number(query.limit) : 200,
     });
   });
