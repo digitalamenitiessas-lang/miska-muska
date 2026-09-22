@@ -35,6 +35,7 @@ import {
   validateOrder,
   type OrderDraft,
 } from '../policies/rules.js';
+import { nombreUsable } from '../policies/nombres.js';
 import { llegoComprobante } from '../policies/comprobantes.js';
 import { localMinutes, localToday } from '../store/db.js';
 import { renderQuickReply } from './persona.js';
@@ -956,6 +957,34 @@ export async function executeTool(
         const direccionDeclarada = typeof input.direccion === 'string' ? input.direccion : null;
         const recibeDeclarado = typeof input.quien_recibe === 'string' ? input.quien_recibe : null;
 
+        /*
+          EL NOMBRE, Y POR QUÉ NO ALCANZA CON DESCARTAR EL RELLENO.
+
+          El modelo manda `<UNKNOWN>` cuando el nombre no está en la charla. Eso
+          terminaba escrito en el pedido Y en la ficha del contacto, tapando el
+          nombre del perfil de WhatsApp: 28 pedidos y 26 contactos desde el
+          13/09. Ver `nombreUsable`.
+
+          Pero tirarlo a la basura y ya rompería el rescate del comprobante. El
+          relleno tiene nueve caracteres, así que pasaba el mínimo de tres de
+          `datosFaltantes`, y ES LO QUE DEJABA CARGAR esos 28 pedidos. Sin nada
+          en su lugar, `validateOrder` los rechazaría y el rescate —que subió la
+          carga del 21% al 86%— dejaría de funcionar justo cuando la plata ya
+          entró.
+
+          Así que el reemplazo depende de quién llama:
+            - el rescate (`forzado`) no tiene con quién confirmar nada, la
+              transferencia ya llegó: se usa el nombre del perfil de WhatsApp,
+              que es un nombre de verdad y es lo mejor que hay.
+            - el camino normal deja el nombre vacío a propósito, para que
+              `validateOrder` le pida al bot que se lo confirme a la clienta,
+              que es lo que corresponde cuando todavía se está hablando.
+        */
+        const deWhatsApp = nombreDeWhatsApp(ctx.contact.displayName);
+        const nombreDeclarado = nombreUsable(String(input.nombre_apellido ?? ''));
+        const nombreDelPedido =
+          nombreDeclarado ?? (ctx.forzado ? (deWhatsApp?.nombre ?? '') : '');
+
         const draft: OrderDraft = {
           items,
           deliveryMode: modalidad,
@@ -964,7 +993,7 @@ export async function executeTool(
           // que sirven para decidir si esto es el mismo pedido o es otro.
           deliveryDate: fechaDeclarada ?? abierto?.deliveryDate ?? null,
           deliveryTime: horaDeclarada ?? abierto?.deliveryTime ?? null,
-          customerName: String(input.nombre_apellido ?? '').trim(),
+          customerName: nombreDelPedido,
           customerDni: typeof input.dni === 'string' ? input.dni : null,
           customerPhone:
             (typeof input.telefono === 'string' ? input.telefono : null) ?? ctx.contact.phone,
@@ -973,7 +1002,6 @@ export async function executeTool(
         };
 
         // El nombre del perfil no completa el pedido, pero evita volver a pedirlo.
-        const deWhatsApp = nombreDeWhatsApp(ctx.contact.displayName);
         const problems = validateOrder(
           draft,
           productsById,
@@ -1306,9 +1334,13 @@ export async function executeTool(
 
         /** Cierre común a los dos caminos de escritura. */
         const cerrarPedido = async (): Promise<void> => {
-          // Completa la ficha del contacto con lo que acaba de dar.
+          /*
+            Completa la ficha del contacto con lo que acaba de dar. El nombre
+            solo si sirve: `undefined` deja el que ya estaba, que es lo que
+            corresponde cuando el pedido se cargó sin nombre propio.
+          */
           await repos.contacts.update(ctx.contact.id, {
-            fullName: draft.customerName,
+            fullName: nombreUsable(draft.customerName) ?? undefined,
             dni: draft.customerDni ?? undefined,
             phone: draft.customerPhone ?? undefined,
           });
@@ -1716,7 +1748,11 @@ export async function executeTool(
         if (!nota) return { ok: false, error: 'La nota vino vacía.' };
         await repos.contacts.appendNote(ctx.contact.id, nota);
         const patch: Parameters<Repositories['contacts']['update']>[1] = {};
-        if (typeof input.nombre_completo === 'string') patch.fullName = input.nombre_completo;
+        // El mismo filtro que en `crear_pedido`: un relleno no pisa la ficha.
+        const nombreDeLaNota = nombreUsable(
+          typeof input.nombre_completo === 'string' ? input.nombre_completo : null,
+        );
+        if (nombreDeLaNota) patch.fullName = nombreDeLaNota;
         if (typeof input.telefono === 'string') patch.phone = input.telefono;
         if (Object.keys(patch).length) await repos.contacts.update(ctx.contact.id, patch);
         return { ok: true, data: { guardado: true } };

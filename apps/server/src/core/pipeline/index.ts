@@ -48,6 +48,7 @@ import {
   RESPUESTA_AL_ENCARGO,
 } from '../policies/encargos.js';
 import { diceQueSigueEsperando, RESPUESTA_SIN_CONSULTA } from '../policies/consultas.js';
+import { motivoDeLaPromesa, prometeConsultar } from '../policies/promesas.js';
 import {
   elComprobanteEntroRecien,
   hablaDelMicroondas,
@@ -1546,6 +1547,47 @@ export class Pipeline {
       cambia es que la charla aparece marcada en la bandeja el mismo minuto en
       que se comprometió el envío, y no una hora después.
     */
+    /*
+      SI EL BOT DICE QUE VA A PREGUNTAR, LA CHARLA SE MARCA. En el acto.
+
+      Ver `core/policies/promesas.ts`: el caso de la torta de $50.000 que quedó
+      colgada desde un domingo a la noche hasta un martes al mediodía, y la
+      medición sobre 14 días.
+
+      El local lo dijo con todas las letras: "el bot no está mandando la primera
+      consulta, tipo 'ya consulto', y deja colgado el chat; nunca genera la
+      primera alerta". No es que no la vean: no existía.
+
+      NO reescribe el mensaje —decir "lo chequeo" cuando no sabés es lo correcto,
+      y es lo que queremos que haga en vez de inventar— y NO saca al bot de la
+      charla: sigue contestando lo demás. Lo único que hace es encender el
+      cartel.
+
+      Al instante y no a los treinta minutos, que fue lo primero que propuse: el
+      aviso se apaga solo apenas alguien del local escribe (`sendAsOperator`),
+      así que los que se atienden rápido aparecen y desaparecen sin costo, y
+      esperar media hora era media hora de la clienta esperando al pedo.
+
+      Si el turno ya escaló, no se toca: esa charla ya está marcada y el cartel
+      del modelo dice más que este.
+    */
+    if (!escalate && !guardaEscalo) {
+      for (const contenido of contents) {
+        if (contenido.kind !== 'text') continue;
+        if (!prometeConsultar(contenido.text)) continue;
+        await repos.conversations.setAttention(
+          conversationId,
+          true,
+          motivoDeLaPromesa(contenido.text),
+        );
+        const marcada = await repos.conversations.get(conversationId);
+        if (marcada) bus.emit({ type: 'conversation', conversation: marcada });
+        log('info', `Prometió consultar (${conversationId}): marcada para que alguien conteste.`);
+        alertaDeGuarda = true;
+        break;
+      }
+    }
+
     const cargado = toolContext.effects.createdOrder;
     if (cargado?.deliveryMode === 'cadete-miska' && cargado.deliveryDate === localToday()) {
       await repos.conversations.setAttention(

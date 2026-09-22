@@ -19,7 +19,7 @@
  * Cuesta unos centavos: cuatro llamadas con un prefijo de ~6.000 fichas y
  * respuestas de una palabra.
  *
- *   npx tsx --env-file=../../.env.produccion scripts/probar-cache-1h.mts
+ *   npx tsx --env-file=../../.env.produccion scripts/experimento-cache-1h.mts
  */
 
 const API_KEY = process.env.OPENROUTER_API_KEY;

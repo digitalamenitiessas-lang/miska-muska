@@ -80,3 +80,59 @@ export function yaSePidioElNombre(mensajes: StoredMessage[]): boolean {
       pideElNombre(m.text),
   );
 }
+
+/*
+  UN RELLENO NO ES UN NOMBRE.
+
+  El local: "el bot pasando un rato borra los nombres que primero si figuraban".
+  No los borraba: les escribia encima la cadena que esta abajo, y el panel
+  muestra el nombre cargado antes que el del perfil de WhatsApp, asi que el
+  bueno quedaba tapado.
+
+  De donde salia: el rescate del comprobante le pide al modelo que arme el
+  pedido leyendo la charla, y cuando el nombre no esta en ningun lado el modelo
+  devuelve un marcador en vez de omitir el campo. `validateOrder` lo dejaba
+  pasar porque recibe aparte el nombre del perfil como candidato valido, y de
+  ahi seguia derecho hasta la ficha del contacto.
+
+  Medido: 28 pedidos y 26 contactos marcados asi, todos desde el 13/09, que es
+  el dia que el rescate entro en produccion.
+
+  La lista NO intenta adivinar si un nombre es real: "Lei", los que son un solo
+  emoji y "jo pino" son nombres de clientas de verdad. Solo caza los rellenos
+  que escribe una maquina cuando no sabe.
+*/
+const RELLENOS = new Set([
+  'unknown',
+  'desconocido',
+  'sin nombre',
+  'sin datos',
+  'no especificado',
+  'no disponible',
+  'cliente',
+  'n/a',
+  'na',
+  'null',
+  'none',
+  'undefined',
+  '-',
+  '--',
+  '?',
+]);
+
+/** `<UNKNOWN>`, `<sin nombre>`, `[desconocido]`: cualquier cosa entre marcas. */
+const ENTRE_MARCAS = /^[<[{(].*[>\]})]$/;
+
+/**
+ * El nombre si sirve para guardar, o `null` si es un relleno del modelo.
+ *
+ * Devuelve `null` para que quien llama use lo que ya tenía en vez de pisarlo.
+ * Un nombre real vuelve tal cual, sin recortes.
+ */
+export function nombreUsable(nombre: string | null | undefined): string | null {
+  const limpio = (nombre ?? '').trim();
+  if (!limpio) return null;
+  if (ENTRE_MARCAS.test(limpio)) return null;
+  if (RELLENOS.has(limpio.toLowerCase())) return null;
+  return limpio;
+}
