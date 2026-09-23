@@ -52,6 +52,7 @@ import { motivoDeLaPromesa, prometeConsultar } from '../policies/promesas.js';
 import {
   atribuyeAlBoxLoQueNoTiene,
   MOTIVO_BOX_INVENTADO,
+  TEXTO_LO_CHEQUEO,
 } from '../policies/descripciones.js';
 import {
   elComprobanteEntroRecien,
@@ -1557,16 +1558,19 @@ export class Pipeline {
       Ver `core/policies/descripciones.ts`: el caso, la medición —una marca en
       1.129 mensajes de 30 días, sin falsos positivos— y por qué no reescribe.
 
-      Escala de verdad: el mensaje ya salió diciendo que un producto trae algo
-      que no trae, y desdecir eso no lo puede hacer el bot.
+      REEMPLAZA EL MENSAJE, no solo avisa. Lo pidió así el local: "simplemente
+      que si el bot no sabe se bloquee". Se pierde lo bueno que traía la misma
+      burbuja, pero una descripción falsa le hace comprar otra cosa a alguien.
     */
     for (const contenido of contents) {
       if (contenido.kind !== 'text') continue;
       if (!atribuyeAlBoxLoQueNoTiene(contenido.text)) continue;
       log(
         'warn',
-        `DESCRIPCIÓN INVENTADA (${conversationId}): "${contenido.text.replace(/\s+/g, ' ').slice(0, 160)}"`,
+        `DESCRIPCIÓN INVENTADA, bloqueada (${conversationId}): ` +
+          `"${contenido.text.replace(/\s+/g, ' ').slice(0, 160)}"`,
       );
+      contenido.text = TEXTO_LO_CHEQUEO;
       alertaDeGuarda = true;
       guardaEscalo = true;
       motivoGuarda = MOTIVO_BOX_INVENTADO;

@@ -37,10 +37,27 @@
   ventana entre la cookie intrusa y el box es de veinte caracteres y no de
   cuarenta: con cuarenta entraba un falso positivo del 12/09.
 
-  NO REESCRIBE EL MENSAJE. El de Agus también decía cosas ciertas y útiles —que
-  hoy no había cookie oreo, y que el Brownie Oreo sale $4.700—, así que taparlo
-  se llevaría puesto lo bueno. Marca la charla y la pasa a una persona, que es
-  quien puede desdecir una descripción inventada.
+  SÍ REEMPLAZA EL MENSAJE, y es una decisión del local. La primera versión solo
+  marcaba la charla: el mensaje salía igual y una persona lo corregía después.
+  Luciano lo cortó: "simplemente que si el bot no sabe se bloquee". Es cierto
+  que el mensaje de Agus también decía cosas útiles —que no había cookie oreo,
+  que el Brownie Oreo sale $4.700— y que taparlo se las lleva puestas. Pero una
+  clienta que lee una descripción falsa compra otra cosa, y eso cuesta más que
+  repetir un precio.
+
+  Se puede reemplazar sin miedo justamente por la medición: una marca en 1.129
+  mensajes. Si el detector fuera más ancho esto sería una pésima idea, y por eso
+  la prueba mide la proporción y falla si sube del 1%.
+
+  LO QUE ESTA GUARDA NO PUEDE HACER, dicho acá para que nadie lo busque después:
+  no previene, corrige. Se intentó detectar antes —por el texto del bot y por la
+  pregunta de la clienta— y ninguno de los dos caminos cierra. Describir las
+  cuatro en una lista y describir mal una son casi la misma frase: un detector
+  sobre la salida marcaba 64 de 788 mensajes, casi todos correctos, del tipo
+  "…y Volcán de Chocolate, y viene con una bolsa de regalo", donde el "viene
+  con" es del box. Y por el lado de la pregunta: en 30 días NADIE preguntó qué
+  es la Volcán. El caso de Agus no arrancó con esa pregunta sino con "tenés
+  cookie Oreo?", y el bot salió a improvisar un reemplazo.
 */
 
 /** Sin tildes y con los espacios planchados, que es como se compara. */
@@ -79,6 +96,16 @@ export function atribuyeAlBoxLoQueNoTiene(texto: string): boolean {
       return ATRIBUYE.some((re) => re.test(p));
     });
 }
+
+/**
+ * Lo que sale en lugar del mensaje inventado.
+ *
+ * Corto y sin prometer nada que no sepamos. No repite los sabores —si el bot
+ * los tuviera claros no habríamos llegado acá— y no nombra el box, para no
+ * volver a meterse en la descripción que justamente no tiene.
+ */
+export const TEXTO_LO_CHEQUEO =
+  'Uy, dejame que eso lo chequeo bien y te confirmo en un ratito 🙈';
 
 /** Lo que lee quien abre la bandeja. */
 export const MOTIVO_BOX_INVENTADO =

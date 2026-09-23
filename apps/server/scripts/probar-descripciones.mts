@@ -10,7 +10,10 @@
  *   npx tsx --env-file=../../.env.produccion scripts/probar-descripciones.mts
  */
 import { openDb, q, closeDb, TIMEZONE } from '../src/core/store/db.js';
-import { atribuyeAlBoxLoQueNoTiene } from '../src/core/policies/descripciones.js';
+import {
+  atribuyeAlBoxLoQueNoTiene,
+  TEXTO_LO_CHEQUEO,
+} from '../src/core/policies/descripciones.js';
 
 let mal = 0;
 const chequear = (ok: boolean, nota: string): void => {
@@ -122,6 +125,16 @@ if (proporcion > 0.01) {
 } else {
   console.log(`\n  ✓ marca el ${(proporcion * 100).toFixed(2)}% de los que nombran el box.`);
 }
+
+/*
+  Y lo que sale en su lugar. La guarda REEMPLAZA el mensaje, así que el texto de
+  reemplazo tiene que poder leerse solo, sin el contexto que tapó, y no puede
+  volver a dispararla.
+*/
+console.log('\n  Lo que la clienta lee en su lugar:\n');
+console.log(`    ${TEXTO_LO_CHEQUEO}\n`);
+chequear(!atribuyeAlBoxLoQueNoTiene(TEXTO_LO_CHEQUEO), 'el reemplazo no se marca a sí mismo');
+chequear(TEXTO_LO_CHEQUEO.length < 120, 'el reemplazo entra en una burbuja');
 
 console.log(mal ? `\n  ${mal} fallaron.\n` : '\n  Pasa todo.\n');
 await closeDb();
