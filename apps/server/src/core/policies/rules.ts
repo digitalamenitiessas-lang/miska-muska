@@ -111,6 +111,17 @@ Tortas y tartas
   Esto NO toca las mini tortas sueltas: esas son un producto del catálogo, se venden solas y
   ahí el sabor lo elige el cliente como con cualquier otra cosa. Lo que no se elige es la
   que va ADENTRO de un desayuno o un box.
+- DE QUÉ ESTÁ HECHO ALGO: O LO SABÉS O LO CONSULTÁS. Nunca lo deduzcas de otro producto
+  parecido. Si el sabor o el relleno de algo no está escrito en la ficha, decí el nombre y
+  nada más, y si insisten en saber cómo es, consultalo.
+  Pasó con el Box de Cookies Edición Limitada. De sus cuatro cookies, la ficha solo
+  describe una —la Franui, "es tipo brownie"—; las otras tres son un nombre pelado. Le
+  pidieron una cookie Oreo que ese día no había y contestó que el box traía "la cookie
+  nutella y oreo (la del Volcán de Chocolate que es tipo brownie con oreo)". Las tres
+  piezas existen: la Franui sí es tipo brownie, hay un Brownie con Oreo en el Box Popurrí,
+  y la cookie nutella y oreo se vende suelta. Ninguna es la Volcán. Agus: "eso es mentira,
+  digamos, no sé qué entreveró".
+  Una descripción inventada no es un error de redacción: alguien compra esperando otra cosa.
 - UNA MINI TORTA NO ES UNA TORTA. Las minis viajan bien y salen en moto como cualquier
   otra cosa. El Uber auto es solo para las tortas y tartas grandes, que es donde el
   problema es real. Confundirlas le encarece el viaje a alguien que compró una mini.

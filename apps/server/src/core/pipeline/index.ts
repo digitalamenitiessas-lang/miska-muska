@@ -50,6 +50,10 @@ import {
 import { diceQueSigueEsperando, RESPUESTA_SIN_CONSULTA } from '../policies/consultas.js';
 import { motivoDeLaPromesa, prometeConsultar } from '../policies/promesas.js';
 import {
+  atribuyeAlBoxLoQueNoTiene,
+  MOTIVO_BOX_INVENTADO,
+} from '../policies/descripciones.js';
+import {
   elComprobanteEntroRecien,
   hablaDelMicroondas,
   tipDeCookies,
@@ -1547,6 +1551,28 @@ export class Pipeline {
       cambia es que la charla aparece marcada en la bandeja el mismo minuto en
       que se comprometió el envío, y no una hora después.
     */
+    /*
+      UNA DESCRIPCIÓN INVENTADA LA CORRIGE UNA PERSONA.
+
+      Ver `core/policies/descripciones.ts`: el caso, la medición —una marca en
+      1.129 mensajes de 30 días, sin falsos positivos— y por qué no reescribe.
+
+      Escala de verdad: el mensaje ya salió diciendo que un producto trae algo
+      que no trae, y desdecir eso no lo puede hacer el bot.
+    */
+    for (const contenido of contents) {
+      if (contenido.kind !== 'text') continue;
+      if (!atribuyeAlBoxLoQueNoTiene(contenido.text)) continue;
+      log(
+        'warn',
+        `DESCRIPCIÓN INVENTADA (${conversationId}): "${contenido.text.replace(/\s+/g, ' ').slice(0, 160)}"`,
+      );
+      alertaDeGuarda = true;
+      guardaEscalo = true;
+      motivoGuarda = MOTIVO_BOX_INVENTADO;
+      break;
+    }
+
     /*
       SI EL BOT DICE QUE VA A PREGUNTAR, LA CHARLA SE MARCA. En el acto.
 
