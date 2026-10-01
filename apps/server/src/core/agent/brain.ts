@@ -449,8 +449,8 @@ export async function runTurn(input: RunTurnInput): Promise<BrainTurn> {
         la prosa: 4.800 por 2 más 4.100 más 4.100 da 17.800 y no hay una
         segunda lectura posible. Solo actúa cuando leyó el mensaje entero sin
         ambigüedad; ver `revisarCuenta`, que explica cuándo no se cree la
-        lectura. Medido sobre 691 mensajes de 30 días: corrige uno, que es el
-        que estaba mal.
+        lectura. Medido sobre 186 mensajes con cuenta de 120
+        días: corrige cuatro, y los cuatro estaban mal.
       */
       turn.bubbles = turn.bubbles.map((b) => {
         const { texto, corregido } = corregirTotal(b);

@@ -29,9 +29,10 @@ const CASOS: Array<{ texto: string; suma: number | null; corrige: boolean; nota:
   },
   {
     /*
-      Los subtotales ya vienen multiplicados y no hay "c/u": la suma sale bien
-      igual, porque sin "c/u" el renglón se toma tal cual. Pero queda marcado
-      como no confiable, así que aunque no diera no se tocaría. Doble red.
+      Los subtotales ya vienen multiplicados y no hay "c/u". Antes esto se
+      marcaba como no confiable; ahora se lee derecho, porque medido contra
+      los mensajes reales el precio de un renglón NUNCA fue unitario sin el
+      "c/u". Da bien y no se toca.
     */
     nota: 'subtotales ya multiplicados, sin c/u: suma bien y no toca',
     texto:
@@ -58,6 +59,43 @@ const CASOS: Array<{ texto: string; suma: number | null; corrige: boolean; nota:
     nota: 'un solo renglón: no hay suma que revisar',
     texto: '🍰 Mini torta Kinder — $10.800\n**Total: $10.800**',
     suma: null,
+    corrige: false,
+  },
+  {
+    /*
+      El pedido de Cami, 30/09. Tres veces mandó este total y la clienta pagó
+      6.000 de más. La guarda leía bien los $38.800 y se callaba porque el
+      "(x3)" sin "c/u" la hacía desconfiar. Ahora corrige.
+    */
+    nota: 'el error de Cami: "(x3)" sin c/u ya no tapa la cuenta',
+    texto:
+      'Listo Cami, ya queda anotado tu pedido\n\n🍪 Cookie Kinder (x3) — $15.000\n🍫 Brownie clásico — $4.200\n🧁 Mini torta Matilda — $10.800\n🍹 Limonada de frutos rojos — $4.100\n🍫 Brockie — $4.700\n\nTotal: $44.800\n\nTe esperamos para retirar en el local!',
+    suma: 38800,
+    corrige: true,
+  },
+  {
+    /*
+      LA TRAMPA, y el motivo de que la ambigüedad no se levantara antes. Este
+      total está PERFECTO: 15.600 + 5.500 + 5.000. Pero el renglón trae el
+      unitario y el subtotal en la misma línea, y la versión vieja lo
+      descartaba entero y daba $10.500. Si se hubiera levantado la regla sin
+      leer esta forma, acá se le reescribía un total bueno por uno malo.
+    */
+    nota: 'el unitario y el subtotal en el mismo renglón: se lee y no se toca',
+    texto:
+      'Listo, Milagro\n\nAcá va el total:\n🥪 Sandwich de jamón y queso en pan de chipá x2 — $7.800 c/u = $15.600\n🧀 Chipá x3 — $5.500\n🍪 Cookie nutella — $5.000\n\nTotal: $26.100',
+    suma: 26100,
+    corrige: false,
+  },
+  {
+    /*
+      Dos precios en un renglón que NO es la forma "c/u = ". No sé cuál vale,
+      así que la suma queda incompleta y no se corrige nada aunque no dé.
+    */
+    nota: 'un renglón con plata que no sé leer apaga la corrección',
+    texto:
+      '🍪 Cookie — $5.000 (antes $6.000)\n🍫 Brownie — $4.200\n🧁 Mini torta — $10.800\nTotal: $20.100',
+    suma: 15000,
     corrige: false,
   },
 ];
@@ -97,7 +135,7 @@ const msgs = await q<{ t: string; text: string; c: string }>(
   `select to_char(created_at at time zone $1,'DD/MM HH24:MI') t, text, conversation_id c
    from messages
    where direction='out' and author='bot' and text is not null and text ~* 'total'
-     and created_at > now() - interval '30 days'
+     and created_at > now() - interval '120 days'
    order by created_at asc`,
   [TIMEZONE],
 );
@@ -106,7 +144,7 @@ let conCuenta = 0;
 let tocaria = 0;
 let dudosas = 0;
 
-console.log(`\n  Corpus real: ${msgs.length} mensajes del bot con la palabra "total", 30 días\n`);
+console.log(`\n  Corpus real: ${msgs.length} mensajes del bot con la palabra "total", 120 días\n`);
 for (const m of msgs) {
   const r = revisarCuenta(m.text);
   if (!r) continue;
