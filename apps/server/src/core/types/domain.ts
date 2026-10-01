@@ -453,6 +453,15 @@ export interface BotSettings {
    * Vacío = mes calendario, que es el caso normal.
    */
   cobroDesde: string;
+  /**
+   * La cuenta de WhatsApp Business, para consultarle a Meta los cargos.
+   *
+   * No se configura: el pipeline lo guarda solo la primera vez que entra un
+   * webhook. Desde octubre de 2026 Meta cobra por mensaje y este número es
+   * lo único que falta para leer la factura, porque el token del servidor
+   * no tiene permiso para enumerar cuentas y encontrarlo por su cuenta.
+   */
+  whatsappAccountId: string;
 }
 
 export interface MetricPoint {

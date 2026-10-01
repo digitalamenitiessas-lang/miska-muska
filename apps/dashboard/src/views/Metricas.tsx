@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
-import { api, type Facturacion, type MetricPoint, type Metrics } from '../api';
+import {
+  api,
+  type CostoWhatsapp,
+  type Facturacion,
+  type MetricPoint,
+  type Metrics,
+} from '../api';
 import { Empty } from '../ui';
 
 
@@ -46,6 +52,7 @@ const REFRESCO_MS = 30_000;
 export function Metricas() {
   const [data, setData] = useState<Metrics | null>(null);
   const [cobro, setCobro] = useState<Facturacion | null>(null);
+  const [whatsapp, setWhatsapp] = useState<CostoWhatsapp | null>(null);
   const [days, setDays] = useState(14);
   const [showTable, setShowTable] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +65,7 @@ export function Metricas() {
         métricas se ven igual y la tarjeta simplemente no aparece.
       */
       setCobro(await api.facturacion().catch(() => null));
+      setWhatsapp(await api.costoWhatsapp().catch(() => null));
       setError(null);
     } catch (err) {
       setError(String(err));
@@ -84,6 +92,7 @@ export function Metricas() {
   return (
     <>
       {cobro ? <ParaCobrar cobro={cobro} /> : null}
+      {whatsapp?.costo ? <CostoDeWhatsapp wa={whatsapp} /> : null}
 
       <div className="tiles">
         <Tile label="Conversaciones" value={String(summary.conversations)} />
@@ -574,6 +583,58 @@ function ParaCobrar({ cobro }: { cobro: Facturacion }) {
     </section>
   );
 }
+/**
+ * Lo que Meta lleva cobrado por los mensajes este mes.
+ *
+ * Va al lado de "Para cobrar" y no mezclado con las tarjetas de arriba
+ * porque es plata de otro proveedor y en otra moneda: aquello son dólares
+ * del modelo, esto son pesos de WhatsApp. Mezclarlos en un solo número
+ * daría una cifra que no existe en ninguna factura.
+ *
+ * Se muestra solo si Meta contestó. El dato es de ellos y tarda horas en
+ * actualizarse, por eso dice a qué hora se consultó.
+ */
+function CostoDeWhatsapp({ wa }: { wa: CostoWhatsapp }) {
+  const c = wa.costo;
+  if (!c) return null;
+  const pesos = (n: number) =>
+    '$' + Math.round(n).toLocaleString('es-AR');
+  const restan = Math.max(0, wa.gratisPorMes - c.mensajes);
+  const mes = new Date(c.desde).toLocaleDateString('es-AR', { month: 'long' });
+  return (
+    <section className="card" style={{ marginBottom: 14 }}>
+      <div className="card-pad">
+        <h3 className="card-title">WhatsApp en {mes}</h3>
+        <div className="row wrap" style={{ alignItems: 'baseline', gap: 10 }}>
+          <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            {pesos(c.costo)}
+          </span>
+          <span className="small muted">
+            {c.mensajes.toLocaleString('es-AR')} mensajes entregados ·{' '}
+            {restan > 0
+              ? `quedan ${restan.toLocaleString('es-AR')} gratis de los ${wa.gratisPorMes.toLocaleString('es-AR')}`
+              : `los ${wa.gratisPorMes.toLocaleString('es-AR')} gratis ya se usaron`}
+          </span>
+        </div>
+        {c.proyeccion !== null ? (
+          <p className="small" style={{ margin: '6px 0 0', fontWeight: 600 }}>
+            A este ritmo, unos {pesos(c.proyeccion)} en el mes
+          </p>
+        ) : null}
+        <p className="small muted" style={{ margin: '6px 0 0' }}>
+          Lo que cobra Meta, no una estimación nuestra. Ellos lo actualizan cada
+          varias horas: esto se consultó a las{' '}
+          {new Date(c.consultadoEn).toLocaleTimeString('es-AR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          })}
+          .
+        </p>
+      </div>
+    </section>
+  );
+}
+
 function usd(value: number): string {
   if (!value) return '$0';
   if (value < 0.01) return `$${value.toFixed(4)}`;

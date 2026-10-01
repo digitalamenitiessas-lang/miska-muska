@@ -1975,4 +1975,6 @@ que sepas qué manejamos y puedas contestar, no para ofrecerla como envío.
 `.trim(),
   // Vacío = mes calendario. Ver `cobroDesde` en el tipo.
   cobroDesde: '',
+  // Lo descubre el pipeline con el primer webhook. Ver el tipo.
+  whatsappAccountId: '',
 };

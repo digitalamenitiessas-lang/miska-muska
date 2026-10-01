@@ -7,6 +7,10 @@ import type { FastifyInstance } from 'fastify';
 import type { ApiDeps } from './server.js';
 import { bus } from '../core/events/bus.js';
 import { config } from '../config.js';
+import {
+  costoDeWhatsapp,
+  MENSAJES_GRATIS_POR_MES,
+} from '../channels/whatsapp/costos.js';
 import { matchQuickReplies } from '../core/pipeline/router.js';
 import { renderQuickReply } from '../core/agent/persona.js';
 import { canonizarCategoria } from '../core/policies/rules.js';
@@ -713,6 +717,20 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
     calendario y esto mira el período que todavía no se facturó. Ver
     `facturacion` y el campo `cobroDesde` de los ajustes.
   */
+  /*
+    Lo que Meta lleva cobrado por los mensajes este mes. Va aparte de
+    /api/gasto y de /api/facturacion porque es de otro proveedor y de otra
+    moneda: aquellos son dólares del modelo, este son pesos de WhatsApp.
+
+    Devuelve null cuando no se puede saber —sin id de cuenta todavía, o Meta
+    caída— y el panel simplemente no dibuja la tarjeta. Ver `costoDeWhatsapp`.
+  */
+  app.get('/api/whatsapp/costo', async () => {
+    const { whatsappAccountId } = await repos.settings.read();
+    const dato = await costoDeWhatsapp(whatsappAccountId, new Date());
+    return { costo: dato, gratisPorMes: MENSAJES_GRATIS_POR_MES };
+  });
+
   app.get('/api/facturacion', async () => {
     const { cobroDesde } = await repos.settings.read();
     return repos.metrics.facturacion(cobroDesde);

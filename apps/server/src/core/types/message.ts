@@ -23,6 +23,14 @@ export interface ConversationRef {
   externalId: string;
   /** Número de teléfono del negocio que recibió el mensaje (WhatsApp multi-número). */
   businessPhoneId?: string;
+  /**
+   * La cuenta de WhatsApp Business que recibió el mensaje.
+   *
+   * Meta lo manda en cada webhook y hace falta para preguntarle cuánto está
+   * cobrando por los mensajes. Viaja por acá para que nadie tenga que
+   * configurarlo a mano: el pipeline lo guarda la primera vez que lo ve.
+   */
+  businessAccountId?: string;
 }
 
 // ---------------------------------------------------------------------------

@@ -230,10 +230,46 @@ export class Pipeline {
     this.#resolve = resolveAdapter;
   }
 
+  /**
+   * ¿Ya guardamos el id de la cuenta de WhatsApp en esta vida del proceso?
+   *
+   * En memoria y no en la base: `handleInbound` corre para CADA mensaje que
+   * entra, y leer los ajustes en cada uno para comparar una cadena que no
+   * cambia nunca sería un viaje a la base por mensaje.
+   */
+  #cuentaDeWhatsappGuardada = false;
+
   /** Punto de entrada único desde cualquier canal. */
   async handleInbound(inbound: InboundMessage): Promise<void> {
     const result = await ingest(this.#repos, inbound);
     if (!result) return;
+
+    /*
+      EL ID DE LA CUENTA SE GUARDA SOLO.
+
+      Meta lo manda en cada webhook y hace falta para leer cuánto está
+      cobrando. Se guarda la primera vez que se ve y nunca más: así nadie
+      tiene que configurarlo, y si algún día cambia la cuenta se actualiza
+      con el primer mensaje que entre después.
+
+      Que falle no puede tumbar un mensaje entrante, así que se traga el
+      error: es un dato de más.
+    */
+    const cuenta = inbound.ref.businessAccountId;
+    if (cuenta && !this.#cuentaDeWhatsappGuardada) {
+      this.#cuentaDeWhatsappGuardada = true;
+      void (async () => {
+        try {
+          const ajustes = await this.#repos.settings.read();
+          if (ajustes.whatsappAccountId !== cuenta) {
+            await this.#repos.settings.write({ whatsappAccountId: cuenta });
+            log('info', `Cuenta de WhatsApp Business guardada: ${cuenta}`);
+          }
+        } catch (err) {
+          log('warn', 'No pude guardar el id de la cuenta de WhatsApp', err);
+        }
+      })();
+    }
 
     /*
       Un reintento de la plataforma sobre algo que ya teníamos guardado.

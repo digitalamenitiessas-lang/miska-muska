@@ -199,6 +199,7 @@ export class WhatsAppAdapter implements ChannelAdapter {
               channel: this.id,
               externalId: msg.from,
               businessPhoneId: value.metadata?.phone_number_id,
+              businessAccountId: entry.id,
             },
             contact: {
               externalId: msg.from,

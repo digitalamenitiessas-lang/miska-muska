@@ -350,6 +350,26 @@ export interface Gasto {
  * haya en Ajustes —no desde el 1°— y sale de los turnos del modelo, que
  * incluyen los que el bot decidió no contestar y también se pagan.
  */
+/**
+ * Lo que Meta lleva cobrado por los mensajes de WhatsApp este mes.
+ *
+ * Otra moneda y otro proveedor que `Facturacion`: aquella son los dólares
+ * del modelo, esta son los pesos de WhatsApp. `costo` viene en null cuando
+ * todavía no se pudo consultar.
+ */
+export interface CostoWhatsapp {
+  costo: {
+    mensajes: number;
+    costo: number;
+    moneda: string;
+    desde: string;
+    consultadoEn: string;
+    /** Lo que saldría el mes entero a este ritmo, o null si no se puede saber. */
+    proyeccion: number | null;
+  } | null;
+  gratisPorMes: number;
+}
+
 export interface Facturacion {
   /** ISO del arranque del período. */
   desde: string;
@@ -545,6 +565,7 @@ export const api = {
   /** Lo que va gastando el bot en el modelo. Se pide en cada pantalla. */
   gasto: () => get<Gasto>('/api/gasto'),
   facturacion: () => get<Facturacion>('/api/facturacion'),
+  costoWhatsapp: () => get<CostoWhatsapp>('/api/whatsapp/costo'),
 
   /** Avisos al celular. La clave es pública: viaja en el JS del panel. */
   claveDeAvisos: () => get<{ clave: string }>('/api/push/clave'),
