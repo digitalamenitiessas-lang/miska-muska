@@ -105,7 +105,7 @@ export async function costoDeWhatsapp(
   const fin = Math.floor(ahora.getTime() / 1000);
   const version = config.whatsapp.graphVersion || 'v21.0';
   const campos =
-    `pricing_analytics.start(${inicio}).end(${fin}).granularity(MONTHLY)`;
+    `pricing_analytics.start(${inicio}).end(${fin}).granularity(DAILY)`;
 
   try {
     const res = await fetch(
@@ -122,9 +122,13 @@ export async function costoDeWhatsapp(
     }
 
     /*
-      Meta devuelve los puntos agrupados, y con granularidad mensual suele venir
-      uno solo. Se suman igual: si alguna vez parte el mes en dos, la cuenta
-      sigue dando bien.
+      POR QUÉ DIARIA Y NO MENSUAL: con granularidad mensual Meta no devuelve
+      nada hasta que el mes termina. Probado el 1 de octubre contra la cuenta
+      real: con MONTHLY contestó `{"id":"919309650763321"}` y nada más; con
+      DAILY, 87 mensajes. La tarjeta hubiera marcado cero todo el mes y recién
+      se habría llenado cuando ya no servía para nada.
+
+      Así que vienen los días sueltos y se suman acá.
     */
     const puntos = (json.pricing_analytics?.data ?? []).flatMap((d) => d.data_points ?? []);
     const dato: CostoDeWhatsapp = {
