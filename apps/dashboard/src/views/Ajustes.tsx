@@ -162,10 +162,10 @@ export function Ajustes({
               }
             />
             <p className="small muted" style={{ margin: '3px 0 0' }}>
-              Vacío es lo normal: el contador de Métricas cuenta el mes calendario. Esto es para
-              cuando ya se cobró parte del mes — el período arranca acá y no el día 1°, así no se
-              cobra dos veces lo mismo. Se apaga solo: cuando cambia el mes, vuelve a contar el
-              mes entero sin que haya que borrarlo.
+              La fecha del último cobro. El contador de Métricas suma todo lo consumido desde
+              acá, así que al facturar hay que moverla a ese momento — si no, lo ya cobrado
+              se sigue contando. Y al revés: si pasa un mes sin facturar, lo del mes anterior
+              se sigue sumando, que es lo correcto. Vacío = cuenta el mes corriente.
             </p>
           </div>
         </section>

@@ -1806,16 +1806,34 @@ export function createRepositories() {
       const corte = cobroDesde.trim() || null;
       const row = await one(
         `WITH periodo AS (
-           SELECT GREATEST(
-             COALESCE($2::timestamptz, '-infinity'::timestamptz),
+           /*
+             EL PERÍODO ARRANCA EN EL ÚLTIMO COBRO, NO EN EL CALENDARIO.
+
+             La primera versión tomaba la fecha MÁS TARDÍA entre el corte y el
+             primero del mes, para que el corte de una vez se apagara solo al
+             cambiar de mes. Estaba mal, y lo marcó Luciano el 1 de octubre:
+             "cambió el mes, y todavía no cobramos lo del mes anterior,
+             entonces debería seguir apareciendo".
+
+             Tenía razón. Lo que se cobra no es "el mes corriente": es todo lo
+             que pasó desde la última vez que se cobró de verdad. Si el mes
+             cambia y nadie facturó, septiembre tiene que seguir sumando. Con
+             el GREATEST, el 1 de octubre a las 00:00 desaparecían del
+             contador los USD 91 de septiembre que nadie había cobrado.
+
+             Ahora el corte manda y punto. Se mueve cuando se cobra, desde
+             Ajustes o con poner-corte-de-cobro.mts. Sin corte guardado se usa
+             el primero del mes, que es lo razonable en una instalación nueva.
+           */
+           SELECT COALESCE(
+             $2::timestamptz,
              date_trunc('month', now() AT TIME ZONE $1) AT TIME ZONE $1
            ) AS desde
          )
          SELECT p.desde,
                 COALESCE(SUM(t.cost_usd), 0) AS costo,
                 COUNT(t.*) AS turnos,
-                p.desde <= date_trunc('month', now() AT TIME ZONE $1) AT TIME ZONE $1
-                  AS arranco_el_mes
+                $2::timestamptz IS NULL AS arranco_el_mes
          FROM periodo p
          LEFT JOIN model_turns t ON t.created_at >= p.desde
          GROUP BY p.desde`,
@@ -1973,7 +1991,7 @@ que sepas qué manejamos y puedas contestar, no para ofrecerla como envío.
 - Bebidas: línea Coca-Cola, aguas saborizadas.
 - También tenemos leche deslactosada y de almendras, y cualquier café se puede pedir "iced".
 `.trim(),
-  // Vacío = mes calendario. Ver `cobroDesde` en el tipo.
+  // Vacío = cuenta el mes corriente. Ver `cobroDesde` en el tipo.
   cobroDesde: '',
   // Lo descubre el pipeline con el primer webhook. Ver el tipo.
   whatsappAccountId: '',

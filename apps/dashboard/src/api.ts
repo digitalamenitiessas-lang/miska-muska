@@ -279,10 +279,9 @@ export interface Settings {
   /**
    * Desde cuándo cuenta el consumo que todavía no se cobró, en ISO 8601.
    *
-   * Vacío = mes calendario, que es el caso normal. Con fecha, el contador de
-   * Métricas arranca ahí y no el día 1°, para cuando ya se cobró parte del mes.
-   * Se desactiva solo: el período empieza en el más tarde de los dos, así que
-   * al cambiar el mes el corte deja de pesar.
+   * El contador de Métricas suma todo lo consumido desde esta fecha, así que
+   * es la del último cobro y hay que moverla cada vez que se factura. Si pasa
+   * un mes sin cobrar, lo anterior se sigue sumando. Vacío = el mes corriente.
    */
   cobroDesde: string;
 }
@@ -375,7 +374,7 @@ export interface Facturacion {
   desde: string;
   costoUsd: number;
   turnos: number;
-  /** true si el período es el mes calendario, o sea que no hay corte vigente. */
+  /** true si no hay ningún cobro registrado y por eso cuenta el mes corriente. */
   arrancoElMes: boolean;
 }
 

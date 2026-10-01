@@ -440,17 +440,20 @@ export interface BotSettings {
   /**
    * Desde cuándo cuenta el consumo que todavía no se cobró.
    *
-   * ISO 8601, y es un corte de UNA vez: el 15/09/2026 el local pagó el
-   * consumo hasta ese momento, y lo que viene después es lo que se factura a
-   * fin de mes. Sin esto, el contador del panel arrancaría el 1° y estaría
-   * cobrando dos veces la primera quincena.
+   * ISO 8601: la fecha del último cobro. El contador suma TODO lo consumido
+   * desde acá, así que al facturar hay que moverla a ese momento.
    *
-   * Se apaga solo, y por eso no hay que acordarse de borrarlo: el período
-   * empieza en el MÁS TARDE de los dos, este corte o el primero del mes. En
-   * octubre el primero del mes ya es posterior, así que el corte deja de
-   * pesar y la cuenta vuelve a ser mensual sin que nadie toque nada.
+   * NO se apaga solo al cambiar el mes, y esa fue una corrección: la primera
+   * versión tomaba la fecha más tardía entre este corte y el primero del mes,
+   * para que el corte de una vez dejara de pesar en octubre. Luciano lo marcó
+   * el 1/10: "cambió el mes, y todavía no cobramos lo del mes anterior,
+   * entonces debería seguir apareciendo". Lo que se factura no es el mes
+   * corriente sino todo lo que pasó desde el último cobro, y con aquella
+   * regla los USD 135 de septiembre desaparecieron del panel a las 00:00 del
+   * 1 de octubre sin que nadie los hubiera cobrado.
    *
-   * Vacío = mes calendario, que es el caso normal.
+   * Vacío = cuenta el mes corriente, que es lo razonable en una instalación
+   * nueva donde todavía no se cobró nunca.
    */
   cobroDesde: string;
   /**

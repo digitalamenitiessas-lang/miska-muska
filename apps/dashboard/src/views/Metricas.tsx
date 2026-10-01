@@ -575,9 +575,9 @@ function ParaCobrar({ cobro }: { cobro: Facturacion }) {
         </div>
         <p className="small muted" style={{ margin: '6px 0 0' }}>
           {cobro.arrancoElMes
-            ? 'Es el mes calendario: se reinicia solo el día 1°.'
-            : 'Arranca en el corte de Ajustes, porque el consumo anterior ya se cobró. Desde el ' +
-              '1° del mes que viene vuelve a contar el mes entero, sin tocar nada.'}
+            ? 'Cuenta el mes corriente porque todavía no se registró ningún cobro.'
+            : 'Cuenta desde el último cobro, no desde el 1°: si pasa un mes sin facturar, lo ' +
+              'de antes se sigue sumando. Para arrancar de cero, movés la fecha en Ajustes.'}
         </p>
       </div>
     </section>
