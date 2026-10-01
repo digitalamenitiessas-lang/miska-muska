@@ -27,6 +27,9 @@ import type {
 } from '../../core/types/message.js';
 import { newId } from '../../core/store/db.js';
 
+/** Para que el id de la cuenta salga una sola vez y no en cada mensaje. */
+let idDeLaCuentaAnotado = false;
+
 const CAPABILITIES: ChannelCapabilities = {
   maxTextLength: 4096,
   maxButtons: 3,
@@ -153,6 +156,23 @@ export class WhatsAppAdapter implements ChannelAdapter {
 
     const out: InboundMessage[] = [];
     for (const entry of payload.entry ?? []) {
+      /*
+        EL ID DE LA CUENTA, UNA VEZ Y AL LOG.
+
+        Meta lo manda en cada webhook y lo estábamos tirando. Hace falta para
+        pedirle a la Graph API cuánto se está cobrando por los mensajes, que
+        desde octubre de 2026 dejaron de ser gratis: sin este número no hay
+        forma de consultar la analítica, y el token del servidor no tiene
+        permiso para enumerar cuentas y encontrarlo solo.
+
+        Solo se anota, una vez por arranque. No toca la base ni el flujo: este
+        método corre para CADA mensaje que entra, y acá un error deja al local
+        sin WhatsApp. Es un identificador, no una credencial.
+      */
+      if (!idDeLaCuentaAnotado && entry.id) {
+        idDeLaCuentaAnotado = true;
+        log('info', `Cuenta de WhatsApp Business: ${entry.id}`);
+      }
       for (const change of entry.changes ?? []) {
         const value = change.value;
 
