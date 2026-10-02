@@ -25,19 +25,29 @@
             FREE_ENTRY_POINT         90    $0
             REGULAR                  61    $2.298,47   ← 37,68 cada uno
 
-  No hay ningún cupo de mil. Hay tipos de precio: cuando una clienta escribe se
-  abre una ventana de 24 h y todo lo que contestemos adentro es gratis, sin
-  tope, y la ventana se reinicia con cada mensaje de ella; si llegó por un
-  anuncio de clic-a-WhatsApp son 72 h. Lo que cae FUERA de esa ventana se cobra
-  a la tarifa publicada, y eso es `REGULAR`. Con el movimiento real de Miska es
-  alrededor del 4% de los mensajes.
+  EL CUPO DE MIL EXISTE, y costó dos errores en direcciones opuestas
+  averiguarlo. Primero se escribió acá a mano, sin medirlo. Después se concluyó
+  lo contrario —que los mensajes de servicio eran gratis y sin tope— porque la
+  página de precios de Meta dice "no cobramos por los mensajes de servicio" y
+  porque la cuenta pasó los mil sin cobrar un peso. Las dos veces faltó lo
+  mismo: mirar el número dos veces seguidas.
 
-  LA TARIFA PUBLICADA ENGAÑA SI SE MIRA SOLA. El selector de precios de Meta
-  muestra ARS 37,6798 para la categoría Servicio y es cierto, pero se aplica a
-  una fracción chica y no a todo lo que sale. Mirar esa tabla sin leer el
-  párrafo que tiene encima —el que dice que lo contestado dentro de la ventana
-  no se cobra— fue el error que se cometió, y salió caro: un informe entero
-  calculado sobre una premisa falsa.
+  Consultando tres veces en una hora, el 2 de octubre:
+
+                           15:00   15:54   16:30
+    FREE_CUSTOMER_SERVICE  1.003   1.003   1.003   ← congelado
+    FREE_ENTRY_POINT         438     438     438
+    REGULAR                   61      96     114   ← sube
+
+  Los gratis se clavaron en 1.003 y lo cobrado no para. O sea: mil mensajes de
+  servicio gratis por mes, y de ahí en adelante cada uno pasa a `REGULAR` y se
+  cobra a la tarifa publicada. Aparte, y sin entrar en ese cupo, están los de
+  `FREE_ENTRY_POINT`: los de quien llegó por un anuncio de clic-a-WhatsApp,
+  gratis por 72 h.
+
+  LA MORALEJA, que ya es la tercera vez que aparece en este proyecto: un número
+  que no se miró dos veces no es un dato, es una suposición. La página de Meta
+  decía una cosa y la cuenta hacía otra; la cuenta gana.
 
   POR ESO ACÁ NO HAY NINGUNA TARIFA NI NINGÚN TOPE ESCRITO. Se pregunta el
   costo y se informa el costo, abierto por tipo para que se vea de dónde sale.
@@ -89,34 +99,57 @@ export interface CostoDeWhatsapp {
 const CACHE_MS = 15 * 60 * 1000;
 let cache: { en: number; dato: CostoDeWhatsapp } | null = null;
 
-/**
- * Desde qué día del mes se puede proyectar.
- *
- * El 1 de octubre Meta cobró cero y el 2 aparecieron los primeros cargos.
- * Proyectar el día 2 es dividir por dos días de los cuales uno fue cero: da la
- * mitad de lo que corresponde y con cara de dato firme. Con un solo día de
- * cobros no se proyecta un mes.
- */
-const DIA_DESDE_EL_QUE_SE_PROYECTA = 3;
-
 /*
-  LA PROYECCIÓN ES UNA REGLA DE TRES SOBRE LO QUE META YA COBRÓ.
+  LA PROYECCIÓN NO ES UNA REGLA DE TRES, PORQUE EL GASTO NO ES LINEAL.
 
-  Nada más que eso, y es a propósito. La versión anterior deducía una tarifa
-  dividiendo el costo por "los mensajes pasados de los mil gratis", porque creía
-  que los primeros mil no se cobraban. Esa cuenta inventaba una tarifa de unos
-  cuatro pesos y se la aplicaba a TODOS los mensajes del mes: el panel llegó a
-  mostrar $87.998 proyectados sobre $1.959 cobrados. Sin escalón, el gasto es
-  lineal y proyectarlo es dividir por los días corridos.
+  Hay un escalón al principio del mes y se vio en vivo. El 1 de octubre la
+  cuenta gastó cero con 1.164 mensajes entregados; el 2 al mediodía empezaron
+  los cargos. Consultando tres veces en una hora:
+
+                           15:00   15:54   ahora
+    FREE_CUSTOMER_SERVICE  1.003   1.003   1.003   ← congelado
+    FREE_ENTRY_POINT         438     438     438
+    REGULAR                   61      96     114   ← sube
+
+  Los gratis se clavaron en 1.003 y lo cobrado sigue subiendo: el cupo de mil
+  mensajes de servicio por mes EXISTE, y cuando se agota el resto pasa a
+  REGULAR y se cobra a la tarifa publicada. Dividir lo gastado por los días
+  corridos da de menos todo el mes, porque arrastra los días gratis del
+  principio.
+
+  LO QUE SE HACE: se deduce la tarifa de lo que Meta ya cobró —el costo sobre
+  los mensajes que cobró, que da 37,68 clavado— y se aplica a los mensajes que
+  faltan del mes al ritmo de los que ya pasaron.
+
+  ES UN TECHO, no una promesa. Supone que de acá al 31 se cobra todo, y eso no
+  es exacto: los que llegan por un anuncio siguen entrando gratis por 72 h
+  (`FREE_ENTRY_POINT` venía sumando unos noventa por día). Se prefiere pasarse
+  para arriba: una cuenta de luz que sale menos de lo avisado no rompe nada, al
+  revés sí.
+
+  NO PROYECTA HASTA QUE HAYA UN PESO COBRADO. Sin cargos no hay tarifa que
+  deducir, y los primeros días del mes son justamente así.
 */
-export function proyectarElMes(costo: number, ahora: Date): number | null {
-  const diasCorridos = ahora.getUTCDate();
-  if (costo <= 0 || diasCorridos < DIA_DESDE_EL_QUE_SE_PROYECTA) return null;
+export function proyectarElMes(
+  dato: Pick<CostoDeWhatsapp, 'mensajes' | 'costo' | 'sinCargo'>,
+  ahora: Date,
+): number | null {
+  const conCargo = dato.mensajes - dato.sinCargo;
+  if (dato.costo <= 0 || conCargo <= 0) return null;
 
+  const tarifa = dato.costo / conCargo;
+  const diasCorridos = ahora.getUTCDate();
   const diasDelMes = new Date(
     Date.UTC(ahora.getUTCFullYear(), ahora.getUTCMonth() + 1, 0),
   ).getUTCDate();
-  return (costo / diasCorridos) * diasDelMes;
+  /*
+    El día en curso cuenta entero aunque esté por la mitad. Si contara solo la
+    parte transcurrida, a las nueve de la mañana el ritmo se vería inflado por
+    tres y la proyección saldría disparada.
+  */
+  const porDia = dato.mensajes / diasCorridos;
+  const faltan = Math.max(0, diasDelMes - diasCorridos);
+  return dato.costo + porDia * faltan * tarifa;
 }
 
 /** El primero del mes en curso, a medianoche UTC, como segundos unix. */
@@ -219,7 +252,7 @@ export async function costoDeWhatsapp(
       consultadoEn: ahora.toISOString(),
       proyeccion: null,
     };
-    dato.proyeccion = proyectarElMes(dato.costo, ahora);
+    dato.proyeccion = proyectarElMes(dato, ahora);
     cache = { en: ahora.getTime(), dato };
     return dato;
   } catch (err) {

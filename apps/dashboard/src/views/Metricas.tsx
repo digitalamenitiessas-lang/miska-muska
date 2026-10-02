@@ -652,13 +652,18 @@ function CostoDeWhatsapp({ wa }: { wa: CostoWhatsapp }) {
           </div>
         ) : null}
 
+        {/*
+          "Hasta" y no "unos", porque es un techo: supone que de acá a fin de
+          mes se cobra todo, y una parte va a seguir entrando gratis por los
+          que llegan de un anuncio. Preferimos pasarnos para arriba.
+        */}
         {c.proyeccion !== null ? (
           <p className="small" style={{ margin: '8px 0 0', fontWeight: 600 }}>
-            A este ritmo, unos {pesos(c.proyeccion)} en el mes
+            A este ritmo, hasta {pesos(c.proyeccion)} en el mes
           </p>
         ) : (
           <p className="small muted" style={{ margin: '8px 0 0' }}>
-            Todavía son pocos días para proyectar el mes.
+            Todavía no cobró nada: no hay con qué proyectar el mes.
           </p>
         )}
         <p className="small muted" style={{ margin: '6px 0 0' }}>
