@@ -33,10 +33,11 @@ const BOXES = [
     sortOrder: 50,
     notes:
       'Box del Día de la Madre. Trae: brownie franui, pavlova de durazno, shot de suspiro ' +
-      'limeño, shot de panacota, cookie de frambuesa, 2 alfajores, sandwich de jamón y queso, ' +
-      '2 chipá, conito de dulce de leche y jugo de naranja. Viene con una cadenita de regalo. ' +
-      'Se abona el box completo por transferencia POR ADELANTADO; el pedido se toma recién ' +
-      'cuando llega el comprobante. Se retira el sábado 17 de octubre en Marcos Paz 473. ' +
+      'limeño, shot de panacota, cookie de frambuesa, 2 alfajores (uno de frutos rojos y uno ' +
+      'de pistacho), sandwich de jamón y queso, 2 chipá, conito de dulce de leche y jugo de ' +
+      'naranja. Viene con una cadenita de regalo. NO se modifica nada: ni los productos ni la ' +
+      'cadenita. Se abona el box completo por transferencia POR ADELANTADO; el pedido se toma ' +
+      'recién cuando llega el comprobante. Se retira el sábado 17 de octubre en Marcos Paz 473. ' +
       'No se envía a domicilio.',
   },
   {
@@ -50,9 +51,10 @@ const BOXES = [
     sortOrder: 51,
     notes:
       'Box del Día de la Madre. Trae: taza de cerámica, mini brownie, mini pavlova, mini ' +
-      'alfajor de pistacho y shot de suspiro limeño. Se abona el box completo por ' +
-      'transferencia POR ADELANTADO; el pedido se toma recién cuando llega el comprobante. ' +
-      'Se retira el sábado 17 de octubre en Marcos Paz 473. No se envía a domicilio.',
+      'alfajor de pistacho y shot de suspiro limeño. NO se modifica nada: ni los productos ni ' +
+      'la taza. Se abona el box completo por transferencia POR ADELANTADO; el pedido se toma ' +
+      'recién cuando llega el comprobante. Se retira el sábado 17 de octubre en Marcos Paz 473. ' +
+      'No se envía a domicilio.',
   },
 ];
 

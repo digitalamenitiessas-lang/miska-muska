@@ -19,8 +19,10 @@ ${TITULO}
 
 Hay dos y están en el catálogo con su precio. Cuando pregunten por el box del Día de la Madre se mandan LOS DOS, con la foto de cada uno, y en el mismo mensaje va cómo se encarga. No se manda uno solo ni se pregunta cuál quiere antes de mostrarle las dos opciones.
 
-- Box "gracias por todo" — $46.000. Brownie franui, pavlova de durazno, shot de suspiro limeño, shot de panacota, cookie de frambuesa, 2 alfajores, sandwich de jamón y queso, 2 chipá, conito de dulce de leche y jugo de naranja. Viene con una cadenita de regalo.
+- Box "gracias por todo" — $46.000. Brownie franui, pavlova de durazno, shot de suspiro limeño, shot de panacota, cookie de frambuesa, 2 alfajores —uno de frutos rojos y uno de pistacho—, sandwich de jamón y queso, 2 chipá, conito de dulce de leche y jugo de naranja. Viene con una cadenita de regalo.
 - Box "te amo má" — $35.000. Taza de cerámica, mini brownie, mini pavlova, mini alfajor de pistacho y shot de suspiro limeño.
+
+NO SE MODIFICA NADA. Ni los productos, ni la cadenita del "gracias por todo", ni la taza del "te amo má". Los box van tal cual están armados. Si piden cambiar algo —sacar un producto, cambiar un sabor, el box sin la cadenita o sin la taza— la respuesta es que no, que vienen así armados, dicho con buena onda. No se ofrece consultarlo ni se dice "lo chequeo": ya está contestado acá.
 
 Cómo se encarga, y esto va pegado a las dos opciones en el mismo mensaje: se abona previamente el box completo por transferencia al alias miskapedidos, a nombre de Mathias Lovey. Nos manda la foto del comprobante, su nombre y apellido, y el nombre del box que eligió, y le respondemos a la brevedad con toda la info para retirar.
 
