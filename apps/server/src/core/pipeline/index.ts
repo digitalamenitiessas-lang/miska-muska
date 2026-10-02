@@ -50,6 +50,10 @@ import {
 import { diceQueSigueEsperando, RESPUESTA_SIN_CONSULTA } from '../policies/consultas.js';
 import { motivoDeLaPromesa, prometeConsultar } from '../policies/promesas.js';
 import {
+  laCharlaEsDeBoxDeLaMadre,
+  motivoDelBoxDeLaMadre,
+} from '../policies/diadelamadre.js';
+import {
   atribuyeAlBoxLoQueNoTiene,
   MOTIVO_BOX_INVENTADO,
   TEXTO_LO_CHEQUEO,
@@ -554,10 +558,29 @@ export class Pipeline {
         charla: si el alias nunca se dijo acá, no hay señal. Para esa está el
         botón de cargar el pedido a mano.
       */
+      /*
+        EL BOX DEL DÍA DE LA MADRE NO LO CARGA EL BOT, Y AVISA SIEMPRE.
+
+        Ver `core/policies/diadelamadre.ts`: el pedido de Agus, por qué el
+        rescate automático es justo lo que no hay que hacer acá, y la medición
+        —en 30 días una sola charla habría encendido el cartel de más—.
+
+        Las dos excepciones que hace esta línea:
+
+        1. NO EXIGE QUE HAYAMOS PASADO EL ALIAS. El alias de esta propuesta sale
+           publicado en Instagram, así que la clienta puede transferir sin que
+           nadie de este lado se lo haya dicho. Con la regla normal esa charla
+           entraba muda, que es exactamente el caso que Agus teme.
+        2. NO DEJA QUE EL RESCATE CARGUE EL PEDIDO. Si lo carga el bot y lo
+           carga una persona, quedan dos box para la misma clienta.
+      */
+      const historial = await this.#repos.messages.history(conversation.id, 30);
+      const deLaMadre = laCharlaEsDeBoxDeLaMadre(historial);
+
       let ventaSinFila = false;
       if (!pedidoSinCobrar && !inscripcion) {
         ventaSinFila = await this.#pasamosElAlias(conversation.id, stored.id);
-        if (!ventaSinFila) return;
+        if (!ventaSinFila && !deLaMadre) return;
       }
 
       /*
@@ -568,7 +591,7 @@ export class Pipeline {
         que hacía era escribir un cartel pidiéndole a una persona que lo cargara
         a mano. Ver `#cargarElPedidoDelComprobante`.
       */
-      const rescatado = ventaSinFila
+      const rescatado = ventaSinFila && !deLaMadre
         ? await this.#cargarElPedidoDelComprobante(conversation)
         : null;
       if (rescatado) {
@@ -605,7 +628,15 @@ export class Pipeline {
         return ` LO RETIRA ELLA por el local${cuando}.`;
       };
 
-      const motivo = pedidoSinCobrar
+      /*
+        El del box gana siempre que la charla sea de box, haya pedido o no. Si
+        el modelo igual dejó una ficha anotada, el cartel lo dice y sigue
+        pidiendo que lo pasen al sistema del local: una ficha del bot no es lo
+        que Agus necesita, él necesita los datos cargados de su lado.
+      */
+      const motivo = deLaMadre
+        ? motivoDelBoxDeLaMadre(pedidoSinCobrar?.number)
+        : pedidoSinCobrar
         ? `[comprobante] Mirá la transferencia y confirmá el pago del pedido ` +
           `#${pedidoSinCobrar.number}. Está en ${pedidoSinCobrar.paid} de ${pedidoSinCobrar.total}, ` +
           'y hasta que no lo confirmes ella queda esperando.' +
