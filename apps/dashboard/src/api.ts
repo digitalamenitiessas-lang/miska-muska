@@ -519,8 +519,14 @@ export const api = {
   campaigns: () => get<Campaign[]>('/api/campaigns'),
   setCampaignActive: (id: string, active: boolean) =>
     post<{ ok: true }>(`/api/campaigns/${id}/active`, { active }),
+  updateCampaign: (
+    id: string,
+    body: Pick<Campaign, 'name' | 'startsOn' | 'endsOn' | 'pitch'>,
+  ) => patch<Campaign>(`/api/campaigns/${id}`, body),
   upsertSku: (campaignId: string, body: Partial<CampaignSku>) =>
     post<CampaignSku>(`/api/campaigns/${campaignId}/skus`, body),
+  deleteSku: (campaignId: string, skuId: string) =>
+    del<{ ok: true }>(`/api/campaigns/${campaignId}/skus/${skuId}`),
 
   /**
    * Sube una foto y devuelve su dirección pública, para guardarla en el producto.

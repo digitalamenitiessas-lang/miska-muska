@@ -477,6 +477,41 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
     });
   });
 
+  /*
+    Editar la campaña. Hasta acá se podía crear una y prenderla, pero el
+    nombre, las fechas y el pitch no se tocaban desde ningún lado: había que
+    entrar a la base. Ver `campaigns.update`.
+  */
+  app.patch('/api/campaigns/:id', async (req, reply) => {
+    const { id } = req.params as { id: string };
+    const body = req.body as Record<string, unknown>;
+    const actual = (await repos.campaigns.listAll()).find((c) => c.id === id);
+    if (!actual) return reply.code(404).send({ error: 'No existe esa campaña' });
+
+    const nombre = String(body.name ?? actual.name).trim();
+    if (!nombre) return reply.code(400).send({ error: 'La campaña necesita un nombre' });
+
+    const desde = String(body.startsOn ?? actual.startsOn).slice(0, 10);
+    const hasta = String(body.endsOn ?? actual.endsOn).slice(0, 10);
+    // Al revés no se guarda: una campaña que termina antes de empezar no existe.
+    if (hasta < desde) {
+      return reply.code(400).send({ error: 'La fecha de fin no puede ser anterior a la de inicio' });
+    }
+
+    return repos.campaigns.update(id, {
+      name: nombre,
+      startsOn: desde,
+      endsOn: hasta,
+      pitch: body.pitch === undefined ? actual.pitch : String(body.pitch).trim() || null,
+    });
+  });
+
+  app.delete('/api/campaigns/:id/skus/:skuId', async (req) => {
+    const { skuId } = req.params as { skuId: string };
+    await repos.campaigns.deleteSku(skuId);
+    return { ok: true };
+  });
+
   app.post('/api/campaigns/:id/active', async (req) => {
     const { id } = req.params as { id: string };
     const { active } = req.body as { active: boolean };

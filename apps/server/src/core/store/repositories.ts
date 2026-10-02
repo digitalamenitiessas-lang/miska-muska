@@ -1266,6 +1266,37 @@ export function createRepositories() {
       await exec('UPDATE campaigns SET active = $2 WHERE id = $1', [id, active]);
     },
 
+    /**
+     * Edita la campaña en sí.
+     *
+     * Faltaba, y no era un detalle: se podía crear una campaña, prenderla y
+     * apagarla, y cambiarle el precio y el stock a cada caja, pero el nombre,
+     * las fechas y el pitch quedaban clavados desde el día que se creó. El
+     * local se pasó un rato buscando dónde editarlos. Peor: la campaña del
+     * Día de la Madre seguía ofreciendo productos del año pasado y el único
+     * control que funcionaba era el interruptor, así que la única forma de
+     * arreglarla era no prenderla.
+     *
+     * Van los cuatro campos juntos y no un parche parcial: el formulario los
+     * manda todos, y así "le borré el pitch" y "no me mandó el pitch" no son
+     * la misma cosa.
+     */
+    async update(
+      id: string,
+      c: Pick<Campaign, 'name' | 'startsOn' | 'endsOn' | 'pitch'>,
+    ): Promise<Campaign | null> {
+      const row = await one(
+        `UPDATE campaigns SET name = $2, starts_on = $3, ends_on = $4, pitch = $5
+         WHERE id = $1 RETURNING *`,
+        [id, c.name, c.startsOn, c.endsOn, c.pitch],
+      );
+      return row ? toCampaign(row) : null;
+    },
+
+    async deleteSku(id: string): Promise<void> {
+      await exec('DELETE FROM campaign_skus WHERE id = $1', [id]);
+    },
+
     async skus(campaignId: string): Promise<CampaignSku[]> {
       const rows = await q(
         'SELECT * FROM campaign_skus WHERE campaign_id = $1 ORDER BY sort_order',
