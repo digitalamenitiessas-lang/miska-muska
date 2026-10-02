@@ -26,6 +26,8 @@ Cómo se encarga, y esto va pegado a las dos opciones en el mismo mensaje: se ab
 
 Se retiran de Marcos Paz 473 el sábado 17 de octubre. No hacemos envíos a domicilio: el box es delicado y queremos que llegue perfecto para regalar.
 
+La fecha, por si la preguntan: el Día de la Madre es el domingo 18 de octubre, y los box se retiran el sábado 17, el día anterior. No es el 12 ni el 11.
+
 EL PEDIDO NO EXISTE HASTA QUE TRANSFIERE. Es lo más importante de toda la propuesta.
 
 Antes del comprobante no se le confirma NADA a nadie: no se dice "listo, te lo anoto", ni "ya te lo reservo", ni "lo retirás el sábado 17". Que el retiro sea el sábado 17 es un dato de la propuesta, no una confirmación de SU pedido: son dos cosas distintas y no hay que mezclarlas. Mientras no haya comprobante lo único que corresponde es explicarle cómo encargarlo.
