@@ -594,36 +594,76 @@ function ParaCobrar({ cobro }: { cobro: Facturacion }) {
  * Se muestra solo si Meta contestó. El dato es de ellos y tarda horas en
  * actualizarse, por eso dice a qué hora se consultó.
  */
+/*
+  El nombre del mes se arma del "2026-10" que manda el servidor y NO de una
+  fecha. Antes llegaba un ISO y acá se le pedía el mes en hora local: la
+  medianoche UTC del 1 de octubre es el 30 de septiembre a las 21 en Argentina,
+  así que el cartel decía "WhatsApp en septiembre" el 2 de octubre.
+*/
+const MESES = [
+  'enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio',
+  'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre',
+];
+const nombreDelMes = (mes: string): string => MESES[Number(mes.slice(5, 7)) - 1] ?? mes;
+
 function CostoDeWhatsapp({ wa }: { wa: CostoWhatsapp }) {
   const c = wa.costo;
   if (!c) return null;
-  const pesos = (n: number) =>
-    '$' + Math.round(n).toLocaleString('es-AR');
-  const restan = Math.max(0, wa.gratisPorMes - c.mensajes);
-  const mes = new Date(c.desde).toLocaleDateString('es-AR', { month: 'long' });
+  /*
+    ARS adelante y no un signo pelado. En esta misma pantalla el gasto del
+    modelo está en dólares, y los dos salían con "$": alcanzaba para que
+    alguien leyera dos mil dólares donde hay dos mil pesos.
+  */
+  const pesos = (n: number) => 'ARS ' + Math.round(n).toLocaleString('es-AR');
+  const conCargo = Math.max(0, c.mensajes - c.sinCargo);
   return (
     <section className="card" style={{ marginBottom: 14 }}>
       <div className="card-pad">
-        <h3 className="card-title">WhatsApp en {mes}</h3>
+        <h3 className="card-title">WhatsApp en {nombreDelMes(c.mes)}</h3>
         <div className="row wrap" style={{ alignItems: 'baseline', gap: 10 }}>
           <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em' }}>
             {pesos(c.costo)}
           </span>
           <span className="small muted">
             {c.mensajes.toLocaleString('es-AR')} mensajes entregados ·{' '}
-            {restan > 0
-              ? `quedan ${restan.toLocaleString('es-AR')} gratis de los ${wa.gratisPorMes.toLocaleString('es-AR')}`
-              : `los ${wa.gratisPorMes.toLocaleString('es-AR')} gratis ya se usaron`}
+            {conCargo > 0 ? (
+              <>
+                <strong>{conCargo.toLocaleString('es-AR')} con cargo</strong>, el resto gratis
+              </>
+            ) : (
+              'ninguno con cargo todavía'
+            )}
           </span>
         </div>
+
+        {/*
+          El desglose es el que explica el número. Sin él, "2.298 pesos sobre
+          1.502 mensajes" se lee como si cada mensaje costara algo, y no:
+          cuesta el 4% que sale fuera de la ventana de 24 h.
+        */}
+        {c.porTipo.length > 1 ? (
+          <div className="small muted" style={{ margin: '8px 0 0', lineHeight: 1.7 }}>
+            {c.porTipo.map((t) => (
+              <div key={t.tipo}>
+                {ETIQUETA_DE_TIPO[t.tipo] ?? t.tipo}: {t.mensajes.toLocaleString('es-AR')} ·{' '}
+                {t.costo > 0 ? pesos(t.costo) : 'sin cargo'}
+              </div>
+            ))}
+          </div>
+        ) : null}
+
         {c.proyeccion !== null ? (
-          <p className="small" style={{ margin: '6px 0 0', fontWeight: 600 }}>
+          <p className="small" style={{ margin: '8px 0 0', fontWeight: 600 }}>
             A este ritmo, unos {pesos(c.proyeccion)} en el mes
           </p>
-        ) : null}
+        ) : (
+          <p className="small muted" style={{ margin: '8px 0 0' }}>
+            Todavía son pocos días para proyectar el mes.
+          </p>
+        )}
         <p className="small muted" style={{ margin: '6px 0 0' }}>
-          Lo que cobra Meta, no una estimación nuestra. Ellos lo actualizan cada
-          varias horas: esto se consultó a las{' '}
+          Lo que cobra Meta en pesos, no una estimación nuestra. Ellos lo
+          actualizan cada varias horas: esto se consultó a las{' '}
           {new Date(c.consultadoEn).toLocaleTimeString('es-AR', {
             hour: '2-digit',
             minute: '2-digit',
@@ -634,6 +674,13 @@ function CostoDeWhatsapp({ wa }: { wa: CostoWhatsapp }) {
     </section>
   );
 }
+
+/** Los nombres de Meta, en castellano y explicando qué son. */
+const ETIQUETA_DE_TIPO: Record<string, string> = {
+  FREE_CUSTOMER_SERVICE: 'Dentro de las 24 h desde que escribió',
+  FREE_ENTRY_POINT: 'Llegó por un anuncio (72 h gratis)',
+  REGULAR: 'Fuera de la ventana',
+};
 
 function usd(value: number): string {
   if (!value) return '$0';

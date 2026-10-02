@@ -1,20 +1,19 @@
 /**
- * La proyección del gasto de WhatsApp.
+ * La tarjeta del gasto de WhatsApp: la proyección y el nombre del mes.
  *
- * Lo que se prueba acá es la aritmética, que es donde se puede meter la pata sin
- * que nadie se dé cuenta: un número de más en el panel se lee como un hecho.
+ * Lo que se prueba acá es donde se puede meter la pata sin que nadie se dé
+ * cuenta, porque un número en el panel se lee como un hecho. Y ya pasó dos
+ * veces en dos días:
  *
- * Lo importante NO es que proyecte bien cuando hay datos —eso es una división—
- * sino que NO proyecte cuando no los hay. Los primeros días de cada mes Meta
- * cobra cero porque están los mil gratis, y ahí no existe tarifa que deducir.
- * Mostrar cualquier cosa en ese hueco sería inventar.
+ *   - El panel mostró "$87.998 proyectados en el mes" con $1.959 cobrados. La
+ *     cuenta vieja deducía una tarifa dividiendo por "los mensajes pasados de
+ *     los mil gratis", un cupo que no existe, y la aplicaba a todos.
+ *   - Y el cartel decía "WhatsApp en SEPTIEMBRE" el 2 de octubre, porque el mes
+ *     viajaba como instante ISO y se leía en hora local.
  *
  *   npx tsx scripts/probar-costo-whatsapp.mts
  */
-import {
-  MENSAJES_GRATIS_POR_MES,
-  proyectarElMes as proyectar,
-} from '../src/channels/whatsapp/costos.js';
+import { mesDe, proyectarElMes as proyectar } from '../src/channels/whatsapp/costos.js';
 
 let mal = 0;
 const chequear = (ok: boolean, nota: string): void => {
@@ -22,53 +21,51 @@ const chequear = (ok: boolean, nota: string): void => {
   console.log(`  ${ok ? '✓' : '✗'} ${nota}`);
 };
 
-console.log('\n  Cuándo NO hay que proyectar nada\n');
+console.log('\n  El mes no tiene zona horaria\n');
 
-const dia5 = new Date('2026-10-05T12:00:00Z');
-chequear(proyectar(26, 0, dia5) === null, 'el primer día, con todo gratis todavía');
-chequear(proyectar(999, 0, dia5) === null, 'justo antes de agotar los mil gratis');
-chequear(proyectar(1000, 0, dia5) === null, 'en los mil exactos: todavía no cobró nada');
-chequear(proyectar(5000, 0, dia5) === null, 'muchos mensajes pero Meta informa cero');
-chequear(proyectar(0, 0, dia5) === null, 'sin datos');
+chequear(mesDe(new Date('2026-10-01T00:00:00Z')) === '2026-10', 'el 1 a medianoche UTC es octubre');
+chequear(mesDe(new Date('2026-10-02T15:00:00Z')) === '2026-10', 'el 2 al mediodía es octubre');
+chequear(mesDe(new Date('2026-10-31T23:59:00Z')) === '2026-10', 'el último día sigue siendo octubre');
+chequear(mesDe(new Date('2026-11-01T02:00:00Z')) === '2026-11', 'el 1 de noviembre ya es noviembre');
+chequear(mesDe(new Date('2026-01-05T12:00:00Z')) === '2026-01', 'enero va con cero adelante');
+
+console.log('\n  Cuándo NO hay que proyectar\n');
+
+chequear(proyectar(0, new Date('2026-10-15T12:00:00Z')) === null, 'sin un peso cobrado');
+chequear(proyectar(-5, new Date('2026-10-15T12:00:00Z')) === null, 'con un costo negativo');
+chequear(proyectar(2298, new Date('2026-10-01T12:00:00Z')) === null, 'el día 1: un solo día no es un mes');
+chequear(proyectar(2298, new Date('2026-10-02T15:00:00Z')) === null, 'el día 2, que es el caso real');
 
 console.log('\n  Cuándo sí, y con qué número\n');
 
 /*
-  El caso real que esperamos: 766 salientes por día, la tarifa publicada de
-  Argentina (ARS 37,6798). Al quinto día habría 3.830 mensajes, 2.830 cobrables,
-  y Meta habría cobrado 2.830 × 37,6798 = 106.634.
+  Desde el día 3. Nueve mil pesos en tres días de un mes de 31 son 93.000:
+  regla de tres sobre lo que Meta ya cobró, sin ninguna tarifa escrita.
 */
-const mensajes5 = 766 * 5;
-const costo5 = (mensajes5 - MENSAJES_GRATIS_POR_MES) * 37.6798;
-const p = proyectar(mensajes5, costo5, dia5);
+const dia3 = proyectar(9000, new Date('2026-10-03T10:00:00Z'));
+chequear(dia3 !== null, 'el día 3 ya proyecta');
+chequear(dia3 !== null && Math.round(dia3) === 93000, `da ${dia3 !== null ? Math.round(dia3) : '—'}, esperaba 93.000`);
 
-chequear(p !== null, 'con plata cobrada sí proyecta');
-if (p !== null) {
-  // 766 × 31 = 23.746 mensajes; menos los mil gratis = 22.746 × 37,6798 ≈ 857.065
-  const esperado = (766 * 31 - MENSAJES_GRATIS_POR_MES) * 37.6798;
-  const error = Math.abs(p - esperado) / esperado;
-  chequear(error < 0.01, `da ${Math.round(p).toLocaleString('es-AR')}, esperaba ${Math.round(esperado).toLocaleString('es-AR')}`);
-}
+const dia10 = proyectar(60000, new Date('2026-10-10T10:00:00Z'));
+chequear(dia10 !== null && Math.round(dia10) === 186000, 'el día 10, con 60.000, proyecta 186.000');
+
+/* Febrero tiene 28: el divisor sale del mes, no de un 30 escrito a mano. */
+const feb = proyectar(7000, new Date('2026-02-07T10:00:00Z'));
+chequear(feb !== null && Math.round(feb) === 28000, 'febrero proyecta sobre 28 días, no sobre 30');
 
 /*
-  Y la trampa del día en curso: si contara solo las horas transcurridas, a las
-  nueve de la mañana el ritmo se vería inflado por tres.
+  Y la trampa del día en curso: si contara las horas transcurridas, a las nueve
+  de la mañana el ritmo se vería inflado por tres.
 */
-const temprano = new Date('2026-10-05T09:00:00Z');
-const tarde = new Date('2026-10-05T23:00:00Z');
 chequear(
-  proyectar(mensajes5, costo5, temprano) === proyectar(mensajes5, costo5, tarde),
+  proyectar(9000, new Date('2026-10-03T09:00:00Z')) === proyectar(9000, new Date('2026-10-03T23:00:00Z')),
   'la hora del día no cambia la proyección, solo la fecha',
 );
 
-/* La tarifa se deduce de Meta, no está escrita en ningún lado. */
-const conTarifaDistinta = proyectar(mensajes5, costo5 * 2, dia5);
-if (p !== null && conTarifaDistinta !== null) {
-  chequear(
-    Math.abs(conTarifaDistinta - p * 2) < 0.01,
-    'si Meta cobrara el doble, la proyección se duplica sola',
-  );
-}
+/* Es lineal: el doble cobrado proyecta el doble. Sin escalones inventados. */
+const a = proyectar(9000, new Date('2026-10-03T10:00:00Z'));
+const b = proyectar(18000, new Date('2026-10-03T10:00:00Z'));
+chequear(a !== null && b !== null && Math.abs(b - a * 2) < 0.01, 'el doble cobrado proyecta el doble');
 
 console.log(mal ? `\n  ${mal} fallaron.\n` : '\n  Pasa todo.\n');
 process.exit(mal ? 1 : 0);

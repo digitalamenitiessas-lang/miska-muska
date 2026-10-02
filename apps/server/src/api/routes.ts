@@ -7,10 +7,7 @@ import type { FastifyInstance } from 'fastify';
 import type { ApiDeps } from './server.js';
 import { bus } from '../core/events/bus.js';
 import { config } from '../config.js';
-import {
-  costoDeWhatsapp,
-  MENSAJES_GRATIS_POR_MES,
-} from '../channels/whatsapp/costos.js';
+import { costoDeWhatsapp } from '../channels/whatsapp/costos.js';
 import { matchQuickReplies } from '../core/pipeline/router.js';
 import { renderQuickReply } from '../core/agent/persona.js';
 import { canonizarCategoria } from '../core/policies/rules.js';
@@ -763,7 +760,7 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
   app.get('/api/whatsapp/costo', async () => {
     const { whatsappAccountId } = await repos.settings.read();
     const dato = await costoDeWhatsapp(whatsappAccountId, new Date());
-    return { costo: dato, gratisPorMes: MENSAJES_GRATIS_POR_MES };
+    return { costo: dato };
   });
 
   app.get('/api/facturacion', async () => {

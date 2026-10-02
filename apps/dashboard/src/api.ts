@@ -359,14 +359,19 @@ export interface Gasto {
 export interface CostoWhatsapp {
   costo: {
     mensajes: number;
+    /** Lo cobrado en el mes, EN PESOS. Meta factura esta cuenta en ARS. */
     costo: number;
+    /** De esos mensajes, los que Meta cobró en cero. */
+    sinCargo: number;
+    /** El desglose por tipo de precio de Meta, de mayor a menor. */
+    porTipo: Array<{ tipo: string; mensajes: number; costo: number }>;
     moneda: string;
-    desde: string;
+    /** El mes contado, como "2026-10". Sin hora, a propósito. */
+    mes: string;
     consultadoEn: string;
     /** Lo que saldría el mes entero a este ritmo, o null si no se puede saber. */
     proyeccion: number | null;
   } | null;
-  gratisPorMes: number;
 }
 
 export interface Facturacion {
