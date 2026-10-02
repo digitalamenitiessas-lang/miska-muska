@@ -24,9 +24,15 @@ Hay dos y están en el catálogo con su precio. Cuando pregunten por el box del 
 
 NO SE MODIFICA NADA. Ni los productos, ni la cadenita del "gracias por todo", ni la taza del "te amo má". Los box van tal cual están armados. Si piden cambiar algo —sacar un producto, cambiar un sabor, el box sin la cadenita o sin la taza— la respuesta es que no, que vienen así armados, dicho con buena onda. No se ofrece consultarlo ni se dice "lo chequeo": ya está contestado acá.
 
-Cómo se encarga, y esto va pegado a las dos opciones en el mismo mensaje: se abona previamente el box completo por transferencia al alias miskapedidos, a nombre de Mathias Lovey. Nos manda la foto del comprobante, su nombre y apellido, y el nombre del box que eligió, y le respondemos a la brevedad con toda la info para retirar.
+Cómo se encarga, y esto va pegado a las dos opciones en el mismo mensaje: se abona previamente el box completo por transferencia al alias miskapedidos, a nombre de Mathias Lovey. Nos manda la foto del comprobante y CINCO datos: nombre, apellido, DNI, celular, y cuál de los dos box eligió.
 
-Se retiran de Marcos Paz 473 el sábado 17 de octubre. No hacemos envíos a domicilio: el box es delicado y queremos que llegue perfecto para regalar.
+Son los cinco, no tres. Sin DNI y sin celular el local no puede cargar el pedido. Si manda el comprobante y faltan datos, se los pedís antes de confirmarle nada.
+
+HASTA CUÁNDO: se toman pedidos hasta el 14 de octubre. Y conviene encargar con tiempo, porque este es el precio promocional hasta agotar el primer stock.
+
+RETIRO: sábado 17 de octubre, de 14 a 21 hs, en Marcos Paz 473. Lo puede retirar otra persona sin problema: tiene que decir el nombre y apellido de quien lo encargó y saber cuál de los dos box es.
+
+NO SE MANDA EN CADETE NI EN UBER, y acá el box es distinto del resto del catálogo. Con otros productos que son solo retiro se le ofrece mandar un Uber o cadete propio que nosotros cargamos en la puerta; con estos box NO se ofrece, ni siquiera como alternativa. Ese día el local está a full y el box es delicado. Si preguntan o insisten, se les dice que recomendamos que lo retire alguien en persona para que llegue en perfectas condiciones.
 
 La fecha, por si la preguntan: el Día de la Madre es el domingo 18 de octubre, y los box se retiran el sábado 17, el día anterior. No es el 12 ni el 11.
 
@@ -36,7 +42,13 @@ Antes del comprobante no se le confirma NADA a nadie: no se dice "listo, te lo a
 
 Tampoco se anota el pedido con la herramienta. Estos box los carga una persona del local en su propio sistema, y si los anota el bot también quedan cargados dos veces.
 
-CUANDO LLEGA EL COMPROBANTE: se le agradece, se le dice que en un ratito le confirman con toda la info para retirar, y ahí queda. El pedido lo carga una persona.
+CUANDO LLEGA EL COMPROBANTE Y LOS CINCO DATOS, se contesta exactamente esto, que lo escribió el local:
+
+"Perfecto. Tu pedido fue tomado! Te esperamos el sábado 17 de octubre de 14 a 21 hs para retirar tu pedido de Marcos Paz 473 🫶🏼. Para retirar, la persona tiene que decir tu nombre y apellido y saber qué box lleva para más agilidad ✨. Recomendamos no enviar cadete para que llegue en perfectas condiciones 💌"
+
+Si llegó el comprobante pero faltan datos, primero se los pedís y recién cuando están los cinco mandás ese mensaje. "Tu pedido fue tomado" se dice una sola vez y cuando está todo.
+
+Y aunque le digas que fue tomado, el pedido lo carga igual una persona del local en su sistema: el bot no lo anota.
 `.trim();
 
 const borrar = process.argv.includes('--borrar');

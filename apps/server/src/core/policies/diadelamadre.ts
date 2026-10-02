@@ -84,10 +84,19 @@ export function laCharlaEsDeBoxDeLaMadre(
  */
 export function motivoDelBoxDeLaMadre(pedidoNumero?: number): string {
   const base = '[box día de la madre] Llegó un comprobante de un box del Día de la Madre. ';
-  const cierre = 'Se retira el sábado 17.';
+  /*
+    Los cinco datos van escritos en el cartel y no en la cabeza de nadie. Son
+    los que Agus pidió el 2 de octubre —"nombre, apellido, DNI, celular y el
+    box que quieran encargar"— y son los que hay que copiar al sistema del
+    local. Un aviso que dice "cargalo" y no dice qué cargar obliga a ir a
+    buscar la lista a otro lado.
+  */
+  const cierre =
+    'Datos a cargar: nombre, apellido, DNI, celular y cuál de los dos box. ' +
+    'Se retira el sábado 17 de 14 a 21.';
   return pedidoNumero
     ? `${base}El bot dejó anotado el #${pedidoNumero}, pero los datos de la clienta hay que ` +
         `pasarlos igual al sistema de ustedes. ${cierre}`
-    : `${base}Cargalo vos a mano con los datos de la clienta: el bot NO lo cargó a propósito, ` +
-        `porque estos tienen que quedar en el sistema de ustedes. ${cierre}`;
+    : `${base}Cargalo vos a mano: el bot NO lo cargó a propósito, porque estos tienen que ` +
+        `quedar en el sistema de ustedes. ${cierre}`;
 }

@@ -21,6 +21,18 @@ import { createRepositories } from '../src/core/store/repositories.js';
   envíos a domicilio porque el box es delicado"— y ese flag no es decorativo:
   bloquea el envío con cadete y le hace explicar al cliente por qué.
 */
+/*
+  Lo que vale igual para los dos, escrito una vez. Si se repite copiado en cada
+  uno, el día que cambie una fecha se cambia en un lado y no en el otro.
+*/
+const RETIRO_Y_PAGO =
+  'Se abona el box completo por transferencia POR ADELANTADO; el pedido se toma recién ' +
+  'cuando llegan el comprobante y los cinco datos: nombre, apellido, DNI, celular y cuál de ' +
+  'los dos box. Se toman pedidos hasta el 14 de octubre, y el precio es promocional hasta ' +
+  'agotar el primer stock. Se retira el sábado 17 de octubre de 14 a 21 hs en Marcos Paz 473, ' +
+  'y lo puede retirar otra persona. NO se manda en cadete ni en Uber, y tampoco se ofrece esa ' +
+  'opción.';
+
 const BOXES = [
   {
     id: 'box-madre-gracias-por-todo',
@@ -36,9 +48,8 @@ const BOXES = [
       'limeño, shot de panacota, cookie de frambuesa, 2 alfajores (uno de frutos rojos y uno ' +
       'de pistacho), sandwich de jamón y queso, 2 chipá, conito de dulce de leche y jugo de ' +
       'naranja. Viene con una cadenita de regalo. NO se modifica nada: ni los productos ni la ' +
-      'cadenita. Se abona el box completo por transferencia POR ADELANTADO; el pedido se toma ' +
-      'recién cuando llega el comprobante. Se retira el sábado 17 de octubre en Marcos Paz 473. ' +
-      'No se envía a domicilio.',
+      'cadenita. ' +
+      RETIRO_Y_PAGO,
   },
   {
     id: 'box-madre-te-amo-ma',
@@ -52,9 +63,8 @@ const BOXES = [
     notes:
       'Box del Día de la Madre. Trae: taza de cerámica, mini brownie, mini pavlova, mini ' +
       'alfajor de pistacho y shot de suspiro limeño. NO se modifica nada: ni los productos ni ' +
-      'la taza. Se abona el box completo por transferencia POR ADELANTADO; el pedido se toma ' +
-      'recién cuando llega el comprobante. Se retira el sábado 17 de octubre en Marcos Paz 473. ' +
-      'No se envía a domicilio.',
+      'la taza. ' +
+      RETIRO_Y_PAGO,
   },
 ];
 
