@@ -670,10 +670,24 @@ export function buildDailyContext(input: DailyContextInput): string {
     );
   }
 
+  /*
+    EL STOCK QUE QUEDA NO ENTRA ACÁ, Y ES A PROPÓSITO.
+
+    Antes esta línea decía "quedan 287 de 300" y el modelo se lo repetía a la
+    clienta. El local no lo quiere: "no quiero que el bot diga el stock que
+    queda al cliente".
+
+    Y no alcanzaba con pedírselo en la prosa. El número puesto delante se dice
+    tarde o temprano; la única forma de que no lo diga es que no lo tenga. Acá
+    solo entra lo único que cambia lo que el bot hace: si todavía hay o si ya
+    no hay. El número completo sigue estando en el panel, que es donde el local
+    lo necesita.
+  */
   for (const { campaign, skus } of campaigns) {
     const lines = skus.map((s) => {
-      const left = s.stockTotal - s.stockUsed;
-      return `  ${s.name} — $${s.price.toLocaleString('es-AR')} — quedan ${left} de ${s.stockTotal}`;
+      const quedan = s.stockTotal - s.stockUsed;
+      const agotado = quedan <= 0 ? ' — AGOTADO: no lo ofrezcas ni lo anotes' : '';
+      return `  ${s.name} — $${s.price.toLocaleString('es-AR')}${agotado}`;
     });
     parts.push(
       `CAMPAÑA ACTIVA: ${campaign.name} (${campaign.startsOn} a ${campaign.endsOn})\n${lines.join('\n')}\n` +
