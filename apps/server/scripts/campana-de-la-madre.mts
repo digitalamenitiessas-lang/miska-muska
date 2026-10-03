@@ -29,8 +29,8 @@ const PITCH =
   'Dos opciones: el Box "gracias por todo" a $46.000 y el Box "te amo má" a $35.000. ' +
   'Se abona el box completo por adelantado por transferencia y el pedido se toma recién ' +
   'con el comprobante y los cinco datos (nombre, apellido, DNI, celular y cuál box). ' +
-  'Pedidos hasta el 14 de octubre; se retiran el sábado 17 de 14 a 21 hs en Marcos Paz 473. ' +
-  'No se manda en cadete ni en Uber.';
+  'Pedidos hasta el 14 de octubre; se retiran del local el sábado 17. El horario de retiro no ' +
+  'se dice hasta que pagó. No se manda en cadete ni en Uber.';
 
 openDb({
   connectionString: process.env.DATABASE_URL!,

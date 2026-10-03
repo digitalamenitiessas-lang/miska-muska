@@ -29,9 +29,10 @@ const RETIRO_Y_PAGO =
   'Se abona el box completo por transferencia POR ADELANTADO; el pedido se toma recién ' +
   'cuando llegan el comprobante y los cinco datos: nombre, apellido, DNI, celular y cuál de ' +
   'los dos box. Se toman pedidos hasta el 14 de octubre, y el precio es promocional hasta ' +
-  'agotar el primer stock. Se retira el sábado 17 de octubre de 14 a 21 hs en Marcos Paz 473, ' +
-  'y lo puede retirar otra persona. NO se manda en cadete ni en Uber, y tampoco se ofrece esa ' +
-  'opción.';
+  'agotar el primer stock. Se retira del local el sábado 17 de octubre y lo puede retirar otra ' +
+  'persona. EL HORARIO DE RETIRO NO SE DICE HASTA QUE PAGÓ: darlo antes hace que entiendan que ' +
+  'pueden caer ese día a comprarlo en el mostrador, y ya pasó. NO se manda en cadete ni en ' +
+  'Uber, y tampoco se ofrece esa opción.';
 
 const BOXES = [
   {

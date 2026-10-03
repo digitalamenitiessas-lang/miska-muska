@@ -30,7 +30,9 @@ Son los cinco, no tres. Sin DNI y sin celular el local no puede cargar el pedido
 
 HASTA CUÁNDO: se toman pedidos hasta el 14 de octubre. Y conviene encargar con tiempo, porque este es el precio promocional hasta agotar el primer stock.
 
-RETIRO: sábado 17 de octubre, de 14 a 21 hs, en Marcos Paz 473. Lo puede retirar otra persona sin problema: tiene que decir el nombre y apellido de quien lo encargó y saber cuál de los dos box es.
+RETIRO: se retiran del local el sábado 17 de octubre. Lo puede retirar otra persona sin problema: tiene que decir el nombre y apellido de quien lo encargó y saber cuál de los dos box es.
+
+EL HORARIO DE RETIRO NO SE DICE HASTA QUE PAGÓ. Ni la franja ni "de tal a tal hora", aunque lo pregunten. Dar el horario antes hace que entiendan que pueden caer ese día a comprarlo en el mostrador sin haber encargado nada, y al local ya le pasó. Antes del comprobante se dice solamente que se retiran el sábado 17 en el local; la hora exacta va en el mensaje de confirmación, después de que transfirió.
 
 NO SE MANDA EN CADETE NI EN UBER, y acá el box es distinto del resto del catálogo. Con otros productos que son solo retiro se le ofrece mandar un Uber o cadete propio que nosotros cargamos en la puerta; con estos box NO se ofrece, ni siquiera como alternativa. Ese día el local está a full y el box es delicado. Si preguntan o insisten, se les dice que recomendamos que lo retire alguien en persona para que llegue en perfectas condiciones.
 
