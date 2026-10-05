@@ -11,21 +11,26 @@
   La clienta preguntó el precio tres veces y nunca lo recibió; a las 13:39 tuvo
   que entrar una persona a pegar el texto a mano.
 */
-import { openDb, q, closeDb } from '../src/core/store/db.js';
 import { cobraLoQueNoHay } from '../src/core/policies/stock.js';
 import { hablaDelBoxDeLaMadre } from '../src/core/policies/diadelamadre.js';
 
-openDb({
-  connectionString: process.env.DATABASE_URL!,
-  password: process.env.DATABASE_PASSWORD,
-  max: 2,
-});
+/*
+  LA LISTA DE APAGADOS VA FIJA ACÁ Y NO SALE DE LA BASE.
 
-const apagados = (
-  await q<any>(`SELECT id, name, category FROM products WHERE available_today = false`)
-).map((p) => ({ id: p.id, name: p.name, category: p.category }));
+  Salía de la base y el test se rompió solo: el local volvió a prender el
+  "Alfajor brownie" y el caso que reproduce dejó de reproducirse. Una prueba
+  que pasa o falla según lo que el local prendió esta mañana no prueba nada —
+  avisa de otra cosa, y encima avisa tarde.
 
-console.log(`  ${apagados.length} productos apagados en el catálogo.\n`);
+  Estos son los que importan para el caso: los dos que el contenido del box
+  nombra y que estaban apagados el 2 y el 5 de octubre.
+*/
+const apagados = [
+  { id: 'alfajor-brownie', name: 'Alfajor brownie', category: 'alfajores' },
+  { id: 'alfajor-pistacho-ddl', name: 'Alfajor pistacho y dulce de leche', category: 'alfajores' },
+  { id: 'merch-taza', name: 'Taza Miska Muska', category: 'merch' },
+  { id: 'cookie-kinder', name: 'Cookie kinder', category: 'cookies' },
+];
 
 /*
   EL CASO DEL 5 DE OCTUBRE A LAS 11:21, que el primer arreglo no agarró.
@@ -115,5 +120,4 @@ if (!solaNo) mal++;
 console.log(`  ${solaNo ? '✓' : '✗'} y la burbuja sola, como se esperaba, no`);
 
 console.log(mal ? `\n  ${mal} fallaron.\n` : '\n  Pasa todo.\n');
-await closeDb();
 process.exit(mal ? 1 : 0);
