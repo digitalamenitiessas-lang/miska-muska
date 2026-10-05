@@ -108,23 +108,29 @@ async function buscar(desde: string): Promise<Hallazgo[]> {
   */
 
   /*
-    El box con envío. Se pide que nombre el box Y que hable de llevarlo, y se
-    descartan los que están diciendo justamente que NO se envía, que es la
-    respuesta correcta y la más común.
+    EL BOX CON ENVÍO. Lo que se busca NO es que el mensaje hable de envíos:
+    ahora que el bot contesta bien, la respuesta correcta —"ese box solo se
+    retira en el local, no se puede enviar"— habla de envíos todo el tiempo y
+    hacía sonar la alarma. La primera versión intentaba descartarlas por
+    lista ("no se envía", "no enviamos"…) y se le escapó "no se PUEDE enviar".
+
+    Esa lista nunca va a estar completa. Lo que sí separa una cosa de la otra
+    sin ambigüedad es PEDIR LOS DATOS DE ENTREGA: una negativa no pregunta la
+    dirección ni la franja horaria ni quién lo recibe. Eso es lo que hizo el
+    bot el 5 a las 8:43 y lo que no puede volver a hacer.
   */
   const envios = await q<any>(
     `SELECT to_char(created_at AT TIME ZONE $2,'HH24:MI') h, conversation_id, text
        FROM messages WHERE direction='out' AND author='bot' AND content_kind='text'
         AND created_at > $1::timestamptz
         AND (text ILIKE '%gracias por todo%' OR text ILIKE '%te amo m%' OR text ILIKE '%día de la madre%')
-        AND (text ILIKE '%a domicilio%' OR text ILIKE '%cadete%' OR text ILIKE '%lo llevamos%'
-             OR text ILIKE '%dirección de%' OR text ILIKE '%franja horaria%')
-        AND text NOT ILIKE '%no hacemos envío%' AND text NOT ILIKE '%no se envía%'
-        AND text NOT ILIKE '%no enviamos%' AND text NOT ILIKE '%no mandamos%'
-        AND text NOT ILIKE '%evitamos envío%' AND text NOT ILIKE '%recomendamos no enviar%'`,
+        AND (text ILIKE '%franja horaria%'
+             OR (text ILIKE '%direcci%' AND text ILIKE '%recibe%')
+             OR text ILIKE '%lo llevemos%'
+             OR text ILIKE '%para que el cadete%')`,
     [desde, TIMEZONE],
   );
-  for (const r of envios) out.push(linea(r, 'BOX DE LA MADRE CON ENVÍO'));
+  for (const r of envios) out.push(linea(r, 'BOX DE LA MADRE: PIDIÓ DATOS DE ENTREGA'));
 
   const paraHoy = await q<any>(
     `SELECT to_char(created_at AT TIME ZONE $2,'HH24:MI') h, conversation_id, text
