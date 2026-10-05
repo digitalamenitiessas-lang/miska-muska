@@ -146,6 +146,7 @@ export const CATEGORY_LABEL: Record<string, string> = {
   saladito: 'Lo saladito',
   tortas: 'Tortas y tartas',
   desayunos: 'Desayunos y boxes',
+  'dia-de-la-madre': 'Día de la Madre',
   cursos: 'Cursos',
   merch: 'Merchandising',
 };

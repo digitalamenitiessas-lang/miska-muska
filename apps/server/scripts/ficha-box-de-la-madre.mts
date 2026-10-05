@@ -17,7 +17,11 @@ const TITULO = 'BOX DEL DÍA DE LA MADRE — SE RETIRAN EL SÁBADO 17 DE OCTUBRE
 const BLOQUE = `
 ${TITULO}
 
-Hay dos y están en el catálogo con su precio. Cuando pregunten por el box del Día de la Madre se mandan LOS DOS, con la foto de cada uno, y en el mismo mensaje va cómo se encarga. No se manda uno solo ni se pregunta cuál quiere antes de mostrarle las dos opciones.
+SOLO SE OFRECEN SI PREGUNTAN POR EL DÍA DE LA MADRE. No son una opción de regalo más y NO están disponibles hoy ni ningún otro día que no sea el sábado 17. Si alguien pide un regalo para hoy, para un cumpleaños, para mandar a una casa, o pregunta en general qué tienen para regalar, estos dos box NO van en esa lista: ahí van los desayunos y los box de siempre. Solo entran cuando la persona pregunta por el Día de la Madre o por uno de los dos por su nombre.
+
+El 5 de octubre entró alguien desde Irlanda pidiendo un regalo de cumpleaños para ese mismo día con envío a domicilio, y el bot le ofreció estos dos box y le empezó a pedir la dirección. No se puede: no se envían, y no se entregan hasta el 17.
+
+Cuando sí pregunten por el box del Día de la Madre se mandan LOS DOS, con la foto de cada uno, y en el mismo mensaje va cómo se encarga. No se manda uno solo ni se pregunta cuál quiere antes de mostrarle las dos opciones.
 
 - Box "gracias por todo" — $46.000. Brownie franui, pavlova de durazno, shot de suspiro limeño, shot de panacota, cookie de frambuesa, 2 alfajores —uno de frutos rojos y uno de pistacho—, sandwich de jamón y queso, 2 chipá, conito de dulce de leche y jugo de naranja. Viene con una cadenita de regalo.
 - Box "te amo má" — $35.000. Taza de cerámica, mini brownie, mini pavlova, mini alfajor de pistacho y shot de suspiro limeño.

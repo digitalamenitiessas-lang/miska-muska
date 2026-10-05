@@ -146,6 +146,7 @@ export type CategoriaDeFabrica =
   | 'saladito'
   | 'tortas'
   | 'desayunos'
+  | 'dia-de-la-madre'
   | 'cursos'
   | 'merch';
 

@@ -869,7 +869,7 @@ export function nombreDeWhatsApp(
  */
 export const CATEGORIAS_DE_FABRICA: CategoriaDeFabrica[] = [
   'cookies', 'muffins', 'mini-tortas', 'cuadrados', 'alfajores',
-  'tabletas', 'saladito', 'tortas', 'desayunos', 'cursos', 'merch',
+  'tabletas', 'saladito', 'tortas', 'desayunos', 'dia-de-la-madre', 'cursos', 'merch',
 ];
 
 /** Largo máximo de una categoría: es el título de una tarjeta, no una descripción. */
@@ -1049,7 +1049,27 @@ export function primeraHora(texto: string | null | undefined): number | null {
   categorías son texto libre desde que el panel las puede crear, y un "Tortas"
   escrito a mano tiene que contar igual que el 'tortas' original.
 */
-const SE_ENCARGA_CON_ANTICIPACION = new Set(['tortas', 'desayunos'].map(claveDeCategoria));
+/*
+  Los box del Día de la Madre entran acá —se encargan para el 17— pero NO en
+  `ENVIO_PROPIO_SIEMPRE`, y esa es toda la razón de que tengan categoría propia
+  en vez de vivir en 'desayunos'.
+
+  El 5 de octubre a las 8:43, con los box recién cargados en 'desayunos', entró
+  alguien desde Irlanda pidiendo un regalo de cumpleaños para ese mismo día con
+  envío. El bot le ofreció los dos box del Día de la Madre y siguió: "ahora
+  necesito algunos datos para que lo llevemos hoy a domicilio: dirección de tu
+  mamá, nombre de quién recibe, franja horaria". Agus: "no hacemos envíos y
+  menos hoy jaja". Una persona del local tuvo que entrar a las 8:58 a
+  desarmarlo.
+
+  El bot no se desvió: hizo lo que decía nuestra propia tabla. 'desayunos'
+  significa "va siempre con nuestro cadete", y al cargar los box ahí les
+  pusimos esa etiqueta encima. La ficha decía lo contrario en prosa y perdió,
+  como pierde siempre la prosa contra una regla de código.
+*/
+const SE_ENCARGA_CON_ANTICIPACION = new Set(
+  ['tortas', 'desayunos', 'dia-de-la-madre'].map(claveDeCategoria),
+);
 
 /** true si ese producto se puede encargar para otro día. */
 export const seEncargaConAnticipacion = (categoria: string): boolean =>

@@ -38,7 +38,7 @@ const BOXES = [
   {
     id: 'box-madre-gracias-por-todo',
     name: 'Box gracias por todo',
-    category: 'desayunos',
+    category: 'dia-de-la-madre',
     price: 46000,
     availableToday: true,
     limitedEdition: false,
@@ -55,7 +55,7 @@ const BOXES = [
   {
     id: 'box-madre-te-amo-ma',
     name: 'Box te amo má',
-    category: 'desayunos',
+    category: 'dia-de-la-madre',
     price: 35000,
     availableToday: true,
     limitedEdition: false,
