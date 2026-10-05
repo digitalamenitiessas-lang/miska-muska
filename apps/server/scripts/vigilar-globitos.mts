@@ -159,8 +159,40 @@ async function buscar(desde: string): Promise<Hallazgo[]> {
 const yaVisto = new Set<string>();
 let corte = DESDE;
 
+/*
+  UN HIPO DE RED NO PUEDE MATAR AL VIGILANTE, y lo mató: se cayó con un
+  `getaddrinfo ENOTFOUND` hacia Supabase y se quedó horas sin mirar nada. Lo
+  peor de un monitor caído es que su silencio se lee igual que "todo bien".
+
+  Así que los errores de consulta no tumban el ciclo: se cuentan, se avisa al
+  final, y recién si fallan muchas seguidas se da por vencido —ahí ya no es un
+  hipo, es que no hay red y conviene decirlo en vez de fingir que vigila—.
+*/
+let fallosSeguidos = 0;
+let fallosEnTotal = 0;
+const FALLOS_PARA_RENDIRSE = 6;
+
 while (Date.now() < HASTA) {
-  const hallazgos = (await buscar(corte)).filter((x) => {
+  let encontrados: Hallazgo[];
+  try {
+    encontrados = await buscar(corte);
+    fallosSeguidos = 0;
+  } catch (err) {
+    fallosSeguidos++;
+    fallosEnTotal++;
+    if (fallosSeguidos >= FALLOS_PARA_RENDIRSE) {
+      console.log(
+        `\n  ⚠ No pude consultar la base ${fallosSeguidos} veces seguidas. Dejo de vigilar.\n` +
+          `     ${(err as Error).message}\n`,
+      );
+      await closeDb();
+      process.exit(0);
+    }
+    await new Promise((r) => setTimeout(r, CADA_MS));
+    continue;
+  }
+
+  const hallazgos = encontrados.filter((x) => {
     const k = `${x.que}|${x.conv}|${x.h}`;
     if (yaVisto.has(k)) return false;
     yaVisto.add(k);
@@ -186,5 +218,13 @@ const total = await q<any>(
     AND content_kind='text' AND created_at > $1::timestamptz`,
   [DESDE],
 );
-console.log(`\n  Sin novedades. ${total[0].n} mensajes del bot revisados, nada raro.\n`);
+/*
+  Los fallos reintentados se dicen. Un "sin novedades" después de doce consultas
+  que no salieron no es lo mismo que uno después de doce que sí.
+*/
+console.log(
+  `\n  Sin novedades. ${total[0].n} mensajes del bot revisados, nada raro.` +
+    (fallosEnTotal ? ` (${fallosEnTotal} consulta(s) fallaron y se reintentaron.)` : '') +
+    '\n',
+);
 await closeDb();
