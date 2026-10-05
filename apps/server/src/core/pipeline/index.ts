@@ -49,6 +49,7 @@ import {
 } from '../policies/encargos.js';
 import { diceQueSigueEsperando, RESPUESTA_SIN_CONSULTA } from '../policies/consultas.js';
 import { motivoDeLaPromesa, prometeConsultar } from '../policies/promesas.js';
+import { juntarLosGlobitos } from '../policies/globitos.js';
 import {
   laCharlaEsDeBoxDeLaMadre,
   motivoDelBoxDeLaMadre,
@@ -2030,7 +2031,7 @@ export class Pipeline {
       return;
     }
 
-    await this.#send(conversationId, contents, {
+    await this.#send(conversationId, juntarLosGlobitos(contents), {
       author: 'bot',
       intent: turn.intent,
       handler: escalate || guardaEscalo ? 'escalate' : 'agent',

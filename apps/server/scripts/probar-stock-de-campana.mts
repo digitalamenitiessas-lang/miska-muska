@@ -45,18 +45,34 @@ const campania = (stockTotal: number, stockUsed: number) => ({
   ],
 });
 
+/*
+  Se mira SOLO el bloque de la campaña y no el contexto entero. La primera
+  versión buscaba "quedan" en todo el texto y saltaba con una línea de otra
+  sección que no tiene nada que ver —la de no pedir los datos del pedido de a
+  uno—. Una prueba que se enciende por otra cosa no prueba lo que dice.
+*/
+const soloLaCampania = (ctx: string): string => {
+  const i = ctx.indexOf('CAMPAÑA ACTIVA');
+  if (i < 0) return '';
+  const resto = ctx.slice(i);
+  const fin = resto.indexOf('\n\n');
+  return fin > 0 ? resto.slice(0, fin) : resto;
+};
+
 const contexto = (stockTotal: number, stockUsed: number) =>
-  buildDailyContext({
+  soloLaCampania(
+    buildDailyContext({
     settings: DEFAULT_SETTINGS,
     products: [],
     campaigns: [campania(stockTotal, stockUsed)],
     quickReplies: [],
     contact: null,
     outsideHours: false,
-    openOrders: [],
-    pendingReview: [],
-    courses: [],
-  } as never);
+      openOrders: [],
+      pendingReview: [],
+      courses: [],
+    } as never),
+  );
 
 console.log('\n  Con stock de sobra\n');
 
