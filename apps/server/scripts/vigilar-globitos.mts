@@ -56,22 +56,20 @@ async function buscar(desde: string): Promise<Hallazgo[]> {
   );
   for (const r of largos) out.push(linea(r, `MENSAJE LARGO (${r.text.length} car.)`));
 
-  const pegados = await q<any>(
-    `WITH s AS (
-       SELECT m.id, m.conversation_id, m.created_at, m.content_kind, m.text,
-              lag(m.created_at) OVER w ant, lag(m.content_kind) OVER w kind_ant
-         FROM messages m WHERE m.direction='out' AND m.author='bot'
-          AND m.created_at > $1::timestamptz
-        WINDOW w AS (PARTITION BY m.conversation_id ORDER BY m.created_at)
-     )
-     SELECT to_char(created_at AT TIME ZONE $2,'HH24:MI') h, conversation_id, text FROM s
-      WHERE ant IS NOT NULL AND created_at - ant < interval '120 seconds'
-        AND content_kind='text' AND kind_ant='text'
-        AND NOT EXISTS (SELECT 1 FROM messages i WHERE i.conversation_id=s.conversation_id
-                         AND i.direction='in' AND i.created_at > s.ant AND i.created_at < s.created_at)`,
-    [desde, TIMEZONE],
-  );
-  for (const r of pegados) out.push(linea(r, 'GLOBITO SUELTO (no se empalmó)'));
+  /*
+    NO SE BUSCAN GLOBITOS SUELTOS, aunque fue lo primero que puse. No se puede:
+    el empalme pasa ANTES de guardar, así que en la base ya no existe un turno
+    con dos globitos. Dos mensajes del bot seguidos son siempre dos turnos
+    distintos, y eso es otra cosa.
+
+    Lo vi en vivo: a las 09:03 una clienta mandó "Hola buenos días!" y veinte
+    segundos después "tendrían un box desayuno para ahora". El bot contestó el
+    primero y después el segundo. Dos mensajes, dos turnos, el empalme bien.
+    Buscarlo acá solo producía alarmas que no significan nada.
+
+    Que el bot conteste dos veces seguidas sí cuesta un mensaje de más ahora que
+    Meta cobra, pero es un tema aparte y no se arregla juntando globitos.
+  */
 
   /*
     El box con envío. Se pide que nombre el box Y que hable de llevarlo, y se
