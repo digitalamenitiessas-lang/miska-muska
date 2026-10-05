@@ -13,6 +13,7 @@
 */
 import { openDb, q, closeDb } from '../src/core/store/db.js';
 import { cobraLoQueNoHay } from '../src/core/policies/stock.js';
+import { hablaDelBoxDeLaMadre } from '../src/core/policies/diadelamadre.js';
 
 openDb({
   connectionString: process.env.DATABASE_URL!,
@@ -25,6 +26,23 @@ const apagados = (
 ).map((p) => ({ id: p.id, name: p.name, category: p.category }));
 
 console.log(`  ${apagados.length} productos apagados en el catálogo.\n`);
+
+/*
+  EL CASO DEL 5 DE OCTUBRE A LAS 11:21, que el primer arreglo no agarró.
+
+  La clienta preguntó el precio de los box. El bot mandó las dos fotos —con el
+  nombre del box en el rótulo— y después una burbuja de texto con el contenido
+  y el alias, SIN la palabra "box" en ninguna parte. Esa burbuja sola matchea
+  "Alfajor brownie" y no matchea la excepción, así que la guarda se la comió y
+  la clienta volvió a quedarse sin el precio.
+
+  Por eso el pipeline ahora mira el turno entero —rótulos de fotos incluidos— y
+  no una burbuja suelta. Esto prueba la burbuja huérfana: sigue dando positivo
+  mirada sola, que es lo correcto; lo que la salva es el contexto.
+*/
+const BURBUJA_HUERFANA = `Te cuento qué trae cada uno: brownie franui, pavlova de durazno, shot de suspiro limeño, 2 alfajores y jugo de naranja.
+
+Se abona por transferencia al alias miskapedidos.`;
 
 /* El texto tal cual lo escribió el local, que es lo que el bot repite. */
 const TEXTO_DE_AGUS = `Para el día de la madre tenemos dos opciones de box:
@@ -50,6 +68,13 @@ Se abona por transferencia al alias miskapedidos.`;
 const CASOS: Array<[string, string, boolean]> = [
   ['el texto del local, tal cual', TEXTO_DE_AGUS, false],
   ['la versión del bot con los alfajores', CON_ALFAJORES, false],
+  /*
+    Esta SÍ frena mirada sola, y está bien: sin el nombre del box, ese texto es
+    indistinguible de alguien cobrando alfajores. Lo que la salva es que el
+    turno nombra el box en el rótulo de la foto, y eso se chequea en el
+    pipeline, no acá.
+  */
+  ['la burbuja huérfana del 5/10, sola, frena', BURBUJA_HUERFANA, true],
 ];
 
 let mal = 0;
@@ -74,6 +99,20 @@ if (unoApagado) {
   if (!ok) mal++;
   console.log(`  ${ok ? '✓' : '✗'} sigue frenando si cobra "${unoApagado.name}" suelto`);
 }
+
+/*
+  Y la pieza que de verdad arregla el caso del 5/10: el turno entero. Se arma
+  como lo arma el pipeline —el rótulo de cada foto más el texto— y se verifica
+  que ahí sí se reconoce de qué se está hablando. Mirando solo la burbuja no
+  alcanza, y eso es lo que costó las dos clientas.
+*/
+const turnoCompleto = ['Box gracias por todo', 'Box te amo má', BURBUJA_HUERFANA].join('\n');
+const seReconoce = hablaDelBoxDeLaMadre(turnoCompleto);
+if (!seReconoce) mal++;
+console.log(`  ${seReconoce ? '✓' : '✗'} el turno entero, con el rótulo de la foto, SÍ se reconoce`);
+const solaNo = !hablaDelBoxDeLaMadre(BURBUJA_HUERFANA);
+if (!solaNo) mal++;
+console.log(`  ${solaNo ? '✓' : '✗'} y la burbuja sola, como se esperaba, no`);
 
 console.log(mal ? `\n  ${mal} fallaron.\n` : '\n  Pasa todo.\n');
 await closeDb();

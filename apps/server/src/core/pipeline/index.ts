@@ -51,6 +51,7 @@ import { diceQueSigueEsperando, RESPUESTA_SIN_CONSULTA } from '../policies/consu
 import { motivoDeLaPromesa, prometeConsultar } from '../policies/promesas.js';
 import { juntarLosGlobitos } from '../policies/globitos.js';
 import {
+  hablaDelBoxDeLaMadre,
   laCharlaEsDeBoxDeLaMadre,
   motivoDelBoxDeLaMadre,
 } from '../policies/diadelamadre.js';
@@ -1501,6 +1502,43 @@ export class Pipeline {
       const apagadosDeMostrador = products
         .filter((p) => !p.availableToday && !seEncargaConAnticipacion(p.category))
         .map((p) => ({ id: p.id, name: p.name }));
+
+      /*
+        SI LA CHARLA ES DE BOX DEL DÍA DE LA MADRE, ESTA GUARDA NO CORRE.
+
+        Ya se arregló una vez y no alcanzó. El 2 de octubre esto le borró el
+        precio a tres clientas: el contenido del box nombra "2 alfajores" y
+        "taza de cerámica", que en el catálogo son productos sueltos y
+        apagados, y la guarda creyó que los estaba vendiendo. El arreglo miraba
+        el texto del mensaje, y el 5 a las 11:21 volvió a pasar.
+
+        El agujero estaba en mirar UNA burbuja. Esa vez los box se nombraron en
+        los rótulos de las dos fotos, y la burbuja de texto traía solo el
+        contenido —"brownie franui… 2 alfajores… te paso el alias"— sin la
+        palabra "box" en ninguna parte. Matcheaba "Alfajor brownie" y no
+        matcheaba la excepción.
+
+        Ahora se mira el turno completo —rótulos de fotos incluidos— y lo que
+        preguntó la clienta. Es lo que define de qué se está hablando; una
+        burbuja suelta no.
+      */
+      const loQueDiceEsteTurno = contents
+        .map((c) => {
+          if (c.kind === 'text') return c.text;
+          /*
+            De una foto valen el epígrafe y el `alt`. El epígrafe casi siempre
+            va vacío —tres fotos con el nombre encima quedan horribles— y el
+            nombre del box vive en el `alt`, que es justamente lo que pasó acá:
+            "Box gracias por todo" estaba ahí y en ningún otro lado del turno.
+          */
+          if (c.kind === 'image') return `${c.caption ?? ''} ${c.alt ?? ''}`;
+          return '';
+        })
+        .join('\n');
+
+      const esCharlaDeBoxDeLaMadre =
+        hablaDelBoxDeLaMadre(loQueDiceEsteTurno) ||
+        laCharlaEsDeBoxDeLaMadre(history.slice(-6));
       /*
         TERMÓMETRO: nuestro cadete para algo que no es un desayuno.
 
@@ -1535,7 +1573,9 @@ export class Pipeline {
         );
       }
 
-      const cobrados = cobraLoQueNoHay(contenido.text, apagadosDeMostrador);
+      const cobrados = esCharlaDeBoxDeLaMadre
+        ? []
+        : cobraLoQueNoHay(contenido.text, apagadosDeMostrador);
       if (cobrados.length) {
         log(
           'warn',
