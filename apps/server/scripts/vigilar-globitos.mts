@@ -29,7 +29,6 @@ openDb({
 const DESDE = process.argv[2] ?? '2026-10-05 11:19:00+00';
 const HASTA = Date.now() + 8 * 60 * 60 * 1000;
 const CADA_MS = 10 * 60 * 1000;
-const LARGO_SOSPECHOSO = 1200;
 
 interface Hallazgo {
   que: string;
@@ -47,14 +46,51 @@ async function buscar(desde: string): Promise<Hallazgo[]> {
     texto: String(r.text ?? '').replace(/\s+/g, ' ').slice(0, 300),
   });
 
-  const largos = await q<any>(
-    `SELECT to_char(created_at AT TIME ZONE $2,'HH24:MI') h, conversation_id, text
-       FROM messages WHERE direction='out' AND author='bot' AND content_kind='text'
-        AND created_at > $1::timestamptz AND length(text) > ${LARGO_SOSPECHOSO}
-      ORDER BY created_at`,
-    [desde, TIMEZONE],
+  /*
+    EL LARGO SE MIRA COMO PROPORCIÓN, NO MENSAJE POR MENSAJE.
+
+    La primera versión avisaba por cada mensaje de más de 1.200 caracteres y
+    saltó con una lista de precios de 1.280. Fui a ver y el bot ya mandaba
+    listas así antes del cambio: 1.571 el 30/09, 1.203 el 03/10, 1.002 el 02/10.
+    La alarma no distinguía un empalme pasado de rosca de una carta de
+    productos.
+
+    Y hay algo peor: no PUEDE distinguirlo. El empalme corta en 1.500, así que
+    todo lo que pase de ahí lo escribió el modelo solo. Mirando un mensaje
+    suelto no se sabe de dónde salió su largo.
+
+    Lo que sí se puede medir es si la proporción de mensajes largos se movió. Si
+    antes uno de cada veinte pasaba los 800 y ahora pasa uno de cada cinco, el
+    empalme está apelmazando; si quedó igual, los largos son los de siempre.
+  */
+  const reparto = await q<any>(
+    `SELECT
+       count(*) FILTER (WHERE created_at > $1::timestamptz) AS n_desp,
+       count(*) FILTER (WHERE created_at > $1::timestamptz AND length(text) > 800) AS largos_desp,
+       count(*) FILTER (WHERE created_at <= $1::timestamptz) AS n_antes,
+       count(*) FILTER (WHERE created_at <= $1::timestamptz AND length(text) > 800) AS largos_antes
+     FROM messages
+      WHERE direction='out' AND author='bot' AND content_kind='text'
+        AND created_at > $1::timestamptz - interval '7 days'`,
+    [desde],
   );
-  for (const r of largos) out.push(linea(r, `MENSAJE LARGO (${r.text.length} car.)`));
+  const z = reparto[0];
+  const despues = Number(z.n_desp);
+  const antes = Number(z.n_antes);
+  if (despues >= 60 && antes >= 200) {
+    const pDesp = Number(z.largos_desp) / despues;
+    const pAntes = Number(z.largos_antes) / antes;
+    if (pDesp > Math.max(0.08, pAntes * 2)) {
+      out.push({
+        que: 'MÁS MENSAJES LARGOS QUE ANTES',
+        h: '—',
+        conv: `${despues} mensajes`,
+        texto:
+          `De más de 800 caracteres: antes ${(pAntes * 100).toFixed(1)}%, ` +
+          `ahora ${(pDesp * 100).toFixed(1)}%. El empalme estaría apelmazando.`,
+      });
+    }
+  }
 
   /*
     NO SE BUSCAN GLOBITOS SUELTOS, aunque fue lo primero que puse. No se puede:
