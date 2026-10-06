@@ -27,7 +27,8 @@ openDb({
 });
 
 const DESDE = process.argv[2] ?? '2026-10-05 11:19:00+00';
-const HASTA = Date.now() + 8 * 60 * 60 * 1000;
+const UNA_VEZ = process.argv.includes("--una-vez");
+const HASTA = UNA_VEZ ? 0 : Date.now() + 8 * 60 * 60 * 1000;
 const CADA_MS = 10 * 60 * 1000;
 
 interface Hallazgo {
@@ -172,7 +173,9 @@ let fallosSeguidos = 0;
 let fallosEnTotal = 0;
 const FALLOS_PARA_RENDIRSE = 6;
 
-while (Date.now() < HASTA) {
+let primera = true;
+while (primera || Date.now() < HASTA) {
+  primera = false;
   let encontrados: Hallazgo[];
   try {
     encontrados = await buscar(corte);
@@ -213,11 +216,22 @@ while (Date.now() < HASTA) {
   await new Promise((r) => setTimeout(r, CADA_MS));
 }
 
-const total = await q<any>(
-  `SELECT count(*) n FROM messages WHERE direction='out' AND author='bot'
-    AND content_kind='text' AND created_at > $1::timestamptz`,
-  [DESDE],
-);
+/*
+  EL CIERRE TAMBIÉN VA PROTEGIDO, y esto lo aprendí a los golpes dos veces en
+  el mismo día: blindé el bucle contra los cortes de red y me olvidé de esta
+  consulta. El vigilante terminó sus ocho horas limpio y se cayó acá, contando.
+  El resultado estaba —no hubo hallazgos— y lo perdí por el resumen.
+*/
+let total: any[] = [{ n: '?' }];
+try {
+  total = await q<any>(
+    `SELECT count(*) n FROM messages WHERE direction='out' AND author='bot'
+      AND content_kind='text' AND created_at > $1::timestamptz`,
+    [DESDE],
+  );
+} catch {
+  console.log('\n  (no pude contar los mensajes al cerrar, pero la vigilancia terminó sin hallazgos)');
+}
 /*
   Los fallos reintentados se dicen. Un "sin novedades" después de doce consultas
   que no salieron no es lo mismo que uno después de doce que sí.
