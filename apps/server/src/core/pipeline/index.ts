@@ -50,6 +50,7 @@ import {
 import { diceQueSigueEsperando, RESPUESTA_SIN_CONSULTA } from '../policies/consultas.js';
 import { motivoDeLaPromesa, prometeConsultar } from '../policies/promesas.js';
 import { juntarLosGlobitos } from '../policies/globitos.js';
+import { corregirElAlias } from '../policies/alias.js';
 import {
   hablaDelBoxDeLaMadre,
   laCharlaEsDeBoxDeLaMadre,
@@ -1355,6 +1356,44 @@ export class Pipeline {
       laCharlaEsDeBoxDeLaMadre(history.slice(-6));
     for (const contenido of contents) {
       if (contenido.kind !== 'text') continue;
+
+      /*
+        LA PLATA A LA CUENTA QUE CORRESPONDE.
+
+        Ver `core/policies/alias.ts`: el 7 de octubre, vendiendo un box del Día
+        de la Madre, el bot mandó el alias de los CURSOS —que es de otra
+        persona— y la clienta transfirió $35.000 ahí. En esa charla no se
+        nombró un curso ni una vez.
+
+        Va primero de todas las guardas de texto a propósito. Las que vienen
+        abajo reemplazan la burbuja entera cuando algo está mal; si el alias se
+        corrigiera después, se corregiría un texto que ya fue descartado.
+      */
+      const conElAlias = corregirElAlias(
+        contenido.text,
+        {
+          aliasPedidos: settings.transferAlias,
+          titularPedidos: settings.transferHolder,
+          aliasCursos: settings.transferAliasCursos,
+          titularCursos: settings.transferHolderCursos,
+        },
+        history
+          .slice(-8)
+          .map((m) => m.text ?? '')
+          .join(' '),
+      );
+      if (conElAlias.corregido) {
+        log(
+          'warn',
+          `ALIAS EQUIVOCADO (${conversationId}): mandaba ${conElAlias.corregido.mandaba}, ` +
+            `va ${conElAlias.corregido.corresponde}. Corregido.`,
+        );
+        contenido.text = conElAlias.texto;
+        alertaDeGuarda = true;
+        motivoGuarda =
+          '[alias] El bot iba a mandar el alias de CURSOS en una venta de pastelería y se lo ' +
+          'corregí al de pedidos. Fijate que la transferencia haya entrado en la cuenta buena.';
+      }
 
       /*
         SI YA LO DIJO HACE UN RATO, NO LO REPITE: SE LO PASA A UNA PERSONA.
