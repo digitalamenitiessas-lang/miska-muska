@@ -1580,9 +1580,21 @@ export class Pipeline {
         por la persona, paso el alias, pidió DNI y celular y cerró con el
         mensaje de "tu pedido fue tomado". Lo único que sobraba era esta guarda.
       */
+      /*
+        De qué se habla se decide con más historial que el resto de la guarda.
+        Ver `sinRedVelvetDeCookie`: cuatro mensajes atrás ella dijo "cookies de
+        red velvet" y en los dos últimos ya decía "las red velvet" a secas,
+        porque quien sigue una charla no repite el sustantivo.
+      */
+      const hayCookiesEnLaCharla = /\bcookies?\b/i.test(
+        history
+          .slice(-10)
+          .map((m) => m.text ?? '')
+          .join(' ') + contenido.text,
+      );
       const encargo = esCharlaDeBoxDeLaMadre
         ? null
-        : comprometeEncargo(contenido.text, hayHumano, contextoReciente);
+        : comprometeEncargo(contenido.text, hayHumano, contextoReciente, hayCookiesEnLaCharla);
       if (encargo) {
         log(
           'warn',

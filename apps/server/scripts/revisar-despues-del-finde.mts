@@ -71,14 +71,27 @@ async function buscar(): Promise<Hallazgo[]> {
     'CONFIRMACIÓN DE BOX OFRECIENDO UBER',
   );
 
-  /* El box antes de las 14: le contesta con el horario del local. */
+  /*
+    El box antes de las 14.
+
+    PIDE QUE SE NOMBRE EL BOX, no "día de la madre" a secas. Con la versión
+    ancha saltó esto, que está perfecto: "si lo querés para el domingo de Día
+    de la Madre, los desayunos ese día salen a partir de las 14:30 (el local
+    abre a las 14)". Es un DESAYUNO, no un box, y encima demuestra que el
+    arreglo del horario de los domingos funciona.
+
+    Y se exige que la hora aparezca cerca de un verbo de retiro: el bot nombra
+    horas todo el día por otros motivos.
+  */
   sumar(
     await q<any>(
       `SELECT to_char(created_at AT TIME ZONE $2,'DD/MM HH24:MI') h, conversation_id, text t
          FROM messages WHERE direction='out' AND author='bot' AND created_at > $1::timestamptz
-          AND (text ILIKE '%box%' OR text ILIKE '%día de la madre%')
+          AND (text ILIKE '%gracias por todo%' OR text ILIKE '%te amo m%')
+          AND (text ILIKE '%retir%' OR text ILIKE '%pasar a buscar%' OR text ILIKE '%buscarlo%')
           AND (text ILIKE '%desde las 8%' OR text ILIKE '%a las 9%' OR text ILIKE '%9 am%'
-               OR text ILIKE '%desde las 9%' OR text ILIKE '%a las 10%' OR text ILIKE '%10 am%')`,
+               OR text ILIKE '%desde las 9%' OR text ILIKE '%a las 10%' OR text ILIKE '%10 am%'
+               OR text ILIKE '%a las 11%' OR text ILIKE '%a las 12%' OR text ILIKE '%mediod%')`,
       [DESDE, TIMEZONE],
     ),
     'BOX RETIRABLE ANTES DE LAS 14',

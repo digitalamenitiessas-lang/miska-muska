@@ -72,8 +72,29 @@ const ES_ENCARGO = /\b(torta|tortas|chocotorta|tarta|tartas|red velvet|desayuno|
 const RED_VELVET = /\bred velvet\b/g;
 const HAY_COOKIES = /\bcookies?\b/;
 
-function sinRedVelvetDeCookie(plano: string): string {
-  return HAY_COOKIES.test(plano) ? plano.replace(RED_VELVET, ' ') : plano;
+/*
+  LA VENTANA TUVO QUE ENSANCHARSE, y esto es la corrección de mi propio
+  arreglo. La primera versión preguntaba "¿este texto dice cookie?" mirando el
+  mensaje y los dos anteriores, y el 13 de octubre a las 18:40 volvió a fallar:
+
+    18:39 ella  "quería saber si les quedan cookies de red velvet"
+    18:39 bot   "Sí, tenemos! 🍪 Cookie red velvet — $4.500"
+    18:40 ella  "si si, 2 de las red velvet"
+    18:40 ella  "para envío, puede ser?"
+    18:40 bot   [frenado] "ya chequeo en la agenda si tenemos disponibilidad"
+
+  La palabra "cookie" estaba, pero cuatro mensajes atrás. En los dos últimos
+  ella ya decía "las red velvet" a secas, porque de qué hablaban ya estaba
+  dicho. Quien sigue una charla no repite el sustantivo en cada frase.
+
+  Por eso de qué se habla se decide con una ventana más ancha que la que usa
+  el resto de la guarda. Las dos ventanas son distintas a propósito: la de
+  `ES_ENCARGO` se midió en dos mensajes y ensancharla frena ventas buenas; esta
+  solo decide si una palabra es ambigua, y equivocarse para este lado no frena
+  nada.
+*/
+function sinRedVelvetDeCookie(plano: string, hayCookiesEnLaCharla = false): string {
+  return hayCookiesEnLaCharla || HAY_COOKIES.test(plano) ? plano.replace(RED_VELVET, ' ') : plano;
 }
 
 /*
@@ -129,6 +150,11 @@ export function comprometeEncargo(
   texto: string,
   hayHumano: boolean,
   contexto = '',
+  /**
+   * ¿En esta charla se habló de cookies? Se calcula sobre una ventana más
+   * ancha que `contexto`: ver `sinRedVelvetDeCookie`.
+   */
+  hayCookiesEnLaCharla = false,
 ): EncargoSinPersona | null {
   if (hayHumano) return null;
 
@@ -148,7 +174,10 @@ export function comprometeEncargo(
   */
   const t = plano(texto).replace(MINI, ' ');
   const ctx = plano(contexto).replace(MINI, ' ');
-  if (!ES_ENCARGO.test(sinRedVelvetDeCookie(t)) && !ES_ENCARGO.test(sinRedVelvetDeCookie(ctx))) {
+  if (
+    !ES_ENCARGO.test(sinRedVelvetDeCookie(t, hayCookiesEnLaCharla)) &&
+    !ES_ENCARGO.test(sinRedVelvetDeCookie(ctx, hayCookiesEnLaCharla))
+  ) {
     return null;
   }
 

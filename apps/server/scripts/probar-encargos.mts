@@ -108,6 +108,54 @@ const total = [...porDia.values()].reduce((a, b) => a + b, 0);
 console.log(`\n  Corpus: ${msgs.length} mensajes del bot, 10 días. Frenaría:\n`);
 for (const [d, n] of [...porDia].sort()) console.log(`    ${d}   ${n}`);
 console.log(`\n  ${total} en 10 días · ${(total / 10).toFixed(1)} por día`);
+/*
+  "RED VELVET" ES UNA TORTA Y TAMBIÉN UNA COOKIE, y la charla del 13 de octubre
+  a las 18:40 muestra por qué no alcanza con mirar el mensaje y los dos
+  anteriores:
+
+    18:39 ella  "quería saber si les quedan cookies de red velvet"
+    18:39 bot   "Sí, tenemos! Cookie red velvet — $4.500"
+    18:40 ella  "si si, 2 de las red velvet"
+    18:40 ella  "para envío, puede ser?"
+
+  En los dos últimos mensajes la palabra "cookie" ya no está: quien sigue una
+  charla no repite el sustantivo. Por eso de qué se habla se decide con una
+  ventana más ancha, y por eso esta prueba usa el historial entero.
+*/
+console.log('\n  La charla de cookies del 13/10\n');
+
+const CHARLA_DE_COOKIES = [
+  'Buenas tardes, como estan?',
+  'Queria saber si les quedan cookies de red velvet',
+  'Hola! Bien, bien. Contame, que necesitas hoy?',
+  'Si, tenemos! Cookie red velvet — $4.500. Te gustaria encargar alguna?',
+  'Si si, 2 de las red velvet',
+  'Para envio, puede ser?',
+];
+const ctxCorto = CHARLA_DE_COOKIES.slice(-2).join(' ');
+const hayCookies = /\bcookies?\b/i.test(CHARLA_DE_COOKIES.slice(-10).join(' '));
+
+const vendeCookies = 'Dale! 2 cookies red velvet, $9.000. Te paso el alias: miskapedidos';
+const chequear = (nota: string, ok: boolean) => {
+  if (!ok) mal++;
+  console.log(`  ${ok ? "✓" : "✗"} ${nota}`);
+};
+chequear(
+  'la venta de cookies NO se frena, aunque "cookie" quedó cuatro mensajes atrás',
+  comprometeEncargo(vendeCookies, false, ctxCorto, hayCookies) === null,
+);
+chequear(
+  'y sin la ventana ancha sí se frenaba: es lo que se arregló',
+  comprometeEncargo(vendeCookies, false, ctxCorto, false) !== null,
+);
+
+const vendeTorta =
+  'Perfecto, la Torta Red Velvet de 20 porciones para el sabado. Te paso el alias: miskapedidos';
+chequear(
+  'una torta de verdad en la MISMA charla se sigue frenando',
+  comprometeEncargo(vendeTorta, false, ctxCorto, hayCookies) !== null,
+);
+
 console.log(mal ? `\n  ${mal} casos fallaron.\n` : '\n  Los casos pasan todos.\n');
 
 await closeDb();

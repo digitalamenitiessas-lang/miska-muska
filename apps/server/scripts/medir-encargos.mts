@@ -70,9 +70,12 @@ const dejaDeFrenar: any[] = [];
 const empiezaAFrenar: any[] = [];
 
 for (const m of msgs) {
-  const ctx = (contextos.get(m.c) ?? []).slice(-2).join(' ');
+  const lista = contextos.get(m.c) ?? [];
+  const ctx = lista.slice(-2).join(' ');
+  /* La ventana ancha, igual que la calcula el pipeline. */
+  const hayCookies = /\bcookies?\b/i.test(lista.slice(-10).join(' ') + m.text);
   const v = vieja(m.text, ctx);
-  const n = comprometeEncargo(m.text, false, ctx);
+  const n = comprometeEncargo(m.text, false, ctx, hayCookies);
   if (v) antes++;
   if (n) ahora++;
   if (v && !n) dejaDeFrenar.push({ ...m, ctx, motivo: v });
