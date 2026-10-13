@@ -30,6 +30,7 @@ import {
   operationalFacts,
   POLICY_PROSE,
   POLICY_PROSE_OCASIONAL,
+  horaDeApertura,
   seEncargaConAnticipacion,
   sePuedenTomarPedidos,
 } from '../policies/rules.js';
@@ -550,9 +551,15 @@ export function buildDailyContext(input: DailyContextInput): string {
         'preparado. El local: "hemos tenido un quilombo con los clientes".',
     );
   } else if (outsideHours) {
+    /*
+      La hora de apertura sale de `horaDeApertura` y no de `openHour` a secas,
+      porque el domingo abre a las 14. Decirle "abre 8:00" un domingo a las
+      diez de la mañana es darle un dato falso justo cuando lo va a repetir.
+    */
     parts.push(
-      `El local está cerrado en este momento (abre ${settings.openHour}:00). Podés seguir ` +
-        'atendiendo y tomando pedidos para más adelante, pero no prometas entregas inmediatas.',
+      `El local está cerrado en este momento (hoy abre ${horaDeApertura(settings)}:00). Podés ` +
+        'seguir atendiendo y tomando pedidos para más adelante, pero no prometas entregas ' +
+        'inmediatas ni digas que ya sale el pedido.',
     );
   }
 

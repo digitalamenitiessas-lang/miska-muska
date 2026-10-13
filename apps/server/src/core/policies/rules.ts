@@ -12,7 +12,7 @@
  * código, no solo en el prompt.
  */
 
-import { localHour, localMinutes, localToday } from '../store/db.js';
+import { localDiaDeLaSemana, localHour, localMinutes, localToday } from '../store/db.js';
 import type { BotSettings, CategoriaDeFabrica, Order, Product } from '../types/domain.js';
 
 export const POLICY_PROSE = `
@@ -1491,10 +1491,30 @@ DATOS OPERATIVOS (citalos exactos, no los inventes)
 `.trim();
 }
 
+/**
+ * A qué hora abre el local ese día.
+ *
+ * EL DOMINGO ABRE MÁS TARDE, y no saberlo costó un disgusto. El domingo 11 de
+ * octubre a las 10:10 una clienta mandó el comprobante y el bot contestó "ya
+ * salimos a entregárselo". El local abre a las 14 los domingos. A las 12:02 la
+ * clienta escribió "estoy en el local", a las 12:03 "de Marcos Paz", y el bot
+ * contestó "dale!". Había ido a un local cerrado.
+ *
+ * El dato estaba en los ajustes pero solo en prosa —"Domingos de 14:00 a
+ * 21:30" dentro del texto de horarios— mientras que el número que mira el
+ * código era uno solo para los siete días. Con `openHour` en 8, el domingo a
+ * las diez de la mañana el bot se creía abierto, y la regla que dice "no
+ * prometas entregas inmediatas" nunca llegó a activarse.
+ */
+export function horaDeApertura(settings: BotSettings, at = new Date()): number {
+  const esDomingo = localDiaDeLaSemana(at) === 0;
+  return esDomingo ? (settings.openHourDomingo ?? settings.openHour) : settings.openHour;
+}
+
 /** true si estamos fuera del horario del local (hora de Tucumán). */
 export function isOutsideBusinessHours(settings: BotSettings, at = new Date()): boolean {
   const hour = localHour(at);
-  return hour < settings.openHour || hour >= settings.closeHour;
+  return hour < horaDeApertura(settings, at) || hour >= settings.closeHour;
 }
 
 /** "21:30" → 1290. Devuelve null si el texto no es una hora. */

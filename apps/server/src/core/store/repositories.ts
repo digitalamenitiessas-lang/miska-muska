@@ -1969,6 +1969,7 @@ export const DEFAULT_SETTINGS: BotSettings = {
     'atendemos por el carrito de adelante, y también hacemos envíos en esa franja. ' +
     'Domingos de 14:00 a 21:30.',
   openHour: 8,
+  openHourDomingo: 14,
   closeHour: 22,
   // El local cierra 21:30. De ahi a las 8 el bot atiende pero no toma pedidos.
   // 08:30 y no 08:00: abren a las 8, pero hasta que las chicas entran y revisan

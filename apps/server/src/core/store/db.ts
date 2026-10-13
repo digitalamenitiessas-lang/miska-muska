@@ -289,3 +289,17 @@ export function dateOnly(value: unknown): string | null {
   }
   return String(value).slice(0, 10);
 }
+
+/**
+ * El día de la semana en Tucumán: 0 domingo, 1 lunes, … 6 sábado.
+ *
+ * Hace falta porque `getDay()` de JavaScript usa la zona de la máquina, y el
+ * servidor corre en UTC: un domingo a las 22 de Tucumán ya es lunes allá.
+ */
+export function localDiaDeLaSemana(at: Date = new Date()): number {
+  const nombre = new Intl.DateTimeFormat('en-GB', {
+    timeZone: TIMEZONE,
+    weekday: 'short',
+  }).format(at);
+  return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'].indexOf(nombre);
+}

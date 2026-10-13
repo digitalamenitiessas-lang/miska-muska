@@ -362,6 +362,8 @@ export interface BotSettings {
    * entregas inmediatas. No es lo que el bot cita: para eso está `scheduleText`.
    */
   openHour: number;
+  /** A qué hora abre los domingos, que es más tarde. Ver `horaDeApertura`. */
+  openHourDomingo?: number;
   closeHour: number;
   /**
    * La franja en la que el bot puede TOMAR pedidos, en HH:MM.
