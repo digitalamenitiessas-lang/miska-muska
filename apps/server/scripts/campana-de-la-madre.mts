@@ -25,8 +25,26 @@
 import { openDb, q, exec, closeDb } from '../src/core/store/db.js';
 import { createRepositories } from '../src/core/store/repositories.js';
 
+/*
+  SIN PRECIOS ACÁ, y me costó un día entenderlo.
+
+  La primera versión decía "el Box gracias por todo a $46.000 y el te amo má a
+  $35.000". El 13 de octubre a las 17:00 el local subió los precios a $49.000 y
+  $37.000 en el catálogo, y el bot siguió pasando los viejos: 20 mensajes con
+  $46.000 en las horas siguientes, mientras el catálogo y los SKU de esta misma
+  campaña ya decían otra cosa.
+
+  Lo más feo es que ese mismo día escribí, en el bloque de la ficha sobre el
+  precio promocional, que los precios no se repiten porque "el día que los
+  vuelva a tocar quedan dos números distintos y ninguna forma de saber cuál
+  manda". Tenía razón y ya me había pasado a mí mismo ocho días antes, en este
+  archivo, sin darme cuenta.
+
+  El precio sale del catálogo y de los SKU de la campaña. Acá va cómo se
+  presenta, que es lo que el catálogo no sabe.
+*/
 const PITCH =
-  'Dos opciones: el Box "gracias por todo" a $46.000 y el Box "te amo má" a $35.000. ' +
+  'Dos opciones de box, con el precio que diga el catálogo. ' +
   'Se abona el box completo por adelantado por transferencia y el pedido se toma recién ' +
   'con el comprobante y los cinco datos (nombre, apellido, DNI, celular y cuál box). ' +
   'Pedidos hasta el 14 de octubre; se retiran del local el sábado 17. El horario de retiro no ' +
@@ -58,9 +76,14 @@ await exec(
 
 /* Los SKU sí tienen API, pero se dejan armados para que no haya que tipearlos. */
 const previos = await repos.campaigns.skus(campana.id);
+/*
+  El precio y el stock se toman de lo que YA esta cargado y no se pisan: el
+  local los cambia desde el panel, que es su lugar. Esto solo asegura que las
+  dos cajas existan.
+*/
 const QUIERO = [
-  { name: 'Box gracias por todo', price: 46000, stockTotal: 300, sortOrder: 1 },
-  { name: 'Box te amo má', price: 35000, stockTotal: 150, sortOrder: 2 },
+  { name: 'Box gracias por todo', sortOrder: 1 },
+  { name: 'Box te amo má', sortOrder: 2 },
 ];
 
 for (const s of QUIERO) {
@@ -69,9 +92,15 @@ for (const s of QUIERO) {
     id: ya?.id,
     campaignId: campana.id,
     name: s.name,
-    price: s.price,
-    stockTotal: s.stockTotal,
-    // Lo ya vendido no se pisa nunca: ese número lo llevan ellos a mano.
+    /*
+      El precio y el stock se respetan tal como están. Los pone el local desde
+      el panel y correr este script no puede volverlos atrás: la primera
+      versión los traía escritos acá y, el día que subieron el precio, haberlo
+      corrido habría deshecho el cambio.
+    */
+    price: ya?.price ?? 0,
+    stockTotal: ya?.stockTotal ?? 0,
+    // Lo ya vendido tampoco se pisa: ese número lo llevan ellos a mano.
     stockUsed: ya?.stockUsed ?? 0,
     sortOrder: s.sortOrder,
   });
