@@ -113,12 +113,26 @@ async function buscar(): Promise<Hallazgo[]> {
     'DOMINGO A LA MAÑANA: PROMETIÓ ENTREGA CON EL LOCAL CERRADO',
   );
 
-  /* Cookies frenadas como si fueran torta. */
+  /*
+    Cookies frenadas como si fueran torta.
+
+    SE BUSCA QUE LA GUARDA HAYA ACTUADO, no la frase suelta. "Chequeo en la
+    agenda" también la escribe el bot por su cuenta y muchas veces con razón:
+    el 13 a las 16:09 una clienta preguntó si tendrían Box Popurrí durante la
+    semana para el sábado y el bot contestó que lo chequeaba. Eso está bien y
+    la guarda ni se enteró —el handler era 'agent'—, pero mi alarma lo marcó
+    igual y me hizo salir a buscar un bug que no existía.
+
+    Cuando la guarda SÍ actúa, reemplaza la burbuja por su texto enlatado y
+    deja el handler en 'escalate'. Esas dos cosas juntas no las produce nadie
+    más.
+  */
   sumar(
     await q<any>(
       `SELECT to_char(created_at AT TIME ZONE $2,'DD/MM HH24:MI') h, conversation_id, text t
          FROM messages m WHERE direction='out' AND author='bot' AND created_at > $1::timestamptz
-          AND text ILIKE '%chequeo en la agenda%'
+          AND handler = 'escalate'
+          AND text ILIKE 'Perfecto! Ya chequeo en la agenda%'
           AND EXISTS (SELECT 1 FROM messages x WHERE x.conversation_id=m.conversation_id
                        AND x.text ILIKE '%cookie%' AND x.created_at > $1::timestamptz)
           AND NOT EXISTS (SELECT 1 FROM messages y WHERE y.conversation_id=m.conversation_id
