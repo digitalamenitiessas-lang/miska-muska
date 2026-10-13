@@ -49,7 +49,36 @@ const ESTA_LISTO: RegExp[] = [
   /\bya (te )?(lo|la|los|las) (entregamos|entregue|entregaron|dimos)\b/,
   /\b(pedi|manda|mandalo|mandale|puede venir el|que venga el)\b[^.?!]{0,20}\buber\b/,
   /\bpodes (pasar|venir)\b[^.?!]{0,20}\b(a )?(retirar|buscar|buscarlo|retirarlo)\b/,
+  /*
+    "QUE SE ACERQUE AL LOCAL A RETIRAR EL PEDIDO", que es la plantilla que el
+    local manda cuando el pedido ya está en el mostrador. Faltaba, y el 13 de
+    octubre costó esto: una persona mandó la dirección y "que se acerque al
+    local con tu nombre y apellido a retirar el pedido", la clienta contestó
+    "Ok", y el bot le dijo "ya nos ponemos a armar tu pedido, puede demorar
+    unos minutos". Agus: "si nosotros ya le hemos mandado la dirección y que se
+    acerque al local es porque ya está listo".
+
+    Medido sobre 4.688 mensajes del local en veinte días: suma 167, y los 167
+    son avisos de que ya está. Es la forma más usada de todas —la guarda
+    agarraba 65 y pasa a 232—.
+  */
+  /\bse acerque\b[^.?!]{0,40}\b(a |para )?(retirar|buscar|retirarlo|buscarlo)\b/,
 ];
+
+/*
+  "PEDIR EL UBER" SE PROBÓ Y SE DESCARTÓ, y queda escrito para que no vuelva a
+  entrar con buena intención.
+
+  Suma 15 en veinte días y la mitad NO son avisos de listo: "no enviamos
+  tortas… o pedir un uber auto" es una explicación de las opciones, "tenés que
+  pedir uber envío o uber encargo" es una instrucción de cómo se hace, "si
+  pedís uber normal no se bajan" es una aclaración. Solo "ya podés pedir el
+  uber!" lo es de verdad, y esa ya la agarra el patrón de `ya (lo) podes
+  retirar`.
+
+  Con la mitad sucia, el precio de agregarla es callar al bot en charlas donde
+  todavía hay que contestar.
+*/
 
 /*
   Lo que usa las mismas palabras y NO es un "está listo". Cada línea salió de un

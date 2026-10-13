@@ -30,6 +30,15 @@ for (const t of [
   'ya lo entregamos amor muchas gracias!',
   'pedi otro uber y le entregamos',
   'Ya esta listo su pedido!',
+  /*
+    La plantilla que mas usa el local y que faltaba. El 13 de octubre mandaron
+    la direccion y esto, la clienta contesto "Ok", y el bot le dijo "ya nos
+    ponemos a armar tu pedido, puede demorar unos minutos".
+  */
+  'que se acerque al local *con tu nombre y apellido* a retirar el pedido porfi',
+  'Que se acerque por la ventanita a retirar el pedido de monica por favor',
+  'que se acerque a el local con tu nombre a buscar el pedido',
+  'que se acerque al local para retirar tu pedido adentro *con tu nombre*',
 ]) probar(t, diceQueEstaListo(t), true);
 
 console.log('\n=== lo que se le parece y NO lo es ===\n');
@@ -43,6 +52,18 @@ for (const t of [
   'cuando este listo te avisamos',
   'todavia no esta listo',
   'Si queres podes venir al local y comparar con las de 20 para que veas el tamaño',
+  /*
+    "Pedir el uber" se probó como señal de listo y se descartó: de 15 casos en
+    veinte días, la mitad son instrucciones de cómo se hace y no avisos de que
+    ya está. Queda acá para que no vuelva a entrar con buena intención.
+  */
+  'no enviamos tortas, podes retirar del local o pedir un uber auto',
+  'tenes que pedir uber envio o uber encargo',
+  'te recomiendo pedir uber envio o encargo porfi',
+  /* Y el "se acerque" nuevo tiene que respetar las mismas exclusiones. */
+  'apenas este listo que se acerque a retirar',
+  'mañana que se acerque al local a retirar el pedido',
+  'que se acerque al local a dejar el molde?',
 ]) probar(t, diceQueEstaListo(t), false);
 
 console.log('\n=== y sobre el historial: solo cuenta lo que escribió una PERSONA ===\n');
