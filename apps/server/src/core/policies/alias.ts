@@ -105,3 +105,65 @@ export function corregirElAlias(
 
   return { texto: salida, corregido: { mandaba: cursos, corresponde: pedidos } };
 }
+
+/*
+  EL BOT PIDIENDO EL ALIAS EN VEZ DE DARLO.
+
+  El 13 de octubre: "Se retira el sábado 17, sí! Pero el horario exacto te lo
+  paso cuando llegue el comprobante ✨ Dale, entonces pasame el alias para que
+  transfieras!". "Pasame el alias" lo dice la clienta, no nosotros.
+
+  Y el daño no es sonar raro: el bot NUNCA le pasó el alias. Esa venta se cerró
+  porque ella lo tenía de un mensaje anterior; sin eso se quedaba esperando a
+  que le mandáramos algo que, en la cabeza del bot, tenía que mandar ella.
+
+  Medido sobre 2.735 mensajes que nombran el alias en 30 días: 6 veces. Dos son
+  del mismo día, las dos en charlas de box, y aparecen pegadas a "te confirmo
+  el horario cuando llegue el comprobante" — la frase diferida parece arrastrar
+  al bot al otro lado del mostrador.
+
+  SE ARREGLA LA FRASE Y SE AGREGA EL ALIAS. Solo dar vuelta "pasame" por "te
+  paso" deja un mensaje bien escrito que igual no trae el dato, y la clienta
+  tiene que pedirlo otra vez. El alias va como bloque aparte al final y no
+  dentro de la frase: metido en el medio rompe el castellano —"te paso el alias
+  miskapedidos y la titular para que hagas la transferencia"— y un mensaje mal
+  escrito es peor que uno con una vuelta de más.
+
+  NO SE TOCA SI EL MENSAJE YA TRAE EL ALIAS. "Una vez que me lo pasas, te doy
+  el alias" y "me pasás por transferencia al alias miskapedidos" están bien
+  dichas, y las dos entraban como error hasta que se exigió que la palabra
+  "alias" fuera el objeto directo de "pasame".
+*/
+const PIDE_EL_ALIAS =
+  /\b(pasa(?:me|nos)|mand[áa]?(?:me|nos)|me pas[áa]s|nos pas[áa]s|envia(?:me|nos))\s+(el\s+)?alias\b/gi;
+
+/** ¿El mensaje ya trae un alias escrito? Entonces lo está dando. */
+const TRAE_UN_ALIAS = (texto: string, c: Cuentas): boolean =>
+  [c.aliasPedidos, c.aliasCursos]
+    .filter((a) => a?.trim())
+    .some((a) => new RegExp(a.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i').test(texto));
+
+export function corregirElAliasAlReves(
+  texto: string,
+  cuentas: Cuentas,
+  contexto = '',
+): { texto: string; corregido: boolean } {
+  PIDE_EL_ALIAS.lastIndex = 0;
+  if (!PIDE_EL_ALIAS.test(texto)) return { texto, corregido: false };
+  if (TRAE_UN_ALIAS(texto, cuentas)) return { texto, corregido: false };
+
+  const deCursos = hablaDeCursos(texto) || hablaDeCursos(contexto);
+  const alias = deCursos ? cuentas.aliasCursos : cuentas.aliasPedidos;
+  const titular = deCursos ? cuentas.titularCursos : cuentas.titularPedidos;
+  if (!alias?.trim()) return { texto, corregido: false };
+
+  const derecho = texto.replace(PIDE_EL_ALIAS, (m) =>
+    m[0] === m[0].toUpperCase() ? 'Te paso el alias' : 'te paso el alias',
+  );
+
+  const bloque = titular?.trim()
+    ? `\n\nAlias: ${alias.trim()}\nA nombre de: ${titular.trim()}`
+    : `\n\nAlias: ${alias.trim()}`;
+
+  return { texto: `${derecho.trimEnd()}${bloque}`, corregido: true };
+}

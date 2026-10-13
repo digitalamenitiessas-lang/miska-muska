@@ -50,7 +50,7 @@ import {
 import { diceQueSigueEsperando, RESPUESTA_SIN_CONSULTA } from '../policies/consultas.js';
 import { motivoDeLaPromesa, prometeConsultar } from '../policies/promesas.js';
 import { juntarLosGlobitos } from '../policies/globitos.js';
-import { corregirElAlias } from '../policies/alias.js';
+import { corregirElAlias, corregirElAliasAlReves } from '../policies/alias.js';
 import {
   hablaDelBoxDeLaMadre,
   laCharlaEsDeBoxDeLaMadre,
@@ -1393,6 +1393,39 @@ export class Pipeline {
         motivoGuarda =
           '[alias] El bot iba a mandar el alias de CURSOS en una venta de pastelería y se lo ' +
           'corregí al de pedidos. Fijate que la transferencia haya entrado en la cuenta buena.';
+      }
+
+      /*
+        EL OTRO ERROR CON EL ALIAS: PEDIRLO EN VEZ DE DARLO.
+
+        Ver `corregirElAliasAlReves`. Va pegado al de arriba porque son la misma
+        familia —la plata que no llega a donde tiene que llegar— y porque los
+        dos tienen que correr antes que las guardas que reemplazan la burbuja
+        entera.
+
+        Corre sobre el texto que ya salió del primero: si una charla tuviera los
+        dos problemas, el alias que se agrega acá es el que aquel dejó bien.
+      */
+      const alReves = corregirElAliasAlReves(
+        contenido.text,
+        {
+          aliasPedidos: settings.transferAlias,
+          titularPedidos: settings.transferHolder,
+          aliasCursos: settings.transferAliasCursos,
+          titularCursos: settings.transferHolderCursos,
+        },
+        history
+          .slice(-4)
+          .map((m) => m.text ?? '')
+          .join(' '),
+      );
+      if (alReves.corregido) {
+        log('warn', `PEDÍA EL ALIAS EN VEZ DE DARLO (${conversationId}). Corregido.`);
+        contenido.text = alReves.texto;
+        alertaDeGuarda = true;
+        motivoGuarda =
+          '[alias] El bot le pedía el alias a la clienta en vez de dárselo. Se lo corregí y le ' +
+          'agregué el alias, pero mirá que la charla no haya quedado trabada.';
       }
 
       /*
