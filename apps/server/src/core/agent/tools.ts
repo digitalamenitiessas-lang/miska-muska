@@ -163,6 +163,28 @@ export const TOOL_DEFINITIONS: ToolDefinition[] = [
       'Usala cuando de verdad no hace falta contestar: una reacción con un emoji sobre algo que ' +
       'escribiste, un "gracias" cuando la charla ya se cerró y ya le contestaste, un mensaje que no ' +
       'pide nada. ' +
+      /*
+        EL LOCAL LO PIDIÓ ASÍ: "que no responda si ya no hace falta para la
+        venta". Desde octubre cada mensaje que sale cuesta plata, y un "de
+        nada" al final de una charla cerrada no mueve nada.
+      */
+      'LA PREGUNTA ES SI LO QUE IBAS A DECIR HACE FALTA PARA LA VENTA. Si lo único que queda por ' +
+      'escribir es una cortesía —"de nada", "a vos", "un gusto", "que lo disfrutes"— y ya le ' +
+      'contestaste todo, no la escribas: llamá esta herramienta. ' +
+      /*
+        Y LA DISTINCIÓN QUE HAY QUE NO PERDER. Medido sobre 41.000 mensajes de
+        catorce días: de los mensajes cortos de la clienta, los "gracias" son
+        cierre, pero "ok", "dale", "listo", "sí" y "sisi" casi nunca lo son —son
+        el SÍ a algo que el bot acaba de preguntar—. Callar esos rompe la venta
+        en la mitad:
+          «Si»    → "para tomar el pedido necesito tu nombre y apellido"
+          «Dale»  → "cuando transfieras los $23.000 restantes…"
+          «Sisi»  → "¿con Uber o en el local?"
+          «Listo» → "recibido, ya nos ponemos a armar tu pedido"
+      */
+      'OJO CON LA DIFERENCIA: "gracias" cierra, pero "ok", "dale", "listo", "sí" y "sisi" casi ' +
+      'siempre son la respuesta a algo que VOS preguntaste. Si quedaba un paso —pedir un dato, ' +
+      'pasar el alias, confirmar cómo lo retira— eso se contesta, no se calla. ' +
       'NUNCA escribas una acotación explicando que no vas a contestar. Eso le llega al cliente: ya ' +
       'pasó, y una persona recibió el texto "(sin respuesta adicional, la conversación quedó ' +
       'cerrada con el agradecimiento)". Si no hay nada que decir, llamá esta herramienta y listo. ' +
