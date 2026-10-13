@@ -50,6 +50,33 @@ const MINI = /\bmini\s+[a-záéíóúñ]+/g;
 const ES_ENCARGO = /\b(torta|tortas|chocotorta|tarta|tartas|red velvet|desayuno|desayunos)\b/;
 
 /*
+  "RED VELVET" ES UNA TORTA Y TAMBIÉN UNA COOKIE, y esa colisión frenó ocho
+  ventas de mostrador en catorce días.
+
+  El caso del local: una clienta pidió "1 cookie red velvet, 2 dubai, 2
+  ferrero", el bot le pasó el total correcto y cuando ella dijo "te puedo
+  transferir", la guarda le contestó "ya chequeo en la agenda si tenemos
+  disponibilidad". Agus: "le ha contestado como cuando encargan una torta, en
+  vez de contestarle que sí porque eso sí lo teníamos".
+
+  La palabra está en la lista por la Torta Red Velvet, con razón. Pero cuando
+  el mensaje habla de cookies, "red velvet" deja de ser señal de encargo: la
+  cookie se vende del stock del día como cualquier otra.
+
+  NO SE SACA DE LA LISTA, se neutraliza solo en ese contexto. Si además hay una
+  torta de verdad, la palabra "torta" está en el mismo mensaje y la guarda corre
+  igual —incluido el caso que originó todo esto, "Ya queda anotada tu Torta Red
+  Velvet de 20 porciones"—. Medido: cambia 8 de 101 frenadas, y las 93 que
+  quedan nombran torta, tarta o desayuno por su cuenta.
+*/
+const RED_VELVET = /\bred velvet\b/g;
+const HAY_COOKIES = /\bcookies?\b/;
+
+function sinRedVelvetDeCookie(plano: string): string {
+  return HAY_COOKIES.test(plano) ? plano.replace(RED_VELVET, ' ') : plano;
+}
+
+/*
   EL BOT COMPROMETIÉNDOSE.
 
   Cada forma salió de un mensaje real. Lo que las une es que después de
@@ -121,7 +148,9 @@ export function comprometeEncargo(
   */
   const t = plano(texto).replace(MINI, ' ');
   const ctx = plano(contexto).replace(MINI, ' ');
-  if (!ES_ENCARGO.test(t) && !ES_ENCARGO.test(ctx)) return null;
+  if (!ES_ENCARGO.test(sinRedVelvetDeCookie(t)) && !ES_ENCARGO.test(sinRedVelvetDeCookie(ctx))) {
+    return null;
+  }
 
   const compromiso = SE_COMPROMETE.find((re) => re.test(t));
   if (compromiso) return { motivo: 'lo dio por anotado' };
