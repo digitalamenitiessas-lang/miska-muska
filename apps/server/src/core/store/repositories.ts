@@ -985,6 +985,41 @@ export function createRepositories() {
   };
 
   const orders = {
+    /**
+     * Pedidos que cargó el bot y que nadie miró.
+     *
+     * "Nadie los miró" es tres cosas a la vez, y las tres hacen falta: la
+     * charla no está marcada, nadie del local la apagó —si la apagó, la vio— y
+     * ninguna persona escribió desde que se cargó el pedido. Con la marca sola
+     * no alcanza: apagar un aviso desde el panel borra `attention_reason` y
+     * `attention_cleared_reason` juntos, así que una charla atendida queda
+     * idéntica a una que nunca avisó.
+     *
+     * La ventana de arriba evita volver sobre lo viejo cada cinco minutos: un
+     * pedido de hace dos horas que nadie miró ya no se arregla con un cartel.
+     */
+    async sinMirarDelBot(desdeMinutos: number, hastaMinutos: number): Promise<Order[]> {
+      const rows = await q(
+        `SELECT o.* FROM orders o
+           JOIN conversations c ON c.id = o.conversation_id
+          WHERE o.created_by = 'bot'
+            AND o.status <> 'cancelado'
+            AND o.created_at < now() - ($1 || ' minutes')::interval
+            AND o.created_at > now() - ($2 || ' minutes')::interval
+            AND c.needs_attention = false
+            AND c.attention_cleared_reason IS NULL
+            AND NOT EXISTS (
+              SELECT 1 FROM messages m
+               WHERE m.conversation_id = o.conversation_id
+                 AND m.direction = 'out' AND m.author = 'human'
+                 AND m.created_at > o.created_at
+            )
+          ORDER BY o.created_at`,
+        [String(desdeMinutos), String(hastaMinutos)],
+      );
+      return rows.map(toOrder);
+    },
+
     /*
       `paidAt` no entra: no es un dato que traiga quien crea el pedido, sale de
       que haya plata. Pedirlo obligaría a los cinco llamadores a mandar null.

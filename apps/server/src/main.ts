@@ -55,6 +55,15 @@ async function main(): Promise<void> {
   void pipeline.purgarAdjuntosViejos();
   setInterval(() => void pipeline.purgarAdjuntosViejos(), 24 * 60 * 60 * 1000).unref();
 
+  /*
+    Los pedidos que el bot cargó y que nadie miró. Ver
+    `avisarPedidosQueNadieMiro`: el aviso que ya existía se dispara con el
+    comprobante, así que el que paga en el local no avisa a nadie. Cada cinco
+    minutos, que con una ventana de quince da hasta tres oportunidades de
+    agarrarlo aunque un barrido falle.
+  */
+  setInterval(() => void pipeline.avisarPedidosQueNadieMiro(), 5 * 60 * 1000).unref();
+
   const health = await channels.healthAll();
   for (const entry of health) {
     bus.emit({ type: 'channel-status', channel: entry.channel, ok: entry.ok, detail: entry.detail });

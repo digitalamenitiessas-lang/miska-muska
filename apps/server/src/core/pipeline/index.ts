@@ -855,6 +855,59 @@ export class Pipeline {
    * porque el bot ya es el único proceso que toca esta base, y un archivo de más
    * en Postgres es el problema que primero se nota cuando la base es chica.
    */
+  /**
+   * UN PEDIDO QUE EL BOT CARGÓ Y QUE NADIE MIRÓ.
+   *
+   * Del local: "ayer había dos pedidos tomados que no decían atención ni
+   * derivado a humano". Es cierto y venía pasando parejo: medido sobre cuatro
+   * días, de unos 27 pedidos diarios que carga el bot queda uno sin que nadie
+   * se entere.
+   *
+   * El agujero tiene forma. El aviso que existe se dispara cuando llega un
+   * COMPROBANTE, así que cubre todo lo que se paga por transferencia. Lo que
+   * se escapa es el pedido que se paga en el local: ahí no hay comprobante
+   * nunca. El caso de ayer fue cuatro cookies por $20.000 —"están yendo a
+   * retirarlo", dijo ella— y nadie en la cocina lo supo.
+   *
+   * Por eso esto NO mira el comprobante ni el medio de pago: mira si alguien
+   * se enteró. Si pasaron quince minutos, la charla no está marcada y ninguna
+   * persona del local escribió desde que se cargó, se enciende el cartel.
+   *
+   * QUINCE MINUTOS, y no al instante, porque el circuito normal tarda: el bot
+   * carga el pedido, llega el comprobante un minuto después y ahí salta el
+   * aviso de siempre. Avisar en el acto duplicaría todos esos. Y no más,
+   * porque un pedido para retirar "ahora" que nadie vio a los quince minutos
+   * ya es tarde.
+   *
+   * Barrido y no temporizador: un setTimeout por pedido se pierde con cada
+   * reinicio, y los reinicios son justo cuando conviene no perder nada.
+   */
+  async avisarPedidosQueNadieMiro(): Promise<void> {
+    try {
+      const huerfanos = await this.#repos.orders.sinMirarDelBot(15, 120);
+      for (const o of huerfanos) {
+        // Un pedido sin charla no tiene dónde encender el cartel.
+        if (!o.conversationId) continue;
+        const conversationId = o.conversationId;
+        const actual = await this.#repos.conversations.get(conversationId);
+        // Entre la consulta y esto pudo aparecer una marca: no se pisa.
+        if (!actual || actual.needsAttention) continue;
+
+        const motivo =
+          `[pedido sin mirar] El bot cargó el pedido #${o.number} hace un rato y nadie lo vio. ` +
+          `Son $${o.total.toLocaleString('es-AR')}. Fijate si hay que prepararlo: estos son los ` +
+          'que se pagan en el local, así que no llega ningún comprobante que avise.';
+        await this.#repos.conversations.setAttention(conversationId, true, motivo);
+        const refrescada = await this.#repos.conversations.get(conversationId);
+        if (refrescada) bus.emit({ type: 'conversation', conversation: refrescada });
+        log('warn', `PEDIDO SIN MIRAR (${conversationId}): #${o.number}, $${o.total}`);
+      }
+    } catch (err) {
+      // Que falle el barrido no puede tumbar nada: corre de nuevo en cinco minutos.
+      log('error', 'No pude revisar los pedidos sin mirar', err);
+    }
+  }
+
   async purgarAdjuntosViejos(): Promise<void> {
     try {
       const borrados = await this.#repos.media.purgarAdjuntosViejos(config.mediaRetencionDias);
