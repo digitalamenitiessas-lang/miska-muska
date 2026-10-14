@@ -1753,6 +1753,54 @@ table.grid tbody tr:hover {
   .gastometro-mes { display: none; }
 }
 
+/*
+  El crédito de OpenRouter. Comparte la forma del gastómetro, pero no el tono:
+  el gasto es un dato de fondo y esto es un vencimiento. Cuando el saldo llega
+  a cero el bot no se degrada, se calla.
+
+  En verde no hay nada que hacer y se lee como el resto de la barra. Los otros
+  dos estados aparecen solos cuando falta poco, que es cuando conviene que
+  salten a la vista: a menos de una semana se tiñe, y a menos de tres días
+  —que es lo que tarda una transferencia si cae un finde— se pone en rojo.
+
+  El `.credito-urgente` no parpadea a propósito. Un cartel que se mueve se
+  tapa con una pestaña; uno que está siempre ahí, en rojo, se termina pagando.
+*/
+.credito-atento {
+  border-color: #e8d6a8;
+  background: var(--warn-soft);
+}
+
+.credito-atento .gastometro-valor,
+.credito-atento .gastometro-mes {
+  color: #8a6410;
+}
+
+.credito-urgente {
+  border-color: var(--rose-deep);
+  background: var(--rose-wash);
+}
+
+.credito-urgente .gastometro-label,
+.credito-urgente .gastometro-valor,
+.credito-urgente .gastometro-mes {
+  color: var(--danger);
+}
+
+.credito-urgente .gastometro-valor {
+  font-weight: 600;
+}
+
+/*
+  En angosto el gastómetro esconde etiqueta y detalle, pero acá los días son
+  justamente lo que hay que ver: sin ellos queda un número suelto que no dice
+  si falta mucho o poco. Se mantiene el detalle cuando la cosa está apretada.
+*/
+@media (max-width: 860px) {
+  .credito-atento .gastometro-mes,
+  .credito-urgente .gastometro-mes { display: inline; }
+}
+
 /* -------------------------------------------------------------- carta --- */
 
 /* La miniatura de la carta. Alta y angosta, como el flyer real. */

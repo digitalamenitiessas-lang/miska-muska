@@ -460,6 +460,25 @@ export interface BotSettings {
    */
   cobroDesde: string;
   /**
+   * Hasta cuándo cuenta, cuando el período ya está cerrado.
+   *
+   * Vacío —que es lo normal— significa que el contador sigue corriendo hasta
+   * ahora. Con fecha, el contador queda CONGELADO: suma lo que pasó entre
+   * `cobroDesde` y este instante, y lo de después no es nuestro.
+   *
+   * Existe por el 14 de octubre de 2026, cuando la API key de OpenRouter pasó
+   * a administrarla el local. Desde ese momento el consumo del modelo lo paga
+   * la cuenta de ellos y ya no hay nada que cobrarles, pero lo de ANTES sí: lo
+   * que se adeudaba tiene que quedar quieto y visible, no seguir engordando
+   * con turnos que ya no pagamos nosotros.
+   *
+   * Mover `cobroDesde` no alcanzaba: eso arranca un período nuevo y borra la
+   * deuda vieja. Son dos cosas distintas —cerrar un período para cobrarlo, y
+   * dejar de contar para siempre— y mezclarlas perdía plata en una o la
+   * inventaba en la otra.
+   */
+  cobroHasta: string;
+  /**
    * La cuenta de WhatsApp Business, para consultarle a Meta los cargos.
    *
    * No se configura: el pipeline lo guarda solo la primera vez que entra un

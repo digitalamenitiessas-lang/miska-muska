@@ -167,6 +167,25 @@ export function Ajustes({
               se sigue contando. Y al revés: si pasa un mes sin facturar, lo del mes anterior
               se sigue sumando, que es lo correcto. Vacío = cuenta el mes corriente.
             </p>
+
+            <label className="label" style={{ marginTop: 10 }}>
+              Y dejar de contar el
+            </label>
+            <input
+              type="datetime-local"
+              value={paraElInput(draft.cobroHasta)}
+              onChange={(e) =>
+                set('cobroHasta', e.target.value ? new Date(e.target.value).toISOString() : '')
+              }
+            />
+            <p className="small muted" style={{ margin: '3px 0 0' }}>
+              Normalmente va vacío y el contador sigue corriendo. Con fecha queda congelado ahí:
+              se cobra lo de antes y lo de después no se cuenta nunca más. Se usó el 14/10/2026,
+              cuando la API key del modelo pasó a administrarla el local y lo que consume el bot
+              dejó de ser deuda nuestra. <strong>No es lo mismo que mover la fecha de arriba:</strong>{' '}
+              aquello arranca un período nuevo y borra lo que se debía; esto lo deja quieto y
+              a la vista.
+            </p>
           </div>
         </section>
 

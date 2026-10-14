@@ -284,6 +284,15 @@ export interface Settings {
    * un mes sin cobrar, lo anterior se sigue sumando. Vacío = el mes corriente.
    */
   cobroDesde: string;
+  /**
+   * Hasta cuándo cuenta, cuando el período ya está cerrado para siempre.
+   *
+   * Vacío —lo normal— es que el contador sigue corriendo. Con fecha queda
+   * congelado ahí: existe desde que la API key de OpenRouter la administra el
+   * local y lo que consume el bot dejó de ser deuda nuestra. Es distinto de
+   * mover `cobroDesde`, que arranca un período nuevo y borra lo que se debía.
+   */
+  cobroHasta: string;
 }
 
 export interface ChannelHealth {
@@ -377,10 +386,32 @@ export interface CostoWhatsapp {
 export interface Facturacion {
   /** ISO del arranque del período. */
   desde: string;
+  /** ISO del cierre, cuando el período está congelado. Vacío si sigue corriendo. */
+  hasta: string;
+  /**
+   * true si el contador está detenido: lo consumido después de `hasta` no se
+   * cobra. Desde que la key de OpenRouter la paga el local, lo que gasta el
+   * bot ya no es deuda, pero lo de antes tiene que quedar quieto y visible.
+   */
+  congelado: boolean;
   costoUsd: number;
   turnos: number;
   /** true si no hay ningún cobro registrado y por eso cuenta el mes corriente. */
   arrancoElMes: boolean;
+}
+
+/**
+ * El crédito que le queda a la cuenta de OpenRouter, en dólares.
+ *
+ * `null` desde la API cuando no se puede saber —sin key, OpenRouter caído, la
+ * consulta demorada—. NULL NO ES CERO: el panel no dibuja nada en ese caso,
+ * porque "quedan $0" por una consulta fallida manda a cargar plata que ya está
+ * cargada, y acostumbra a ignorar el cartel.
+ */
+export interface CreditoOpenRouter {
+  cargado: number;
+  usado: number;
+  restante: number;
 }
 
 export interface ConversationDetail {
@@ -576,6 +607,8 @@ export const api = {
   gasto: () => get<Gasto>('/api/gasto'),
   facturacion: () => get<Facturacion>('/api/facturacion'),
   costoWhatsapp: () => get<CostoWhatsapp>('/api/whatsapp/costo'),
+  /** El saldo de OpenRouter. Se pide en cada pantalla, igual que el gasto. */
+  creditoOpenRouter: () => get<{ credito: CreditoOpenRouter | null }>('/api/openrouter/credito'),
 
   /** Avisos al celular. La clave es pública: viaja en el JS del panel. */
   claveDeAvisos: () => get<{ clave: string }>('/api/push/clave'),

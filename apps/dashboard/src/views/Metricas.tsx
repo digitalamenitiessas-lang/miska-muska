@@ -550,34 +550,56 @@ function niceTicks(max: number, count: number): number[] {
  * en un número solo fue lo que hizo falta aclarar cuando se cobró la primera vez.
  */
 function ParaCobrar({ cobro }: { cobro: Facturacion }) {
+  const fecha = (iso: string) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime())
+      ? '—'
+      : d.toLocaleString('es-AR', {
+          day: 'numeric',
+          month: 'long',
+          hour: '2-digit',
+          minute: '2-digit',
+        });
+  };
+
   const desde = new Date(cobro.desde);
-  const dias = Math.max(1, Math.ceil((Date.now() - desde.getTime()) / 86_400_000));
-  const cuando = Number.isNaN(desde.getTime())
-    ? '—'
-    : desde.toLocaleString('es-AR', {
-        day: 'numeric',
-        month: 'long',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
+  /*
+    Con el período congelado los días son los del período, no los que pasaron
+    hasta hoy: si no, el cartel diría "USD 223 en 40 días" y mañana "en 41",
+    como si el número siguiera creciendo. Justamente dejó de crecer.
+  */
+  const corte = cobro.congelado ? new Date(cobro.hasta).getTime() : Date.now();
+  const dias = Math.max(1, Math.ceil((corte - desde.getTime()) / 86_400_000));
+
   return (
     <section className="card" style={{ marginBottom: 14 }}>
       <div className="card-pad">
-        <h3 className="card-title">Para cobrar</h3>
+        <h3 className="card-title">Para cobrar{cobro.congelado ? ' · cerrado' : ''}</h3>
         <div className="row wrap" style={{ alignItems: 'baseline', gap: 10 }}>
           <span style={{ fontSize: 30, fontWeight: 700, letterSpacing: '-0.02em' }}>
             {usd(cobro.costoUsd)}
           </span>
           <span className="small muted">
-            consumo del modelo desde el {cuando} · {cobro.turnos.toLocaleString('es-AR')} turnos ·{' '}
-            {dias} {dias === 1 ? 'día' : 'días'}
+            consumo del modelo desde el {fecha(cobro.desde)}
+            {cobro.congelado ? ` hasta el ${fecha(cobro.hasta)}` : ''} ·{' '}
+            {cobro.turnos.toLocaleString('es-AR')} turnos · {dias} {dias === 1 ? 'día' : 'días'}
           </span>
         </div>
         <p className="small muted" style={{ margin: '6px 0 0' }}>
-          {cobro.arrancoElMes
-            ? 'Cuenta el mes corriente porque todavía no se registró ningún cobro.'
-            : 'Cuenta desde el último cobro, no desde el 1°: si pasa un mes sin facturar, lo ' +
-              'de antes se sigue sumando. Para arrancar de cero, movés la fecha en Ajustes.'}
+          {cobro.congelado
+            ? /*
+                CONGELADO NO ES CERO NI ES UN BUG. El número queda quieto a
+                propósito y hay que decir por qué, o la primera pregunta va a
+                ser por qué el contador no se mueve más.
+              */
+              'Este número está congelado: desde el corte, la API key del modelo la administra ' +
+              'el local y lo que consume el bot ya no se cobra acá. Lo de antes queda a la ' +
+              'vista hasta que se cobre. Para volver a contar, borrás la fecha de cierre en ' +
+              'Ajustes.'
+            : cobro.arrancoElMes
+              ? 'Cuenta el mes corriente porque todavía no se registró ningún cobro.'
+              : 'Cuenta desde el último cobro, no desde el 1°: si pasa un mes sin facturar, lo ' +
+                'de antes se sigue sumando. Para arrancar de cero, movés la fecha en Ajustes.'}
         </p>
       </div>
     </section>

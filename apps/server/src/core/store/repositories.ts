@@ -1863,13 +1863,26 @@ export function createRepositories() {
      * Los cortes van en la hora de Tucumán, por lo mismo que `gasto()`: a las
      * 22 de acá ya es mañana en UTC, y la noche es cuando más escriben.
      */
-    async facturacion(cobroDesde: string): Promise<{
+    async facturacion(
+      cobroDesde: string,
+      cobroHasta = '',
+    ): Promise<{
       desde: string;
+      hasta: string;
+      congelado: boolean;
       costoUsd: number;
       turnos: number;
       arrancoElMes: boolean;
     }> {
       const corte = cobroDesde.trim() || null;
+      /*
+        EL TECHO DEL PERÍODO. Vacío es lo normal: se suma hasta ahora y el
+        número crece solo. Con fecha, el período está cerrado y lo de después
+        no se cuenta nunca más. Ver `cobroHasta` en el tipo: desde que la key
+        de OpenRouter la paga el local, lo que gasta el bot ya no es deuda, y
+        sin este techo el panel seguiría sumándolo.
+      */
+      const techo = cobroHasta.trim() || null;
       const row = await one(
         `WITH periodo AS (
            /*
@@ -1901,12 +1914,21 @@ export function createRepositories() {
                 COUNT(t.*) AS turnos,
                 $2::timestamptz IS NULL AS arranco_el_mes
          FROM periodo p
-         LEFT JOIN model_turns t ON t.created_at >= p.desde
+         /*
+           El techo va en el JOIN y no en un WHERE: con WHERE, un período sin
+           un solo turno adentro se queda sin filas y el panel no muestra cero,
+           muestra nada.
+         */
+         LEFT JOIN model_turns t
+                ON t.created_at >= p.desde
+               AND ($3::timestamptz IS NULL OR t.created_at < $3::timestamptz)
          GROUP BY p.desde`,
-        [TIMEZONE, corte],
+        [TIMEZONE, corte, techo],
       );
       return {
         desde: row?.desde ? new Date(row.desde as string).toISOString() : '',
+        hasta: techo ? new Date(techo).toISOString() : '',
+        congelado: techo !== null,
         costoUsd: Number(row?.costo ?? 0),
         turnos: Number(row?.turnos ?? 0),
         arrancoElMes: Boolean(row?.arranco_el_mes),
@@ -2060,6 +2082,8 @@ que sepas qué manejamos y puedas contestar, no para ofrecerla como envío.
 `.trim(),
   // Vacío = cuenta el mes corriente. Ver `cobroDesde` en el tipo.
   cobroDesde: '',
+  // Vacío = el contador sigue corriendo. Con fecha queda congelado ahí.
+  cobroHasta: '',
   // Lo descubre el pipeline con el primer webhook. Ver el tipo.
   whatsappAccountId: '',
 };

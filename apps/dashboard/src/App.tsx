@@ -8,6 +8,7 @@ import {
   ultimaActividad,
   type ChannelHealth,
   type Conversation,
+  type CreditoOpenRouter,
   type Gasto,
   type LiveEvent,
   type Settings,
@@ -80,6 +81,12 @@ export default function App() {
   const [channels, setChannels] = useState<ChannelHealth[]>([]);
   const [connected, setConnected] = useState(false);
   const [gasto, setGasto] = useState<Gasto | null>(null);
+  /*
+    El saldo de OpenRouter. Desde el 14/10/2026 la key la paga el local, así que
+    el día que llegue a cero el bot se calla: el número va en la barra de arriba
+    y no adentro de la cuenta de OpenRouter, que nadie abre.
+  */
+  const [credito, setCredito] = useState<CreditoOpenRouter | null>(null);
   const [authError, setAuthError] = useState(false);
   /** Se incrementa con cada evento del servidor: las vistas lo usan para refrescar. */
   const [tick, setTick] = useState(0);
@@ -168,7 +175,7 @@ export default function App() {
 
   const loadShell = useCallback(async () => {
     try {
-      const [convs, cfg, gastado] = await Promise.all([
+      const [convs, cfg, gastado, saldo] = await Promise.all([
         api.conversations(),
         api.settings(),
         /*
@@ -176,11 +183,18 @@ export default function App() {
           arriba se queda sin el número y todo lo demás sigue andando.
         */
         api.gasto().catch(() => null),
+        api.creditoOpenRouter().catch(() => null),
       ]);
       setConversations(convs);
       setSettings(cfg.settings);
       setChannels(cfg.channels);
       if (gastado) setGasto(gastado);
+      /*
+        Solo se pisa cuando vino un número. Con `setCredito(saldo?.credito ?? null)`
+        un error de red borraría el saldo de la pantalla; el de hace un rato sigue
+        siendo mejor que nada.
+      */
+      if (saldo?.credito) setCredito(saldo.credito);
       refrescarResumen();
       setAuthError(false);
     } catch (err) {
@@ -463,6 +477,9 @@ export default function App() {
           ) : null}
           {settings && !settings.botEnabled ? <Pill tone="warn">bot apagado</Pill> : null}
           {gasto ? <Gastometro gasto={gasto} onVerMas={() => setView('metricas')} /> : null}
+          {credito ? (
+            <Credito credito={credito} gasto={gasto} onVerMas={() => setView('metricas')} />
+          ) : null}
         </header>
 
         {view === 'bandeja' ? (
@@ -551,6 +568,73 @@ function Gastometro({ gasto, onVerMas }: { gasto: Gasto; onVerMas: () => void })
       <span className="gastometro-label">Modelo hoy</span>
       <span className="gastometro-valor">{plata(gasto.hoy)}</span>
       <span className="gastometro-mes">{detalleMes}</span>
+    </button>
+  );
+}
+
+/**
+ * El crédito que le queda a la cuenta de OpenRouter.
+ *
+ * POR QUÉ ESTÁ EN LA BARRA Y NO EN MÉTRICAS: desde el 14 de octubre de 2026 la
+ * API key la administra el local. Cuando el saldo llegue a cero el bot deja de
+ * contestar —no se degrada, se calla— y eso un sábado a la mañana es el peor
+ * día posible. El número tiene que estar delante de quien puede cargar plata,
+ * todo el tiempo, sin que nadie entre a la cuenta de OpenRouter a mirarlo.
+ *
+ * A diferencia del gastómetro, este SÍ grita cuando corresponde: el gasto es
+ * un dato de fondo, pero quedarse sin crédito apaga el bot.
+ */
+function Credito({
+  credito,
+  gasto,
+  onVerMas,
+}: {
+  credito: CreditoOpenRouter;
+  gasto: Gasto | null;
+  onVerMas: () => void;
+}) {
+  /*
+    CUÁNTOS DÍAS AGUANTA, que es la pregunta real: "quedan USD 50" no le dice
+    a nadie si hay que cargar hoy o la semana que viene.
+
+    El promedio sale del mes dividido los días corridos, y no del gasto de hoy:
+    a las nueve de la mañana "hoy" es casi cero y el cálculo diría que alcanza
+    para meses. Es un promedio del bot, no de la key, así que sigue valiendo
+    aunque la cuenta que paga haya cambiado: lo que consume el bot es lo mismo.
+  */
+  const diaDelMes = new Date().getDate();
+  const porDia = gasto && gasto.mes > 0 ? gasto.mes / diaDelMes : 0;
+  const dias = porDia > 0 ? credito.restante / porDia : null;
+
+  /*
+    Tres días es el umbral, y no es un número redondo elegido al azar: cargar
+    crédito es una transferencia que alguien tiene que hacer en horario, y un
+    fin de semana largo entra entero adentro de tres días.
+  */
+  const urgente = dias !== null && dias < 3;
+  const atento = dias !== null && dias < 7;
+
+  const plata = (n: number) => `$${n.toFixed(2)}`;
+  const cuantosDias =
+    dias === null
+      ? null
+      : dias < 1
+        ? 'menos de un día'
+        : `~${Math.floor(dias)} ${Math.floor(dias) === 1 ? 'día' : 'días'}`;
+
+  return (
+    <button
+      className={`gastometro credito${urgente ? ' credito-urgente' : atento ? ' credito-atento' : ''}`}
+      onClick={onVerMas}
+      title={
+        `Crédito de OpenRouter: quedan ${plata(credito.restante)} de ${plata(credito.cargado)} cargados.` +
+        (cuantosDias ? `\nAl ritmo de este mes, alcanza para ${cuantosDias}.` : '') +
+        '\nCuando llega a cero el bot deja de contestar. Se carga desde la cuenta de OpenRouter.'
+      }
+    >
+      <span className="gastometro-label">Crédito</span>
+      <span className="gastometro-valor">{plata(credito.restante)}</span>
+      {cuantosDias ? <span className="gastometro-mes">{cuantosDias}</span> : null}
     </button>
   );
 }

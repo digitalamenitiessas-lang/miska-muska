@@ -10,6 +10,7 @@ import { config } from '../config.js';
 import { costoDeWhatsapp } from '../channels/whatsapp/costos.js';
 import { matchQuickReplies } from '../core/pipeline/router.js';
 import { renderQuickReply } from '../core/agent/persona.js';
+import { creditoDeOpenRouter } from '../core/agent/credito.js';
 import { canonizarCategoria } from '../core/policies/rules.js';
 import type { ConversationMode, OrderStatus, Product, ProductCategory } from '../core/types/domain.js';
 import type { ChannelId } from '../core/types/message.js';
@@ -764,9 +765,21 @@ export async function registerManagementRoutes(app: FastifyInstance, deps: ApiDe
   });
 
   app.get('/api/facturacion', async () => {
-    const { cobroDesde } = await repos.settings.read();
-    return repos.metrics.facturacion(cobroDesde);
+    const { cobroDesde, cobroHasta } = await repos.settings.read();
+    return repos.metrics.facturacion(cobroDesde, cobroHasta);
   });
+
+  /*
+    El crédito que le queda a la cuenta de OpenRouter. Va en la barra de arriba
+    porque desde el 14 de octubre de 2026 la key la administra el local: el día
+    que el saldo llegue a cero el bot se calla, y el número tiene que estar
+    delante de quien puede cargarle plata, no adentro de la cuenta de
+    OpenRouter.
+
+    Devuelve `{ credito: null }` cuando no se puede saber, y el panel no dibuja
+    nada. Ver `creditoDeOpenRouter`: null no es cero.
+  */
+  app.get('/api/openrouter/credito', async () => ({ credito: await creditoDeOpenRouter() }));
 
   // --- Avisos al celular ---------------------------------------------------
 
