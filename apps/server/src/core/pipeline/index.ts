@@ -1490,10 +1490,44 @@ export class Pipeline {
         incluido el alias. Esta guarda es el segundo paso y nada más: no impide
         preguntar ni mostrar la carta, impide COMPROMETER y impide pedir plata.
 
-        Se apaga si una persona del local ya habló en la charla: ahí la torta
-        está autorizada y discutirle a una empleada es peor que no tener guarda.
+        Se apaga si una persona del local habló HACE POCO: ahí la torta está
+        autorizada y discutirle a una empleada es peor que no tener guarda.
+
+        EL "HACE POCO" FALTABA, y costó una torta vendida que no se podía
+        hacer. El 13 de octubre a las 23:08 el bot comprometió una Frutimiska
+        para el día siguiente y pidió la seña; la clienta pagó $23.000. A la
+        mañana una persona tuvo que escribirle que no hay frutillas en
+        temporada.
+
+        La guarda no corrió porque alguien del local había hablado en esa
+        charla… el 7 de octubre, por otro pedido, que había terminado con un
+        "entregado!". Seis días antes. La condición era `history.some(...)` sin
+        reloj: una clienta atendida una vez por una persona quedaba exenta para
+        siempre.
+
+        CUATRO HORAS, y el número sale de medir. Sobre 14 días, de las 63 veces
+        que la excepción apagó la guarda:
+
+          menos de 1 h    39   ← una persona está atendiendo de verdad
+          1 a 4 h          6
+          4 a 12 h         5
+          más de 12 h     13   ← entre ellas la Frutimiska, con 148 horas
+
+        Con cuatro horas se respetan las 45 donde alguien está encima y vuelven
+        a frenarse las 18 restantes, poco más de una por día.
+
+        Se elige corto por la asimetría: equivocarse de más manda una charla a
+        una persona, equivocarse de menos vende una torta que la cocina no va a
+        hacer.
       */
-      const hayHumano = history.some((m) => m.direction === 'out' && m.author === 'human');
+      const HORAS_DE_AUTORIZACION = 4;
+      const ahoraMs = Date.now();
+      const hayHumano = history.some(
+        (m) =>
+          m.direction === 'out' &&
+          m.author === 'human' &&
+          ahoraMs - Date.parse(m.createdAt) < HORAS_DE_AUTORIZACION * 60 * 60 * 1000,
+      );
       /*
         Termometro: el bot acusando el pago y de paso mandando el Uber. El texto
         armado y la prosa ya no lo dicen; esto cuenta las veces que lo escribe
