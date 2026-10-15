@@ -9,9 +9,13 @@
  * Y va a pasar mucho: el precio viejo se nombró 2.603 veces en veinte días.
  * Toda esa gente tiene $46.000 escrito en su chat.
  *
- * Los precios nuevos NO se escriben acá: salen del catálogo, que es donde el
- * local los cambia. Si los repitiera en la ficha, el día que los vuelva a
- * tocar tendríamos dos números distintos y ninguna forma de saber cuál manda.
+ * Los precios NO se escriben acá, ni los nuevos ni los viejos. Los nuevos salen
+ * del catálogo, que es donde el local los cambia. Los viejos estaban escritos
+ * para que el bot supiera de qué precio le hablaban, y el 14 de octubre se
+ * volvieron en contra: al apagarse los box del catálogo fueron los únicos
+ * números que le quedaron y salió ofreciendo con ellos. Un número en la ficha
+ * sobrevive a que el producto desaparezca, y ahí deja de ser una aclaración
+ * para volverse la única fuente.
  *
  *   npx tsx --env-file=../../.env.produccion scripts/ficha-precio-promocional.mts
  *   npx tsx --env-file=../../.env.produccion scripts/ficha-precio-promocional.mts --borrar
@@ -24,7 +28,7 @@ const TITULO = 'SI DICEN QUE EL BOX ERA MÁS BARATO';
 const BLOQUE = `
 ${TITULO}
 
-Los box del Día de la Madre tuvieron un precio promocional —$46.000 el "gracias por todo" y $35.000 el "te amo má"— que valía para quienes abonaran hasta el 13 de octubre. Ese precio ya terminó. Los que valen ahora son los del catálogo.
+Los box del Día de la Madre tuvieron un precio promocional, más barato que el de ahora, que valía para quienes abonaran hasta el 13 de octubre. Ese precio ya terminó.
 
 Mucha gente tiene el precio viejo escrito en su chat, así que van a preguntar. Cuando digan "yo vi que era 46", "me habían dicho 35" o parecido:
 

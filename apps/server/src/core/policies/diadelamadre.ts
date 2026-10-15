@@ -74,6 +74,107 @@ export function laCharlaEsDeBoxDeLaMadre(
   return mensajes.some((m) => Boolean(m.text) && hablaDelBoxDeLaMadre(m.text!));
 }
 
+/*
+  ──────────────────────────────────────────────────────────────────────────
+  NO SE OFRECE UN BOX QUE YA NO ESTÁ.
+
+  La noche del 14 de octubre quedaban diez box y el local los apagó del
+  catálogo, que es la palanca que usan para decir "esto ya no se vende". El bot
+  los siguió ofreciendo una hora larga, en cuatro charlas, y encima al precio
+  promocional que ya no existía. Agus, a las 22:30: "me preocupo porque literal
+  nos quedan los últimos 10 box y ya no tenemos más para vender y vamos a
+  sobrevender".
+
+  Dos cosas fallaron a la vez, y la segunda es la que duele: la ficha describía
+  los dos box enteros, así que el bot podía armar la oferta sin mirar el
+  catálogo; y el único precio que le quedaba escrito, una vez apagado el
+  producto, era el viejo. APAGAR EL PRODUCTO EMPEORÓ EL MENSAJE en vez de
+  callarlo. La ficha ya se arregló, pero la ficha es prosa: esto es la red.
+
+  QUÉ MIRA: que el bot no VENDA un box que el catálogo tiene apagado. Nombrarlo
+  está bien y hace falta —hay trescientas personas que ya lo pagaron y preguntan
+  por el retiro, el horario y la cadenita—. Lo que no puede pasar es ofrecerlo,
+  ponerle precio o pedir la transferencia.
+
+  POR QUÉ NO ALCANZABA LA GUARDA DE STOCK que ya existe: esa mira los productos
+  sueltos que el mensaje cobra, y para estos box está apagada a propósito,
+  porque el CONTENIDO del box nombra cosas apagadas —los alfajores, la taza— y
+  borraba precios buenos. Aquella cuida los ingredientes; esta cuida el box.
+*/
+
+/** Un box del Día de la Madre que hoy no se vende, como viene del catálogo. */
+export interface BoxApagado {
+  id: string;
+  name: string;
+}
+
+/*
+  Vender es poner precio o pedir la plata. Nombrar, contar qué trae o hablar del
+  retiro, no.
+*/
+const PONE_PRECIO = /\$\s?\d|\b\d{2}\.?\d{3}\b|\bsale\b|\bcuesta\b|\bprecio\b|\bvale\b/i;
+const PIDE_LA_PLATA_DEL_BOX =
+  /\balias\b|\btransferi|\btransferencia\b|\bcomprobante\b|\bseña\b|\bmiskapedidos\b/i;
+/*
+  Y presentar las opciones también es vender, aunque no haya número: "tenemos
+  dos opciones para el Día de la Madre" seguido de las fotos fue exactamente el
+  mensaje de las 22:10.
+*/
+const OFRECE = /\btenemos\b|\bopciones?\b|\bten[ée]s\b|\bpod[ée]s (llevar|elegir|encargar)\b|\bpara encargar\b|\bcu[aá]l te (interesa|gustar[ií]a)\b/i;
+
+/*
+  Decir que no hay es justamente lo que queremos: si el mensaje ya lo aclara, no
+  se toca. Se repite acá en vez de importarlo de `stock.ts` porque aquel módulo
+  no exporta el patrón y copiarlo entero ataría dos guardas que cambian por
+  motivos distintos.
+*/
+const YA_DICE_QUE_NO_HAY =
+  /\bse (agot|termin)|\bagotad|\bsin stock\b|\bya no (hay|quedan?|tenemos|los tenemos|nos quedan)\b|\bno (nos )?quedan?\b|\bcerramos los pedidos\b|\bpedidos? (ya )?(est[aá]n )?cerrad/i;
+
+/**
+ * ¿Este mensaje está VENDIENDO un box que el catálogo tiene apagado?
+ *
+ * Devuelve los box en cuestión, o vacío si no hay problema. `apagados` son los
+ * box del Día de la Madre con `availableToday` en false: si el local los vuelve
+ * a encender, esta guarda se apaga sola y nadie tiene que acordarse de nada.
+ */
+export function vendeUnBoxQueNoEsta(texto: string, apagados: BoxApagado[]): BoxApagado[] {
+  if (!apagados.length) return [];
+  if (!hablaDelBoxDeLaMadre(texto)) return [];
+  if (YA_DICE_QUE_NO_HAY.test(texto)) return [];
+  const vende = PONE_PRECIO.test(texto) || PIDE_LA_PLATA_DEL_BOX.test(texto) || OFRECE.test(texto);
+  if (!vende) return [];
+  /*
+    Cuál de los dos aparece. Si el mensaje presenta las dos opciones y los dos
+    están apagados, vuelven los dos; si solo uno está apagado, vuelve ese.
+
+    El caso que no hay que perder es el mensaje que dice "día de la madre" y
+    ofrece sin nombrar ningún box por su nombre —"tenemos dos opciones
+    hermosas", que fue el de las 22:10—: ahí no hay nombre que matchear, así
+    que si no se reconoce ninguno vuelven todos los apagados.
+  */
+  const nombrados = apagados.filter((b) => NOMBRE_DE_BOX(b).test(texto));
+  return nombrados.length ? nombrados : apagados;
+}
+
+/** El patrón que reconoce a cada box por su nombre dentro de un mensaje. */
+function NOMBRE_DE_BOX(box: BoxApagado): RegExp {
+  return /gracias por todo/i.test(box.name)
+    ? /gracias por todo/i
+    : /te amo m[aá](?![a-záéíóúñ])/i;
+}
+
+/**
+ * Lo que se manda en lugar del mensaje que vendía algo que ya no hay.
+ *
+ * Dice la verdad y cierra la puerta, porque la puerta está cerrada: el local
+ * apagó los dos box cuando le quedaban diez. No ofrece anotar en una lista ni
+ * avisar si se libera alguno, que es lo que el bot inventaría solo.
+ */
+export const TEXTO_BOX_AGOTADO =
+  'Los box del Día de la Madre ya se agotaron y cerramos los pedidos 🥺 ' +
+  'Mil gracias por escribirnos igual! Si querés te cuento qué otras cosas tenemos 🫶🏼';
+
 /**
  * El cartel que ve el local. Dice qué hacer, no solo que pasó algo.
  *

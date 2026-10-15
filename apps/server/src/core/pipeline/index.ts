@@ -52,9 +52,12 @@ import { motivoDeLaPromesa, prometeConsultar } from '../policies/promesas.js';
 import { juntarLosGlobitos } from '../policies/globitos.js';
 import { corregirElAlias, corregirElAliasAlReves } from '../policies/alias.js';
 import {
+  BOXES_DE_LA_MADRE,
   hablaDelBoxDeLaMadre,
   laCharlaEsDeBoxDeLaMadre,
   motivoDelBoxDeLaMadre,
+  TEXTO_BOX_AGOTADO,
+  vendeUnBoxQueNoEsta,
 } from '../policies/diadelamadre.js';
 import {
   atribuyeAlBoxLoQueNoTiene,
@@ -1764,6 +1767,49 @@ export class Pipeline {
           'warn',
           `OFRECIÓ NUESTRO CADETE SIN SER DESAYUNO (${conversationId}): "${cadeteDeMas}"`,
         );
+      }
+
+      /*
+        NO SE VENDE UN BOX DEL DÍA DE LA MADRE QUE EL CATÁLOGO TIENE APAGADO.
+
+        Ver `vendeUnBoxQueNoEsta`. La noche del 14 de octubre el local apagó los
+        dos box con diez en stock y el bot los siguió ofreciendo una hora, con el
+        precio viejo encima.
+
+        LA EXCEPCIÓN DE LA CHARLA CON PEDIDO no es una comodidad, es el 100% de
+        los falsos positivos. Medido sobre los mensajes que el bot le mandó a
+        gente que ya tenía el box anotado: 4 de 69 caían en la guarda, y uno era
+        la información de retiro de una clienta que ya había pagado —el nombre
+        con el que tenía que presentarse el sábado—. Taparle eso a quien ya
+        compró, el día antes de ir a buscarlo, es peor que el problema que esto
+        arregla. Con el pedido abierto delante, la guarda no se mete.
+
+        Lo que queda sin cubrir es que alguien que ya compró pida OTRO box y el
+        bot se lo ofrezca. Es angosto y esas charlas ya tienen quien las mire:
+        todo comprobante de box levanta la mano para que lo cargue una persona.
+      */
+      const boxesApagados = products
+        .filter((p) => BOXES_DE_LA_MADRE.includes(p.id) && !p.availableToday)
+        .map((p) => ({ id: p.id, name: p.name }));
+      const yaTienePedidoDeBox = openOrders.some((o) =>
+        o.items.some((i) => BOXES_DE_LA_MADRE.includes(i.productId ?? '')),
+      );
+      const vendidosSinStock = yaTienePedidoDeBox
+        ? []
+        : vendeUnBoxQueNoEsta(contenido.text, boxesApagados);
+      if (vendidosSinStock.length) {
+        log(
+          'warn',
+          `VENDÍA UN BOX APAGADO (${conversationId}): ${vendidosSinStock.map((b) => b.name).join(', ')}`,
+        );
+        contenido.text = TEXTO_BOX_AGOTADO;
+        guardaEscalo = true;
+        alertaDeGuarda = true;
+        motivoGuarda =
+          `[box día de la madre] Iba a ofrecer ${vendidosSinStock.map((b) => b.name).join(', ')}, ` +
+          'que está apagado en el catálogo. Le contesté que se agotaron. Si en realidad queda ' +
+          'alguno, encendelo en Catálogo y contestale vos.';
+        continue;
       }
 
       const cobrados = esCharlaDeBoxDeLaMadre
