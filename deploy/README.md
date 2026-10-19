@@ -255,3 +255,58 @@ tiene el TLS, y Meta exige el 443.
 **No loguees query strings** en el vhost, o poné el panel detrás de la
 autenticación del proxy: el token del panel viaja ahí porque `EventSource` no
 puede mandar encabezados.
+
+## La base vive en la VPS (desde el 19/10/2026)
+
+Hasta esa fecha la base estaba en Supabase, en Oregón. Se trajo a la VPS por
+latencia: cada consulta costaba ~10 ms contra ~0,1 ms en local, y abrir una
+conexión nueva, casi un segundo. Un turno del bot hace veinte y pico de
+consultas.
+
+El PostgreSQL de la VPS **escucha solo en localhost**, así que para correr un
+script desde tu máquina hay que abrir un túnel primero:
+
+```bash
+ssh -N -L 5433:127.0.0.1:5432 root@2.25.185.242
+```
+
+Y en otra terminal, lo de siempre:
+
+```bash
+cd apps/server
+npx tsx --env-file=../../.env.produccion scripts/el-que-sea.mts
+```
+
+Sin el túnel los scripts fallan al conectar, y eso es a propósito.
+
+**Por qué es a propósito.** El `.env.produccion` local tenía la URL de Supabase
+y, después de la mudanza, seguía siendo válida: la copia vieja sigue ahí, con
+todos los datos del día de la mudanza. Correr un script desde la máquina
+escribía en esa copia fantasma y no pasaba nada visible —el script decía
+"listo", los conteos daban bien— pero el bot no se enteraba. Pasó el 19/10 con
+la limpieza del Día de la Madre: se aplicó al fantasma, se verificó contra el
+fantasma, y hubo que rehacerla en la VPS.
+
+Un script que no conecta es un problema de treinta segundos. Un script que
+escribe en la base equivocada es un problema que se descubre dias después.
+
+**Alternativa, y suele ser más simple:** correrlo directamente en la VPS, donde
+el `.env` ya apunta a la base buena.
+
+```bash
+ssh root@2.25.185.242 'cd /opt/miska-muska/apps/server && npx tsx --env-file=../../.env scripts/el-que-sea.mts'
+```
+
+### Respaldos
+
+Supabase los hacía solo; ahora los hace `scripts/respaldar-miska.sh`, con un
+timer de systemd todos los días a las 05:00 de Tucumán. Diario sin las fotos
+(14 MB, catorce días) y los domingos entero (444 MB, cuatro semanas).
+
+```bash
+systemctl list-timers respaldar-miska.timer
+ls -lh /var/backups/miska/
+```
+
+Los respaldos quedan en el mismo disco que la base: cubren un borrado por
+error, no que se muera el disco.
