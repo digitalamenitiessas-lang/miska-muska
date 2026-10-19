@@ -428,24 +428,45 @@ export interface ConversationDetail {
  * Base de la API.
  *
  * En desarrollo queda vacía y el proxy de Vite manda `/api` al servidor local.
- * En Vercel el panel es estático y el bot vive en otro dominio, así que hay que
- * definir `VITE_API_URL` (ej. https://bot.miskamuska.com.ar) al hacer el build.
- * Se deja sin barra final para poder concatenar rutas que ya empiezan con `/`.
+ * Si el panel se publica en un dominio distinto al del bot hay que definir
+ * `VITE_API_URL` (ej. https://bot.miskamuska.com.ar) al hacer el build. Se deja
+ * sin barra final para poder concatenar rutas que ya empiezan con `/`.
+ *
+ * VACÍA TAMBIÉN ES UNA RESPUESTA VÁLIDA, y esa es la corrección del 19 de
+ * octubre de 2026. Desde que el panel se sirve en la VPS al lado del bot, el
+ * mismo origen atiende las dos cosas y la base correcta es justamente ninguna:
+ * `/api/...` relativo. Antes, con la base vacía el panel mostraba el cartel de
+ * "falta configurar" y no dejaba entrar, porque el único caso contemplado era
+ * el de Vercel —otro dominio— donde vacío sí quería decir mal configurado.
+ *
+ * Para distinguir "no lo configuraron" de "es a propósito" alcanza con mirar si
+ * la variable se pasó: se construye con `VITE_API_URL=/` cuando el bot está en
+ * el mismo origen. La barra sola se limpia y queda vacía igual, pero el hecho
+ * de que la variable exista es la señal de que alguien lo decidió.
  */
-export const API_BASE = (import.meta.env.VITE_API_URL ?? '').replace(/\/$/, '');
+const API_URL_CRUDA = import.meta.env.VITE_API_URL;
+export const API_BASE = (API_URL_CRUDA ?? '').replace(/\/$/, '');
 
 const url = (path: string): string => `${API_BASE}${path}`;
 
-/** true cuando el panel está publicado pero no sabe a qué servidor hablarle. */
+/**
+ * true cuando el panel está publicado pero no sabe a qué servidor hablarle.
+ *
+ * Son dos condiciones y ninguna sobra: que no se haya pasado la variable —con
+ * `/` basta para decir "mismo origen"— y que no estemos en desarrollo, donde el
+ * proxy de Vite resuelve `/api` sin que haga falta configurar nada.
+ */
 export const apiBaseFaltante =
-  !API_BASE && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+  !API_URL_CRUDA && !/^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
 
 const AYUDA_API_BASE =
   'El panel no sabe a qué servidor hablarle: se construyó sin VITE_API_URL, ' +
   'así que está pidiéndose la API a sí mismo y recibe su propio HTML.\n\n' +
-  'En Vercel: Settings → Environment Variables → VITE_API_URL = https://tu-bot.dominio.com\n' +
-  'Después hay que VOLVER A DESPLEGAR: Vite incrusta las variables al construir, ' +
-  'no las lee en tiempo de ejecución.';
+  'Si el bot vive en el MISMO dominio que el panel, se construye con ' +
+  'VITE_API_URL=/ y habla por rutas relativas.\n' +
+  'Si vive en otro, VITE_API_URL = https://tu-bot.dominio.com\n\n' +
+  'En los dos casos hay que VOLVER A PUBLICAR: Vite incrusta las variables al ' +
+  'construir, no las lee en tiempo de ejecución.';
 
 /** Token opcional del panel; se guarda en localStorage. */
 export function getToken(): string {
