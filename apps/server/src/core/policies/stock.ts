@@ -15,7 +15,6 @@
  * que el local quiere. Lo que no puede pasar es nombrarlo como si se pudiera
  * comprar.
  */
-import { hablaDelBoxDeLaMadre } from './diadelamadre.js';
 
 /** Sin tildes, sin puntuación y con los espacios planchados. */
 function plano(texto: string): string {
@@ -246,32 +245,6 @@ export function cobraLoQueNoHay(
   if (!pideLaPlata(texto)) return [];
   const ofrecidos = ofreceLoQueNoHay(texto, apagadosDeMostrador);
   if (!ofrecidos.length) return [];
-  /*
-    LOS BOX DEL DÍA DE LA MADRE NO SE DESARMAN, y esta guarda les borró el
-    precio a tres clientas el 2 de octubre.
-
-    El bot contestaba bien: las dos opciones con todo lo que traen y su precio.
-    Pero el contenido nombra cosas que el catálogo tiene como productos sueltos
-    y apagados —"2 alfajores (uno de frutos rojos y uno de pistacho)", "taza de
-    cerámica"—, así que el match daba positivo y el mensaje se reemplazaba por
-    "dame un minuto que confirmo". Una clienta preguntó el precio tres veces y
-    nunca lo recibió; a las 13:39 entró una persona a pegar el texto a mano.
-
-    Es el mismo caso que la mini torta de acá abajo, más grande: lo que va
-    ADENTRO de algo armado no se está vendiendo suelto.
-
-    POR QUÉ SE APAGA ENTERA Y NO SOLO PARA LOS ALFAJORES. Se probó acotarlo
-    midiendo las palabras juntas en vez de en cualquier lugar de la oración, y
-    el corpus de 30 días dijo que no: dejaba de ver "son 3 cookies: 2 de
-    ferrero y 1 de kinder" —una venta real de algo apagado, justo la que costó
-    $19.800 en septiembre— porque ahí las palabras también están separadas.
-
-    El riesgo que queda es que en una charla de box se cobre además un suelto
-    apagado y esto no lo frene. Es angosto, y esas charlas ya tienen quien las
-    mire: todo comprobante de box del Día de la Madre levanta la mano sí o sí
-    para que lo cargue una persona. Ver `diadelamadre.ts`.
-  */
-  if (hablaDelBoxDeLaMadre(texto)) return [];
   /*
     La mini torta que va ADENTRO de un desayuno no se está vendiendo suelta, así
     que su stock no importa acá. Es el único falso positivo estructural que

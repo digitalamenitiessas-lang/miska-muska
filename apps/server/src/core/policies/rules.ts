@@ -869,7 +869,7 @@ export function nombreDeWhatsApp(
  */
 export const CATEGORIAS_DE_FABRICA: CategoriaDeFabrica[] = [
   'cookies', 'muffins', 'mini-tortas', 'cuadrados', 'alfajores',
-  'tabletas', 'saladito', 'tortas', 'desayunos', 'dia-de-la-madre', 'cursos', 'merch',
+  'tabletas', 'saladito', 'tortas', 'desayunos', 'cursos', 'merch',
 ];
 
 /** Largo máximo de una categoría: es el título de una tarjeta, no una descripción. */
@@ -1068,7 +1068,7 @@ export function primeraHora(texto: string | null | undefined): number | null {
   como pierde siempre la prosa contra una regla de código.
 */
 const SE_ENCARGA_CON_ANTICIPACION = new Set(
-  ['tortas', 'desayunos', 'dia-de-la-madre'].map(claveDeCategoria),
+  ['tortas', 'desayunos'].map(claveDeCategoria),
 );
 
 /** true si ese producto se puede encargar para otro día. */

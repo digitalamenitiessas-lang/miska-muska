@@ -52,14 +52,6 @@ import { motivoDeLaPromesa, prometeConsultar } from '../policies/promesas.js';
 import { juntarLosGlobitos } from '../policies/globitos.js';
 import { corregirElAlias, corregirElAliasAlReves } from '../policies/alias.js';
 import {
-  BOXES_DE_LA_MADRE,
-  hablaDelBoxDeLaMadre,
-  laCharlaEsDeBoxDeLaMadre,
-  motivoDelBoxDeLaMadre,
-  TEXTO_BOX_AGOTADO,
-  vendeUnBoxQueNoEsta,
-} from '../policies/diadelamadre.js';
-import {
   atribuyeAlBoxLoQueNoTiene,
   MOTIVO_BOX_INVENTADO,
   TEXTO_LO_CHEQUEO,
@@ -564,29 +556,10 @@ export class Pipeline {
         charla: si el alias nunca se dijo acá, no hay señal. Para esa está el
         botón de cargar el pedido a mano.
       */
-      /*
-        EL BOX DEL DÍA DE LA MADRE NO LO CARGA EL BOT, Y AVISA SIEMPRE.
-
-        Ver `core/policies/diadelamadre.ts`: el pedido de Agus, por qué el
-        rescate automático es justo lo que no hay que hacer acá, y la medición
-        —en 30 días una sola charla habría encendido el cartel de más—.
-
-        Las dos excepciones que hace esta línea:
-
-        1. NO EXIGE QUE HAYAMOS PASADO EL ALIAS. El alias de esta propuesta sale
-           publicado en Instagram, así que la clienta puede transferir sin que
-           nadie de este lado se lo haya dicho. Con la regla normal esa charla
-           entraba muda, que es exactamente el caso que Agus teme.
-        2. NO DEJA QUE EL RESCATE CARGUE EL PEDIDO. Si lo carga el bot y lo
-           carga una persona, quedan dos box para la misma clienta.
-      */
-      const historial = await this.#repos.messages.history(conversation.id, 30);
-      const deLaMadre = laCharlaEsDeBoxDeLaMadre(historial);
-
       let ventaSinFila = false;
       if (!pedidoSinCobrar && !inscripcion) {
         ventaSinFila = await this.#pasamosElAlias(conversation.id, stored.id);
-        if (!ventaSinFila && !deLaMadre) return;
+        if (!ventaSinFila) return;
       }
 
       /*
@@ -597,7 +570,7 @@ export class Pipeline {
         que hacía era escribir un cartel pidiéndole a una persona que lo cargara
         a mano. Ver `#cargarElPedidoDelComprobante`.
       */
-      const rescatado = ventaSinFila && !deLaMadre
+      const rescatado = ventaSinFila
         ? await this.#cargarElPedidoDelComprobante(conversation)
         : null;
       if (rescatado) {
@@ -634,15 +607,7 @@ export class Pipeline {
         return ` LO RETIRA ELLA por el local${cuando}.`;
       };
 
-      /*
-        El del box gana siempre que la charla sea de box, haya pedido o no. Si
-        el modelo igual dejó una ficha anotada, el cartel lo dice y sigue
-        pidiendo que lo pasen al sistema del local: una ficha del bot no es lo
-        que Agus necesita, él necesita los datos cargados de su lado.
-      */
-      const motivo = deLaMadre
-        ? motivoDelBoxDeLaMadre(pedidoSinCobrar?.number)
-        : pedidoSinCobrar
+      const motivo = pedidoSinCobrar
         ? `[comprobante] Mirá la transferencia y confirmá el pago del pedido ` +
           `#${pedidoSinCobrar.number}. Está en ${pedidoSinCobrar.paid} de ${pedidoSinCobrar.total}, ` +
           'y hasta que no lo confirmes ella queda esperando.' +
@@ -1374,42 +1339,6 @@ export class Pipeline {
       bot en el medio de una venta que venía bien.
     */
 
-    /*
-      SI LA CHARLA ES DE BOX DEL DÍA DE LA MADRE, ESTA GUARDA NO CORRE.
-
-      Ya se arregló una vez y no alcanzó. El 2 de octubre esto le borró el
-      precio a tres clientas: el contenido del box nombra "2 alfajores" y
-      "taza de cerámica", que en el catálogo son productos sueltos y
-      apagados, y la guarda creyó que los estaba vendiendo. El arreglo miraba
-      el texto del mensaje, y el 5 a las 11:21 volvió a pasar.
-
-      El agujero estaba en mirar UNA burbuja. Esa vez los box se nombraron en
-      los rótulos de las dos fotos, y la burbuja de texto traía solo el
-      contenido —"brownie franui… 2 alfajores… te paso el alias"— sin la
-      palabra "box" en ninguna parte. Matcheaba "Alfajor brownie" y no
-      matcheaba la excepción.
-
-      Ahora se mira el turno completo —rótulos de fotos incluidos— y lo que
-      preguntó la clienta. Es lo que define de qué se está hablando; una
-      burbuja suelta no.
-    */
-    const loQueDiceEsteTurno = contents
-      .map((c) => {
-        if (c.kind === 'text') return c.text;
-        /*
-          De una foto valen el epígrafe y el `alt`. El epígrafe casi siempre
-          va vacío —tres fotos con el nombre encima quedan horribles— y el
-          nombre del box vive en el `alt`, que es justamente lo que pasó acá:
-          "Box gracias por todo" estaba ahí y en ningún otro lado del turno.
-        */
-        if (c.kind === 'image') return `${c.caption ?? ''} ${c.alt ?? ''}`;
-        return '';
-      })
-      .join('\n');
-
-    const esCharlaDeBoxDeLaMadre =
-      hablaDelBoxDeLaMadre(loQueDiceEsteTurno) ||
-      laCharlaEsDeBoxDeLaMadre(history.slice(-6));
     for (const contenido of contents) {
       if (contenido.kind !== 'text') continue;
 
@@ -1682,9 +1611,12 @@ export class Pipeline {
           .map((m) => m.text ?? '')
           .join(' ') + contenido.text,
       );
-      const encargo = esCharlaDeBoxDeLaMadre
-        ? null
-        : comprometeEncargo(contenido.text, hayHumano, contextoReciente, hayCookiesEnLaCharla);
+      const encargo = comprometeEncargo(
+        contenido.text,
+        hayHumano,
+        contextoReciente,
+        hayCookiesEnLaCharla,
+      );
       if (encargo) {
         log(
           'warn',
@@ -1769,52 +1701,7 @@ export class Pipeline {
         );
       }
 
-      /*
-        NO SE VENDE UN BOX DEL DÍA DE LA MADRE QUE EL CATÁLOGO TIENE APAGADO.
-
-        Ver `vendeUnBoxQueNoEsta`. La noche del 14 de octubre el local apagó los
-        dos box con diez en stock y el bot los siguió ofreciendo una hora, con el
-        precio viejo encima.
-
-        LA EXCEPCIÓN DE LA CHARLA CON PEDIDO no es una comodidad, es el 100% de
-        los falsos positivos. Medido sobre los mensajes que el bot le mandó a
-        gente que ya tenía el box anotado: 4 de 69 caían en la guarda, y uno era
-        la información de retiro de una clienta que ya había pagado —el nombre
-        con el que tenía que presentarse el sábado—. Taparle eso a quien ya
-        compró, el día antes de ir a buscarlo, es peor que el problema que esto
-        arregla. Con el pedido abierto delante, la guarda no se mete.
-
-        Lo que queda sin cubrir es que alguien que ya compró pida OTRO box y el
-        bot se lo ofrezca. Es angosto y esas charlas ya tienen quien las mire:
-        todo comprobante de box levanta la mano para que lo cargue una persona.
-      */
-      const boxesApagados = products
-        .filter((p) => BOXES_DE_LA_MADRE.includes(p.id) && !p.availableToday)
-        .map((p) => ({ id: p.id, name: p.name }));
-      const yaTienePedidoDeBox = openOrders.some((o) =>
-        o.items.some((i) => BOXES_DE_LA_MADRE.includes(i.productId ?? '')),
-      );
-      const vendidosSinStock = yaTienePedidoDeBox
-        ? []
-        : vendeUnBoxQueNoEsta(contenido.text, boxesApagados);
-      if (vendidosSinStock.length) {
-        log(
-          'warn',
-          `VENDÍA UN BOX APAGADO (${conversationId}): ${vendidosSinStock.map((b) => b.name).join(', ')}`,
-        );
-        contenido.text = TEXTO_BOX_AGOTADO;
-        guardaEscalo = true;
-        alertaDeGuarda = true;
-        motivoGuarda =
-          `[box día de la madre] Iba a ofrecer ${vendidosSinStock.map((b) => b.name).join(', ')}, ` +
-          'que está apagado en el catálogo. Le contesté que se agotaron. Si en realidad queda ' +
-          'alguno, encendelo en Catálogo y contestale vos.';
-        continue;
-      }
-
-      const cobrados = esCharlaDeBoxDeLaMadre
-        ? []
-        : cobraLoQueNoHay(contenido.text, apagadosDeMostrador);
+      const cobrados = cobraLoQueNoHay(contenido.text, apagadosDeMostrador);
       if (cobrados.length) {
         log(
           'warn',
