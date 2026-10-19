@@ -23,8 +23,7 @@
     "seed": "npm run seed -w @miska/server",
     "demo": "npm run demo -w @miska/server",
     "db:sql": "npm run db:sql -w @miska/server",
-    "db:migrate": "npm run db:migrate -w @miska/server",
-    "setup:supabase": "npm run setup:supabase -w @miska/server --"
+    "db:migrate": "npm run db:migrate -w @miska/server"
   },
   "devDependencies": {
     "concurrently": "^9.1.2"

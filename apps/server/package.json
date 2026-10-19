@@ -12,8 +12,7 @@
     "seed": "tsx --env-file-if-exists=../../.env src/core/store/seed.ts",
     "demo": "tsx --env-file-if-exists=../../.env src/core/store/demo.ts",
     "db:sql": "tsx scripts/dump-schema.mts",
-    "db:migrate": "tsx --env-file-if-exists=../../.env scripts/migrate.mts",
-    "setup:supabase": "tsx --env-file-if-exists=../../.env scripts/setup-supabase.mts"
+    "db:migrate": "tsx --env-file-if-exists=../../.env scripts/migrate.mts"
   },
   "dependencies": {
     "fastify": "^5.2.1",
