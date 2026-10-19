@@ -14,6 +14,7 @@ import {
   type Settings,
 } from './api';
 import { Pill, Switch, useToast } from './ui';
+import { desdeLaBase } from './base';
 import { ponerSonido, sonarAviso, sonidoEncendido } from './sonido';
 import { avisarEnPantalla } from './avisos';
 import { Inbox } from './views/Inbox';
@@ -373,7 +374,7 @@ export default function App() {
     <div className="shell">
       <aside className="sidebar">
         <div className="brand">
-          <img className="brand-logo" src="/logo.png" alt="Miska Muska · Pastelería creativa" />
+          <img className="brand-logo" src={desdeLaBase("logo.png")} alt="Miska Muska · Pastelería creativa" />
         </div>
 
         <nav className="nav">
@@ -644,7 +645,7 @@ function FaltaApiUrl() {
     <div style={{ display: 'grid', placeItems: 'center', height: '100%', padding: 20 }}>
       <div className="card card-pad" style={{ maxWidth: 560 }}>
         <div className="brand-gate">
-          <img src="/logo.png" alt="Miska Muska · Pastelería creativa" />
+          <img src={desdeLaBase("logo.png")} alt="Miska Muska · Pastelería creativa" />
         </div>
         <h2 style={{ fontFamily: 'var(--font-brand)', fontSize: 18, margin: '0 0 10px' }}>
           Falta decirle al panel dónde está el bot
@@ -696,7 +697,7 @@ function TokenGate({ onSaved }: { onSaved: () => void }) {
         }}
       >
         <div className="brand-gate">
-          <img src="/logo.png" alt="Miska Muska · Pastelería creativa" />
+          <img src={desdeLaBase("logo.png")} alt="Miska Muska · Pastelería creativa" />
         </div>
         <label className="label" htmlFor="token">
           Token del panel

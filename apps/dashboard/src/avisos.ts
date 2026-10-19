@@ -1,3 +1,4 @@
+import { desdeLaBase } from './base';
 /**
  * Los avisos al celular, del lado del navegador.
  *
@@ -88,7 +89,7 @@ function etiquetaDelDispositivo(): string {
 }
 
 export async function encenderAvisos(): Promise<EstadoAvisos> {
-  const registro = await navigator.serviceWorker.register('/sw.js');
+  const registro = await navigator.serviceWorker.register(desdeLaBase('sw.js'));
   await navigator.serviceWorker.ready;
 
   const permiso = await Notification.requestPermission();
@@ -160,8 +161,8 @@ export async function avisarEnPantalla(
     if (!registro) return;
     await registro.showNotification(titulo, {
       body: cuerpo,
-      icon: '/icon-192.png',
-      badge: '/icon-192.png',
+      icon: desdeLaBase('icon-192.png'),
+      badge: desdeLaBase('icon-192.png'),
       requireInteraction: true,
       tag: conversacionId ? 'charla:' + conversacionId : 'miska',
       data: { conversacionId: conversacionId ?? null },
