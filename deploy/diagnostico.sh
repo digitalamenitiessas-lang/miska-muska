@@ -69,13 +69,24 @@ titulo "Node instalado en el host"
 hay node && echo "  $(node --version)" || echo "  no (no hace falta: el bot va en Docker)"
 
 titulo "Salida a internet"
-for destino in openrouter.ai api.telegram.org aws-1-us-west-2.pooler.supabase.com; do
+# Supabase salio de esta lista el 19/10/2026: la base se mudo a esta misma
+# maquina y ya no se sale a internet para hablarle. Lo que queda son las dos
+# que no se pueden traer: el modelo y Telegram.
+for destino in openrouter.ai api.telegram.org graph.facebook.com; do
   if timeout 5 bash -c "</dev/tcp/$destino/443" 2>/dev/null; then
     echo "    $destino:443  ✔"
   else
     echo "    $destino:443  ✗ (revisar firewall)"
   fi
 done
+
+titulo "Base de datos local"
+if sudo -u postgres psql -d miska -tAc "SELECT 1" >/dev/null 2>&1; then
+  echo "    postgres: ✔  $(sudo -u postgres psql -tAc "SELECT pg_size_pretty(pg_database_size('miska'))" 2>/dev/null)"
+  echo "    ultimo respaldo: $(ls -t /var/backups/miska/*.dump 2>/dev/null | head -1 | xargs -r basename)"
+else
+  echo "    postgres: ✗ no responde — el bot no puede hacer nada sin esto"
+fi
 
 titulo "Firewall"
 hay ufw && ufw status 2>/dev/null | head -8 | sed 's/^/    /'
