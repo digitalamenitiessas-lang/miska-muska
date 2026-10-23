@@ -574,6 +574,13 @@ export const api = {
   crearPedido: (body: Partial<Order>) => post<Order>('/api/orders', body),
 
   campaigns: () => get<Campaign[]>('/api/campaigns'),
+  /**
+   * Crear una campaña. Igual que con los pedidos, la ruta estaba y el panel no
+   * la llamaba: el 23 de octubre el local cargó todo el Box Halloween y no
+   * encontró dónde crear la campaña, porque no había dónde.
+   */
+  crearCampania: (body: Pick<Campaign, 'name' | 'startsOn' | 'endsOn' | 'pitch' | 'active'>) =>
+    post<Campaign>('/api/campaigns', body),
   setCampaignActive: (id: string, active: boolean) =>
     post<{ ok: true }>(`/api/campaigns/${id}/active`, { active }),
   updateCampaign: (

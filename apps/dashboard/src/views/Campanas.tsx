@@ -24,6 +24,8 @@ export function Campanas({ toast }: { toast: (text: string) => void }) {
   const [editando, setEditando] = useState<string | null>(null);
   /** La campaña a la que se le está agregando una caja. */
   const [agregando, setAgregando] = useState<string | null>(null);
+  /** Si está abierto el formulario de una campaña nueva. */
+  const [creando, setCreando] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -89,6 +91,22 @@ export function Campanas({ toast }: { toast: (text: string) => void }) {
     }
   };
 
+  const crearCampania = async (datos: Pick<Campaign, 'name' | 'startsOn' | 'endsOn' | 'pitch'>) => {
+    try {
+      /*
+        Nace pausada. Sin cajas el bot la anunciaría vacía, así que primero se
+        cargan las cajas y después se prende con el interruptor.
+      */
+      const next = await api.crearCampania({ ...datos, active: false });
+      setCampaigns((prev) => [{ ...next, skus: [] }, ...prev]);
+      setCreando(false);
+      setAgregando(next.id);
+      toast(`${next.name} creada. Agregale las cajas y prendela.`);
+    } catch (err) {
+      toast(`No pude crearla: ${String(err)}`);
+    }
+  };
+
   const agregarCaja = async (campaign: Campaign, datos: NuevaCaja) => {
     try {
       const next = await api.upsertSku(campaign.id, {
@@ -135,17 +153,40 @@ export function Campanas({ toast }: { toast: (text: string) => void }) {
   };
 
   if (loading) return <Empty glyph="⏳">Cargando…</Empty>;
+
+  const nueva = creando ? (
+    <section className="card">
+      <FormularioDeCampania
+        campaign={campaniaEnBlanco()}
+        onCancel={() => setCreando(false)}
+        onSave={(datos) => void crearCampania(datos)}
+      />
+    </section>
+  ) : (
+    <div className="row">
+      <button className="btn btn-sm btn-primary" onClick={() => setCreando(true)}>
+        + Nueva campaña
+      </button>
+    </div>
+  );
+
   if (!campaigns.length) {
     return (
-      <Empty glyph="🎁">
-        Todavía no hay campañas. Se usan para San Valentín, Pascuas, Día del Padre, Día del Niño,
-        Día de la Madre y Navidad.
-      </Empty>
+      <div className="col" style={{ gap: 16 }}>
+        {nueva}
+        {creando ? null : (
+          <Empty glyph="🎁">
+            Todavía no hay campañas. Se usan para San Valentín, Pascuas, Halloween, Día del Padre,
+            Día del Niño, Día de la Madre y Navidad.
+          </Empty>
+        )}
+      </div>
     );
   }
 
   return (
     <div className="col" style={{ gap: 16 }}>
+      {nueva}
       {campaigns.map((campaign) => {
         const totals = campaign.skus.reduce(
           (acc, s) => ({
@@ -322,6 +363,12 @@ export function Campanas({ toast }: { toast: (text: string) => void }) {
       })}
     </div>
   );
+}
+
+/** El punto de partida del formulario de una campaña nueva: arranca hoy. */
+function campaniaEnBlanco(): Campaign {
+  const hoy = new Date().toLocaleDateString('sv-SE', { timeZone: 'America/Argentina/Tucuman' });
+  return { id: '', name: '', startsOn: hoy, endsOn: hoy, active: false, pitch: null, skus: [] };
 }
 
 /** El formulario de la campaña, abierto en el lugar del encabezado. */
