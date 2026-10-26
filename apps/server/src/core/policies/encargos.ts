@@ -98,6 +98,31 @@ function sinRedVelvetDeCookie(plano: string, hayCookiesEnLaCharla = false): stri
 }
 
 /*
+  EL PIE DEL PEDIDO DE LA WEB NO ES UNA TORTA.
+
+  Todo pedido que se arma en la tienda online llega con el mismo texto de
+  condiciones abajo: "*Las tortas se retiran de barrio norte y se abonan en
+  efectivo al retirar (coordinar retiro por este medio)*". Lo pega la página,
+  pidan lo que pidan, y la palabra "tortas" de ese renglón disparaba la guarda.
+
+  Pasó el 24 y el 25 de octubre con el Box Halloween: entraba el pedido de la
+  web, el bot contestaba "ya chequeo en la agenda si tenemos disponibilidad" y
+  la charla caía en el panel como "[torta o desayuno]". Agus: "cuando vienen de
+  la web no explica él? que se paga todo por transferencia, día de retiro, etc".
+
+  Ya se había arreglado el 5 de octubre para los box del Día de la Madre, con
+  una excepción atada a esa campaña. Cuando se borró la campaña, se fue con
+  ella, y el agujero volvió con la siguiente. Por eso ahora se saca el renglón
+  y no se exceptúa un producto: si el pedido de la web trae una torta de
+  verdad, la torta está nombrada en los ítems y la guarda corre igual.
+*/
+const PIE_DE_LA_WEB = /\*?\s*las tortas se retiran de barrio norte[^*]*\*?/g;
+
+function sinPieDeLaWeb(plano: string): string {
+  return plano.replace(PIE_DE_LA_WEB, ' ');
+}
+
+/*
   EL BOT COMPROMETIÉNDOSE.
 
   Cada forma salió de un mensaje real. Lo que las une es que después de
@@ -172,8 +197,8 @@ export function comprometeEncargo(
     nombrada hace media hora, en una charla que despues compro cookies, no
     tiene que frenar la venta de las cookies.
   */
-  const t = plano(texto).replace(MINI, ' ');
-  const ctx = plano(contexto).replace(MINI, ' ');
+  const t = sinPieDeLaWeb(plano(texto)).replace(MINI, ' ');
+  const ctx = sinPieDeLaWeb(plano(contexto)).replace(MINI, ' ');
   if (
     !ES_ENCARGO.test(sinRedVelvetDeCookie(t, hayCookiesEnLaCharla)) &&
     !ES_ENCARGO.test(sinRedVelvetDeCookie(ctx, hayCookiesEnLaCharla))

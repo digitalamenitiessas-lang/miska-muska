@@ -72,6 +72,34 @@ const okHumano = conHumano === null;
 if (!okHumano) mal++;
 console.log(`\n  ${okHumano ? '✓' : '✗'} con una persona ya en la charla, no frena`);
 
+/*
+  EL PEDIDO DE LA WEB. Este es el del 26/10 a las 14:50, tal cual llegó: dos
+  Box Halloween y, abajo, el pie que pega la página con "Las tortas se retiran
+  de barrio norte". Ese "tortas" frenaba la venta de un box.
+*/
+console.log('\n  El pedido de la web\n');
+
+const PIE_WEB =
+  '*Solo realizamos envíos de alfajores, tabletas y conitos (el envío se abona según la zona).*\n' +
+  '*Las tortas se retiran de barrio norte y se abonan en efectivo al retirar ☺️ (coordinar retiro por este medio)*';
+const webDeBox =
+  'Hola Agus! quiero hacer el siguiente pedido:\n\n2 x Box halloween 🎃 - $ 50,000\n\n' +
+  '*Total: $ 50,000*\nNombre: Romina Amduni\nMedio de pago: Transferencia\n\nNota: - Viernes\n\n' +
+  PIE_WEB;
+const webDeTorta =
+  'Hola Agus! quiero hacer el siguiente pedido:\n\n1 x Torta Matilda 20 porciones - $ 58,000\n\n' +
+  '*Total: $ 58,000*\nMedio de pago: Transferencia\n\n' +
+  PIE_WEB;
+const pasaAlias = 'Perfecto! Son $50.000 por los dos Box Halloween. Te paso el alias: miskapedidos';
+
+for (const [nota, ok] of [
+  ['un box pedido desde la web NO se frena por el pie de la página', comprometeEncargo(pasaAlias, false, webDeBox) === null],
+  ['una torta pedida desde la web se sigue frenando', comprometeEncargo('Te paso el alias: miskapedidos', false, webDeTorta) !== null],
+] as const) {
+  if (!ok) mal++;
+  console.log(`  ${ok ? '✓' : '✗'} ${nota}`);
+}
+
 openDb({
   connectionString: process.env.DATABASE_URL!,
   password: process.env.DATABASE_PASSWORD,
