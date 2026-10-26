@@ -32,6 +32,7 @@ import {
   POLICY_PROSE_OCASIONAL,
   horaDeApertura,
   seEncargaConAnticipacion,
+  proximaHoraDePedidos,
   sePuedenTomarPedidos,
 } from '../policies/rules.js';
 import { localToday } from '../store/db.js';
@@ -532,9 +533,10 @@ export function buildDailyContext(input: DailyContextInput): string {
     desde el primer mensaje en vez de descubrirlo cuando ya prometió.
   */
   if (!sePuedenTomarPedidos(settings, now)) {
+    const retoma = proximaHoraDePedidos(settings, now);
     parts.push(
-      `AHORA NO SE TOMAN PEDIDOS. Se toman de ${settings.pedidosDesde} a ` +
-        `${settings.pedidosHasta}, y estamos fuera de esa franja.\n` +
+      `AHORA NO SE TOMAN PEDIDOS. Se vuelven a tomar a las ${retoma} (hasta las ` +
+        `${settings.pedidosHasta}), y estamos fuera de esa franja.\n` +
         'Seguí atendiendo con toda naturalidad: precios, qué trae cada cosa, cómo funciona el ' +
         'envío, cuánto sale. Todo eso se contesta igual.\n' +
         'Lo que NO va, y es lo que hay que cuidar:\n' +
@@ -545,7 +547,7 @@ export function buildDailyContext(input: DailyContextInput): string {
         'franja, dedicatoria— como si lo estuvieras tomando. Pedir todo eso ES tomar el ' +
         'pedido para el que está del otro lado, aunque vos no lo cargues. Si ya te los dio, ' +
         'perfecto, quedan en la charla; pero no salgas a buscarlos.\n' +
-        `Lo que sí: decile que a las ${settings.pedidosDesde} alguien del local se lo toma y ` +
+        `Lo que sí: decile que a las ${retoma} alguien del local se lo toma y ` +
         'le confirma. Pasó de verdad: fue el día de la secretaria, entraron pedidos con el ' +
         'local cerrado, se confirmaron horarios de ese mismo día y a la mañana no había nada ' +
         'preparado. El local: "hemos tenido un quilombo con los clientes".',

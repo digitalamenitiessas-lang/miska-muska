@@ -1545,13 +1545,55 @@ function aMinutos(hhmm: string | undefined): number | null {
  * cierre es más temprano que la apertura.
  */
 export function sePuedenTomarPedidos(settings: BotSettings, at = new Date()): boolean {
-  const desde = aMinutos(settings.pedidosDesde);
+  const desde = pedidosDesdeElDia(settings, at);
   const hasta = aMinutos(settings.pedidosHasta);
   // Sin ventana configurada no se bloquea nada: es una restricción, no un modo.
   if (desde === null || hasta === null || desde === hasta) return true;
 
   const ahora = localMinutes(at);
   return desde < hasta ? ahora >= desde && ahora < hasta : ahora >= desde || ahora < hasta;
+}
+
+/**
+ * Desde qué minuto del día se toman pedidos ese día.
+ *
+ * `pedidosDesde` es uno solo para toda la semana, igual que `openHour`, y el
+ * domingo el local abre a las 14. Sin esto el domingo a la mañana el bot
+ * tomaba pedidos con el local cerrado. Pasó el 25 de octubre: entre las 10:31
+ * y las 11:12 cargó tres pedidos para ese mismo día, a una clienta le contestó
+ * "Ya podés pedir el Uber" y el Uber llegó a un local cerrado. Ella escribió
+ * "una estafa total"; a las 13:50 el local le pidió disculpas y le mandó el
+ * pedido sin cargo.
+ *
+ * Solo el domingo, y solo hacia más tarde: si en la semana la franja de pedidos
+ * arranca antes de abrir, es porque el local lo eligió así.
+ */
+function pedidosDesdeElDia(settings: BotSettings, at: Date): number | null {
+  const desde = aMinutos(settings.pedidosDesde);
+  if (desde === null || localDiaDeLaSemana(at) !== 0) return desde;
+  return Math.max(desde, horaDeApertura(settings, at) * 60);
+}
+
+/**
+ * A qué hora se vuelven a tomar pedidos, como "08:00" o "14:00".
+ *
+ * Es lo que el bot le dice a quien escribe fuera de la franja: "a las 08:00
+ * alguien del local te lo toma". Con `pedidosDesde` a secas, el sábado a la
+ * noche y el domingo a la mañana decía las 8, y el domingo a las 8 no hay nadie.
+ */
+export function proximaHoraDePedidos(settings: BotSettings, at = new Date()): string {
+  const hoy = pedidosDesdeElDia(settings, at);
+  const hasta = aMinutos(settings.pedidosHasta);
+  // Una franja que cruza la medianoche no tiene un "mañana" claro: se dice la configurada.
+  if (hoy === null || hasta === null || hoy >= hasta) return settings.pedidosDesde;
+
+  const minutos =
+    localMinutes(at) < hoy
+      ? hoy
+      : (pedidosDesdeElDia(settings, new Date(at.getTime() + 24 * 60 * 60 * 1000)) ?? hoy);
+  const hh = String(Math.floor(minutos / 60)).padStart(2, '0');
+  const mm = String(minutos % 60).padStart(2, '0');
+  return `${hh}:${mm}`;
 }
 
 

@@ -31,6 +31,7 @@ import {
   nombreDeWhatsApp,
   normalizarNombre,
   notaDeUsoMensajeRapido,
+  proximaHoraDePedidos,
   sePuedenTomarPedidos,
   validateOrder,
   type OrderDraft,
@@ -740,13 +741,14 @@ export async function executeTool(
         */
         // Registrar no es confirmar: ver `forzado` en ToolContext.
         if (!ctx.forzado && !sePuedenTomarPedidos(settings)) {
+          const retoma = proximaHoraDePedidos(settings);
           return {
             ok: false,
             error:
-              `Ahora no se toman pedidos: se toman de ${settings.pedidosDesde} a ` +
-              `${settings.pedidosHasta}. NO lo cargues, NO le digas que quedó anotado y NO le ` +
+              `Ahora no se toman pedidos: se vuelven a tomar a las ${retoma}. NO lo cargues, ` +
+              'NO le digas que quedó anotado y NO le ' +
               'confirmes ningún horario de entrega ni de retiro. Contestale lo que pregunte ' +
-              `—precios, qué hay, cómo funciona— y decile que a las ${settings.pedidosDesde} ` +
+              `—precios, qué hay, cómo funciona— y decile que a las ${retoma} ` +
               'alguien del local le confirma. Que quede clarísimo que todavía NO está tomado.',
           };
         }

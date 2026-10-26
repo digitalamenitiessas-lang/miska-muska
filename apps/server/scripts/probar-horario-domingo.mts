@@ -18,7 +18,12 @@
  *
  *   npx tsx scripts/probar-horario-domingo.mts
  */
-import { horaDeApertura, isOutsideBusinessHours } from '../src/core/policies/rules.js';
+import {
+  horaDeApertura,
+  isOutsideBusinessHours,
+  proximaHoraDePedidos,
+  sePuedenTomarPedidos,
+} from '../src/core/policies/rules.js';
 import { localDiaDeLaSemana } from '../src/core/store/db.js';
 import type { BotSettings } from '../src/core/types/domain.js';
 
@@ -70,6 +75,32 @@ console.log('\n  Y si no hay hora de domingo cargada, no se rompe nada\n');
 
 const viejos = { openHour: 8, closeHour: 22 } as BotSettings;
 chequear(horaDeApertura(viejos, elCaso) === 8, 'sin el ajuste, vuelve al comportamiento de antes');
+
+/*
+  LA FRANJA DE PEDIDOS TAMBIÉN TENÍA QUE SABERLO.
+
+  El domingo 25 de octubre, entre las 10:31 y las 11:12, el bot cargó tres
+  pedidos para ese mismo día. `isOutsideBusinessHours` ya decía cerrado, pero
+  la guarda de `crear_pedido` mira `sePuedenTomarPedidos`, y esa usaba
+  `pedidosDesde` (08:00) para los siete días. A una clienta le dijo "Ya podés
+  pedir el Uber" y el Uber llegó a un local cerrado.
+*/
+console.log('\n  La franja de pedidos del domingo\n');
+
+const PEDIDOS = { ...AJUSTES, pedidosDesde: '08:00', pedidosHasta: '21:30' } as BotSettings;
+
+chequear(!sePuedenTomarPedidos(PEDIDOS, enTucuman('2026-10-25T14:03:00Z')), 'domingo 25/10 11:03 (el caso): NO se toman pedidos');
+chequear(!sePuedenTomarPedidos(PEDIDOS, enTucuman('2026-10-25T16:59:00Z')), 'domingo 13:59, todavía no');
+chequear(sePuedenTomarPedidos(PEDIDOS, enTucuman('2026-10-25T17:00:00Z')), 'domingo 14:00, sí');
+chequear(sePuedenTomarPedidos(PEDIDOS, enTucuman('2026-10-26T11:00:00Z')), 'lunes 08:00, sí, como siempre');
+chequear(!sePuedenTomarPedidos(PEDIDOS, enTucuman('2026-10-26T10:59:00Z')), 'lunes 07:59, no, como siempre');
+
+console.log('\n  Y el bot dice la hora correcta en que se retoman\n');
+
+chequear(proximaHoraDePedidos(PEDIDOS, enTucuman('2026-10-25T14:03:00Z')) === '14:00', 'domingo a la mañana: "a las 14:00"');
+chequear(proximaHoraDePedidos(PEDIDOS, enTucuman('2026-10-25T02:00:00Z')) === '14:00', 'sábado 23:00: también "a las 14:00", porque mañana es domingo');
+chequear(proximaHoraDePedidos(PEDIDOS, enTucuman('2026-10-26T01:00:00Z')) === '08:00', 'domingo 22:00: "a las 08:00", porque mañana es lunes');
+chequear(proximaHoraDePedidos(PEDIDOS, enTucuman('2026-10-26T10:00:00Z')) === '08:00', 'lunes 07:00: "a las 08:00"');
 
 console.log(mal ? `\n  ${mal} fallaron.\n` : '\n  Pasa todo.\n');
 process.exit(mal ? 1 : 0);
