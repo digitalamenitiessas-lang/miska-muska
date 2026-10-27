@@ -1189,15 +1189,34 @@ export class Pipeline {
         return;
       }
 
-      if (streak >= settings.escalateAfterErrors) {
+      /*
+        SIN CRÉDITO NO HAY SEGUNDO INTENTO QUE VALGA.
+
+        La racha está pensada para un tropiezo suelto: falla una vez, a la
+        siguiente sale. Un 402 de OpenRouter no es eso: se acabó la plata de la
+        cuenta y va a fallar igual para todos hasta que alguien cargue saldo. Y
+        como la racha es por charla, quien escribía UNA sola vez no llegaba
+        nunca a la segunda falla: se quedaba sin respuesta y sin aviso.
+
+        Pasó el 27 de octubre: desde las 13:20 la cuenta quedó en cero, el bot
+        dejó de contestar, y a las 15:40 había doce charlas con una pregunta
+        real colgada —varias "cuánto cuesta la Box Halloween"— y casi ninguna
+        marcada en el panel. Nadie se enteró hasta mirar el log.
+      */
+      const sinCredito = /OpenRouter HTTP 402\b/.test(turn.error ?? '');
+
+      if (streak >= settings.escalateAfterErrors || sinCredito) {
         this.#errorStreak.delete(conversationId);
         await repos.conversations.setMode(conversationId, 'human');
         await repos.conversations.setAttention(
           conversationId,
           true,
-          turn.refused
-            ? `El modelo declinó responder: ${turn.error}`
-            : `El bot falló ${streak} veces seguidas: ${turn.error ?? 'sin respuesta'}`,
+          sinCredito
+            ? '[sin crédito] OpenRouter se quedó sin saldo y el bot no puede contestar a nadie. ' +
+                'Contestale vos, y que alguien cargue crédito en openrouter.ai/settings/credits.'
+            : turn.refused
+              ? `El modelo declinó responder: ${turn.error}`
+              : `El bot falló ${streak} veces seguidas: ${turn.error ?? 'sin respuesta'}`,
         );
         const refreshed = await repos.conversations.get(conversationId);
         if (refreshed) bus.emit({ type: 'conversation', conversation: refreshed });
