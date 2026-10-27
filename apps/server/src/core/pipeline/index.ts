@@ -21,7 +21,13 @@ import type { ChannelAdapter } from '../types/channel.js';
 import type { Repositories } from '../store/repositories.js';
 import { bus, log } from '../events/bus.js';
 import { config } from '../../config.js';
-import type { Conversation, ConversationMode, Order, StoredMessage } from '../types/domain.js';
+import type {
+  CampaignSku,
+  Conversation,
+  ConversationMode,
+  Order,
+  StoredMessage,
+} from '../types/domain.js';
 import type {
   ChannelId,
   InboundContent,
@@ -32,6 +38,7 @@ import {
   aliasDeCursos,
   isOutsideBusinessHours,
   nombreDeWhatsApp,
+  normalizarNombre,
   seEncargaConAnticipacion,
 } from '../policies/rules.js';
 import { pideElNombre, yaSePidioElNombre } from '../policies/nombres.js';
@@ -607,7 +614,32 @@ export class Pipeline {
         return ` LO RETIRA ELLA por el local${cuando}.`;
       };
 
-      const motivo = pedidoSinCobrar
+      /*
+        EL BOX DE UNA CAMPAÑA LO CARGA UNA PERSONA EN EL SISTEMA DEL LOCAL.
+
+        Es lo que se hacía con el del Día de la Madre y se fue cuando se borró
+        esa campaña. Agus, el 27 de octubre, con el Box Halloween: "le pasás la
+        info, la gente manda el comprobante, los datos, y ahí ya contesta
+        'perfecto, el viernes 30 te esperamos para retirar del local'. Y ahí
+        que ya diga atención humano porque los chicos tienen que cargar ese
+        pedido".
+
+        Ahora no depende de una campaña con nombre propio: vale para cualquier
+        caja de una campaña activa. Cuando la campaña termina o se apaga, esto
+        se apaga solo.
+      */
+      const caja = await this.#cajaDeCampania(conversation.id, pedidoSinCobrar);
+
+      const motivo = caja
+        ? `[${caja.name}] Llegó el comprobante de un ${caja.name}. Confirmá la transferencia` +
+          (pedidoSinCobrar ? ` del pedido #${pedidoSinCobrar.number}` : '') +
+          ' y cargalo en el sistema de ustedes con nombre y apellido, DNI y celular (están en ' +
+          'la charla; si falta alguno, el bot ya se lo pidió).' +
+          (pedidoSinCobrar?.deliveryDate
+            ? ` Lo retira el ${pedidoSinCobrar.deliveryDate}` +
+              `${pedidoSinCobrar.deliveryTime ? ` (${pedidoSinCobrar.deliveryTime})` : ''}.`
+            : '')
+        : pedidoSinCobrar
         ? `[comprobante] Mirá la transferencia y confirmá el pago del pedido ` +
           `#${pedidoSinCobrar.number}. Está en ${pedidoSinCobrar.paid} de ${pedidoSinCobrar.total}, ` +
           'y hasta que no lo confirmes ella queda esperando.' +
@@ -657,6 +689,35 @@ export class Pipeline {
       // Que falle el aviso no puede tumbar el mensaje, que ya está guardado.
       log('error', `No pude marcar el comprobante de ${conversation.id}`, err);
     }
+  }
+
+  /**
+   * Si la charla es por una caja de una campaña activa, cuál.
+   *
+   * Con pedido, manda lo que dice el pedido y nada más. La charla no alcanza:
+   * cuando preguntan por Halloween el bot presenta los dos box, y alguien que
+   * terminó comprando el Box cookies Halloween ya leyó "Box Halloween" arriba.
+   * Sin pedido —el comprobante llegó antes de que se cargara— se mira la
+   * charla, que es lo único que hay.
+   */
+  async #cajaDeCampania(
+    conversationId: string,
+    pedido: Order | undefined,
+  ): Promise<CampaignSku | null> {
+    const campanias = await this.#repos.campaigns.listActive();
+    if (!campanias.length) return null;
+    const cajas = (await Promise.all(campanias.map((c) => this.#repos.campaigns.skus(c.id))))
+      .flat()
+      .map((sku) => ({ sku, clave: normalizarNombre(sku.name) }))
+      .filter((c) => c.clave.length >= 4);
+    if (!cajas.length) return null;
+
+    const texto = pedido
+      ? pedido.items.map((i) => normalizarNombre(i.description)).join(' | ')
+      : (await this.#repos.messages.history(conversationId, 30))
+          .map((m) => normalizarNombre(m.text ?? ''))
+          .join(' | ');
+    return cajas.find((c) => texto.includes(c.clave))?.sku ?? null;
   }
 
   /**
@@ -1259,9 +1320,31 @@ export class Pipeline {
         aliasDeCursos(settings).alias,
       ]);
 
+      /*
+        UN RETIRO PARA OTRO DÍA NO TIENE UBER QUE FRENAR.
+
+        Esta guarda existe para que nadie mande un chofer antes de que alguien
+        mire la plata. Si el pedido se retira en el local otro día y el
+        comprobante ya llegó, no hay chofer, y lo que el bot está diciendo es
+        cuándo y dónde pasar. El 27 de octubre, con un Box Halloween: la clienta
+        mandó comprobante y datos, el bot le iba a confirmar el retiro del
+        viernes 30, y esto se lo cambió por "apenas esté listo te avisamos", que
+        para un encargo con fecha no quiere decir nada. Agus: "eso tiene que
+        contestar que va a estar listo el viernes para retirar de tal hora a tal
+        hora".
+
+        El aviso para que alguien confirme la transferencia ya lo puso el
+        comprobante cuando llegó: ver `#avisarSiEsComprobante`.
+      */
+      const retiraOtroDia =
+        sinCobrar.deliveryMode === 'retira-local' &&
+        Boolean(sinCobrar.deliveryDate) &&
+        sinCobrar.deliveryDate! > localToday();
+
       for (const contenido of contents) {
         if (contenido.kind !== 'text') continue;
         if (!contenido.text.toLowerCase().includes(calle)) continue;
+        if (yaPago && retiraOtroDia) continue;
         log(
           'warn',
           `Guarda: el bot iba a dar la dirección con el pedido ${sinCobrar.number} sin cobrar` +
