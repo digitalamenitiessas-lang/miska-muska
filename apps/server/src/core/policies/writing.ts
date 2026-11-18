@@ -40,6 +40,21 @@ const COPA: Array<[RegExp, string]> = [
   [/\bte copa\b/gi, 'te gusta'],
   [/\bme copan\b/gi, 'me gustan'],
   [/\bme copa\b/gi, 'me gusta'],
+  /*
+    "te late" tampoco: el 18 de noviembre, el día que volvió el bot, cerró tres
+    charlas con "Cuál te late?" y el local lo marcó al toque. Mismo mapa
+    cerrado, anclado a "te/me + late", para no tocar nunca un "late" en inglés
+    ni un "latte" de la cafetería.
+  */
+  // Primero con mayúscula y sin la bandera i, para que "Te late?" no salga "te gusta?".
+  [/\bTe latería(n?)\b/g, 'Te gustaría$1'],
+  [/\bTe laten\b/g, 'Te gustan'],
+  [/\bTe late\b/g, 'Te gusta'],
+  [/\bte latería(n?)\b/gi, 'te gustaría$1'],
+  [/\bte laten\b/gi, 'te gustan'],
+  [/\bte late\b/gi, 'te gusta'],
+  [/\bme laten\b/gi, 'me gustan'],
+  [/\bme late\b/gi, 'me gusta'],
 ];
 
 /*

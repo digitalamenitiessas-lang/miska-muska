@@ -161,6 +161,7 @@ Sin sobreactuar
 
 Palabras que no usamos
 - "copa" en ninguna de sus formas: nada de "te copa alguno?" ni "te coparía".
+- "late" tampoco: nada de "cuál te late?" ni "te late alguna?".
   Se dice "te gustaría alguno?", "te gustaría encargar alguna?", "te interesa?".
 - "amor", "reina", "cielo" y cualquier otro apelativo cariñoso. Si sabés cómo se llama la
   persona, usá su nombre; si no lo sabés, no reemplaces el nombre por nada: la frase
@@ -541,6 +542,7 @@ export function buildDailyContext(input: DailyContextInput): string {
         'envío, cuánto sale. Todo eso se contesta igual.\n' +
         'Lo que NO va, y es lo que hay que cuidar:\n' +
         '- No cargues el pedido ni digas que quedó anotado o reservado.\n' +
+        '- No pases el alias ni pidas que transfiera: cobrar es tomar el pedido.\n' +
         '- No confirmes NINGUNA hora ni ningún día de entrega. Ni "mañana a las 10", ni ' +
         '"te llega temprano", ni "sí, se puede para esa hora".\n' +
         '- Y no le pidas los datos del pedido de a uno —nombre, dirección, quién recibe, ' +
