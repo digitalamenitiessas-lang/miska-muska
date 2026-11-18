@@ -902,6 +902,22 @@ export function renderQuickReply(
     .join('\n');
 
   /*
+    Los sabores de helado que hoy están prendidos, para escribirlos en una frase:
+    "americana o dulce de leche". Va en una línea y no en lista porque el texto
+    del local los nombra adentro de una oración ("sumale un pote de helado de
+    ..."). Hasta acá esa oración estaba escrita a mano con los dos sabores, y si
+    se agotaba uno el mensaje lo seguía ofreciendo: lo marcó el propio reporte
+    del lanzamiento del pote, el 17 de noviembre.
+  */
+  const sabores = available('helado').map((p) =>
+    p.name.replace(/^pote( de)? helado( de)? /i, '').toLowerCase(),
+  );
+  const heladosHoy =
+    sabores.length > 1
+      ? `${sabores.slice(0, -1).join(', ')} o ${sabores[sabores.length - 1]}`
+      : (sabores[0] ?? '');
+
+  /*
     Los sorrentinos van TODOS, estén disponibles hoy o no, y eso es a propósito.
 
     El local escribió la lista a mano y puso los cinco sabores, incluidos los dos
@@ -942,6 +958,7 @@ export function renderQuickReply(
     linkDesayunos: settings.breakfastsUrl,
     cookiesHoy: cookiesHoy || 'consultanos qué cookies hay hoy',
     miniTortasHoy: miniTortasHoy || 'consultanos qué minis hay hoy',
+    heladosHoy: heladosHoy || 'consultanos qué sabores hay hoy',
     sorrentinos: sorrentinos || null,
     precioMiniTorta: precioMiniTorta === null ? null : String(precioMiniTorta),
   };

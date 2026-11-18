@@ -11,6 +11,7 @@ const PLACEHOLDERS = [
   ['{{linkCursos}}', 'página de cursos'],
   ['{{linkDesayunos}}', 'categoría desayunos'],
   ['{{cookiesHoy}}', 'lista de cookies disponibles hoy, con precio'],
+  ['{{heladosHoy}}', 'sabores de helado disponibles hoy ("americana o dulce de leche")'],
   ['{{miniTortasHoy}}', 'lista de mini tortas disponibles hoy'],
   ['{{precioMiniTorta}}', 'precio actual de la mini torta'],
 ];
@@ -153,6 +154,16 @@ function Editor({
   onSave: (next: QuickReply) => void;
 }) {
   const [draft, setDraft] = useState(item);
+  /*
+    Lo que está escrito en el campo de disparadores, tal cual. La lista se arma
+    a partir de esto y no al revés: si el campo mostraba la lista ya limpia, cada
+    tecla pasaba por el trim y el filtro, y la coma o el espacio recién tipeados
+    desaparecían antes de poder escribir lo que seguía. Así se guardó el 17 de
+    noviembre "aheladopotedeheladoheladoconcookiecombohelado" en vez de
+    "helado, pote de helado, helado con cookie, combo helado", y antes
+    "cajasdealfajores": disparadores que no coinciden con nada.
+  */
+  const [triggersTexto, setTriggersTexto] = useState(item.triggers.join(', '));
 
   return (
     <div
@@ -208,14 +219,15 @@ function Editor({
           <label className="label">Disparadores (separados por coma)</label>
           <input
             type="text"
-            value={draft.triggers.join(', ')}
+            value={triggersTexto}
             placeholder="uber, cadete, mando un uber"
-            onChange={(e) =>
+            onChange={(e) => {
+              setTriggersTexto(e.target.value);
               setDraft({
                 ...draft,
                 triggers: e.target.value.split(',').map((t) => t.trim()).filter(Boolean),
-              })
-            }
+              });
+            }}
           />
         </div>
 
