@@ -610,6 +610,9 @@ export function buildDailyContext(input: DailyContextInput): string {
         .join('\n'),
   );
 
+  const combos = combosDeHelado(products);
+  if (combos) parts.push(combos);
+
   /*
     Lo que hoy no hay va AGRUPADO POR CATEGORÍA Y CON PRECIO, igual que lo que
     sí hay. Antes era una lista plana de nombres sueltos, y eso rompía de dos
@@ -870,6 +873,48 @@ export function buildDailyContext(input: DailyContextInput): string {
   }
 
   return parts.filter(Boolean).join('\n\n');
+}
+
+/**
+ * Los totales del pote de helado + cookie, ya sumados.
+ *
+ * El 18 de noviembre, el día que volvió el bot, una clienta preguntó el precio
+ * del helado con cookie y el bot contestó "pote + cookie red velvet te sale
+ * $9.000, pote + cookie nutella $10.000". Son $8.500 y $9.500: $4.000 del pote
+ * más $4.500 o $5.500 de la cookie. La ficha tenía la regla y hasta un ejemplo
+ * hecho, y media hora antes lo había sumado bien en otro chat. Una suma de
+ * cabeza sale bien casi siempre, que no alcanza cuando la clienta transfiere
+ * lo que le dijimos.
+ *
+ * Así que la cuenta la hace el código, con los precios de hoy, y el bot copia
+ * el total. Solo las cookies y los potes prendidos: si hoy no hay helado o no
+ * hay cookies, el bloque no va.
+ */
+export function combosDeHelado(products: Product[]): string | null {
+  const hoy = (categoria: string) =>
+    products.filter(
+      (p) => p.availableToday && claveDeCategoria(p.category) === claveDeCategoria(categoria),
+    );
+  const potes = hoy('helado');
+  const cookies = hoy('cookies');
+  if (!potes.length || !cookies.length) return null;
+
+  const $ = (n: number) => `$${n.toLocaleString('es-AR')}`;
+  const precios = [...new Set(potes.map((p) => p.price))].sort((a, b) => a - b);
+  const bloques = precios.map((precio) => {
+    const sabores = potes.filter((p) => p.price === precio).map((p) => p.name).join(' / ');
+    const titulo = precios.length > 1 ? `  Con ${sabores} (${$(precio)}):\n` : '';
+    return (
+      titulo +
+      cookies.map((c) => `  ${c.name} + pote → ${$(c.price + precio)}`).join('\n')
+    );
+  });
+  return (
+    'POTE DE HELADO + COOKIE, TOTALES DE HOY YA SUMADOS (pote + 1 cookie). Usá estos ' +
+    'números tal cual, no sumes de cabeza. Si lleva más cookies o más potes, sumá cada ' +
+    `cookie con su precio y cada pote a ${$(precios[0])}${precios.length > 1 ? ' (o el de su sabor)' : ''}:\n` +
+    bloques.join('\n')
+  );
 }
 
 /**
